@@ -1,0 +1,76 @@
+{% extends 'distribution/base.html' %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Dashboard</h2>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <h5 class="card-title">Total Profit</h5>
+                <h3 class="card-text">PKR {{ total_profit|floatformat:2 }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <h5 class="card-title">Total Sales</h5>
+                <h3 class="card-text">PKR {{ total_sales|floatformat:2 }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-info">
+            <div class="card-body">
+                <h5 class="card-title">Remaining Stock Value</h5>
+                <h3 class="card-text">PKR {{ remaining_stock_value|floatformat:2 }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-secondary">
+            <div class="card-body">
+                <h5 class="card-title">Total Products</h5>
+                <h3 class="card-text">{{ total_products }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Total Clients</h5>
+                <h3 class="card-text">{{ total_clients }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Total Manufacturers</h5>
+                <h3 class="card-text">{{ total_manufacturers }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Quick Actions</h5>
+                <a href="{% url 'sale_create' %}" class="btn btn-primary me-2">Create New Sale</a>
+                <a href="{% url 'cheese_add' %}" class="btn btn-success me-2">Add Cheese Product</a>
+                <a href="{% url 'client_add' %}" class="btn btn-info me-2">Add Client</a>
+                <a href="{% url 'manufacturer_add' %}" class="btn btn-secondary">Add Manufacturer</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

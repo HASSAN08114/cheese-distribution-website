@@ -1,0 +1,111 @@
+{% extends 'distribution/base.html' %}
+
+{% block title %}Create Sale{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Create New Sale</h2>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post" id="saleForm">
+            {% csrf_token %}
+            
+            <div class="mb-3">
+                <label for="client" class="form-label">Client</label>
+                <select name="client" id="client" class="form-control" required>
+                    <option value="">Select a client</option>
+                    {% for client in clients %}
+                    <option value="{{ client.pk }}" {% if selected_client_id == client.pk %}selected{% endif %}>{{ client.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <h5 class="mt-4 mb-3">Sale Items</h5>
+            {{ formset.management_form }}
+            <div id="formset-container">
+                {% for form in formset %}
+                <div class="row mb-3 formset-row">
+                    {{ form.id }}
+                    <div class="col-md-4">
+                        <label class="form-label">Cheese Product</label>
+                        {{ form.cheese_product }}
+                        {% if form.cheese_product.errors %}
+                            <div class="text-danger">{{ form.cheese_product.errors }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Quantity (kg)</label>
+                        {{ form.quantity_kg }}
+                        {% if form.quantity_kg.errors %}
+                            <div class="text-danger">{{ form.quantity_kg.errors }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Selling Price (PKR/kg)</label>
+                        {{ form.selling_price_per_kg }}
+                        {% if form.selling_price_per_kg.errors %}
+                            <div class="text-danger">{{ form.selling_price_per_kg.errors }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Delete</label>
+                        <div class="form-check mt-2">
+                            {{ form.DELETE }}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <button type="button" class="btn btn-secondary mb-3" id="add-item">Add Item</button>
+            <br>
+            <button type="submit" class="btn btn-primary">Create Sale</button>
+            <a href="{% url 'sale_history' %}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const addButton = document.getElementById('add-item');
+    const container = document.getElementById('formset-container');
+    const totalForms = document.getElementById('id_form-TOTAL_FORMS');
+    let formCount = parseInt(totalForms.value);
+
+    addButton.addEventListener('click', function() {
+        const rows = container.querySelectorAll('.formset-row');
+        const lastRow = rows[rows.length - 1];
+        const newForm = lastRow.cloneNode(true);
+        
+        const formRegex = RegExp(`form-(\\d+)-`, 'g');
+        newForm.innerHTML = newForm.innerHTML.replace(formRegex, function(match) {
+            return match.replace(/\d+/, formCount);
+        });
+        
+        const inputs = newForm.querySelectorAll('input, select');
+        inputs.forEach(function(input) {
+            if (input.name) {
+                input.name = input.name.replace(/\d+/, formCount);
+            }
+            if (input.id) {
+                input.id = input.id.replace(/\d+/, formCount);
+            }
+            if (input.type !== 'hidden' && input.type !== 'checkbox') {
+                input.value = '';
+            }
+            if (input.type === 'checkbox') {
+                input.checked = false;
+            }
+        });
+        
+        container.appendChild(newForm);
+        formCount++;
+        totalForms.value = formCount;
+    });
+});
+</script>
+{% endblock %}
+

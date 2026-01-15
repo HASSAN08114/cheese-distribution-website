@@ -1,0 +1,19 @@
+{% extends 'distribution/base.html' %}
+
+{% block title %}Delete Cheese Product{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Delete Cheese Product</h2>
+
+<div class="card">
+    <div class="card-body">
+        <p>Are you sure you want to delete cheese product "{{ product.name }}"?</p>
+        <form method="post">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">Delete</button>
+            <a href="{% url 'cheese_inventory' %}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}
+

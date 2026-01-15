@@ -1,0 +1,50 @@
+{% extends 'distribution/base.html' %}
+
+{% block title %}Sale Details{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Sale Details #{{ sale.id }}</h2>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h5>Sale Information</h5>
+        <p><strong>Client:</strong> {{ sale.client.name }}</p>
+        <p><strong>Date:</strong> {{ sale.sale_date|date:"Y-m-d H:i" }}</p>
+        <p><strong>Total Amount:</strong> PKR {{ sale.total_amount|floatformat:2 }}</p>
+        <p><strong>Total Profit:</strong> PKR {{ total_profit|floatformat:2 }}</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <h5>Sale Items</h5>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Cheese Product</th>
+                    <th>Quantity (kg)</th>
+                    <th>Selling Price (PKR/kg)</th>
+                    <th>Purchase Price (PKR/kg)</th>
+                    <th>Profit per kg (PKR)</th>
+                    <th>Total Profit (PKR)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in sale_items %}
+                <tr>
+                    <td>{{ item.cheese_product.name }}</td>
+                    <td>{{ item.quantity_kg }}</td>
+                    <td>{{ item.selling_price_per_kg }}</td>
+                    <td>{{ item.cheese_product.purchase_price_per_kg }}</td>
+                    <td>{{ item.profit_per_kg }}</td>
+                    <td>{{ item.get_total_profit|floatformat:2 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<a href="{% url 'sale_history' %}" class="btn btn-secondary mt-3">Back to Sale History</a>
+{% endblock %}
+

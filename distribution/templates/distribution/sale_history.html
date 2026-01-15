@@ -1,0 +1,46 @@
+{% extends 'distribution/base.html' %}
+
+{% block title %}Sale History{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Sale History</h2>
+    <a href="{% url 'sale_create' %}" class="btn btn-primary">Create New Sale</a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Sale ID</th>
+                    <th>Client</th>
+                    <th>Date</th>
+                    <th>Total Amount (PKR)</th>
+                    <th>Total Profit (PKR)</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in sales_data %}
+                <tr>
+                    <td>#{{ item.sale.id }}</td>
+                    <td>{{ item.sale.client.name }}</td>
+                    <td>{{ item.sale.sale_date|date:"Y-m-d H:i" }}</td>
+                    <td>{{ item.sale.total_amount|floatformat:2 }}</td>
+                    <td>{{ item.total_profit|floatformat:2 }}</td>
+                    <td>
+                        <a href="{% url 'sale_detail' item.sale.pk %}" class="btn btn-sm btn-info">View Details</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center">No sales found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
