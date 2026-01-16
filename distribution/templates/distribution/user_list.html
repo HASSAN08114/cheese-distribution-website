@@ -1,0 +1,84 @@
+{% extends 'distribution/base.html' %}
+
+{% block title %}User Management{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-people-fill"></i> User Management</h2>
+    <a href="{% url 'user_add' %}" class="btn btn-primary">
+        <i class="bi bi-person-plus"></i> Add New User
+    </a>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-dark text-white">
+        <h5 class="mb-0"><i class="bi bi-list-ul"></i> All Users</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Username</th>
+                        <th>Full Name</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in users_with_roles %}
+                    <tr>
+                        <td><strong>{{ item.user.username }}</strong></td>
+                        <td>{{ item.user.get_full_name|default:"—" }}</td>
+                        <td>{{ item.user.email|default:"—" }}</td>
+                        <td>
+                            {% if item.role == 'owner' %}
+                                <span class="badge bg-warning text-dark">
+                                    <i class="bi bi-shield-check"></i> Owner
+                                </span>
+                            {% else %}
+                                <span class="badge bg-info">
+                                    <i class="bi bi-person"></i> Employee
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if item.user.is_active %}
+                                <span class="badge bg-success">Active</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <a href="{% url 'user_edit_role' item.user.pk %}" class="btn btn-sm btn-outline-warning">
+                                <i class="bi bi-pencil"></i> Edit Role
+                            </a>
+                            {% if item.user != user %}
+                            <a href="{% url 'user_delete' item.user.pk %}" class="btn btn-sm btn-outline-danger">
+                                <i class="bi bi-trash"></i> Delete
+                            </a>
+                            {% else %}
+                            <span class="text-muted small">(You)</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                            <p class="mt-2">No users found. Add your first user above.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="alert alert-info mt-3">
+    <i class="bi bi-info-circle"></i> <strong>Note:</strong> New users are automatically assigned the "Employee" role. You can change their role using the "Edit Role" button.
+</div>
+{% endblock %}

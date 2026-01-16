@@ -1,6 +1,25 @@
 from django.db import models
 from django.core.validators import MinValueValidator
+from django.contrib.auth.models import User
 from decimal import Decimal
+
+
+class UserProfile(models.Model):
+    ROLE_CHOICES = [
+        ('owner', 'Owner'),
+        ('employee', 'Employee'),
+    ]
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='employee')
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.get_role_display()}"
+    
+    def is_owner(self):
+        return self.role == 'owner'
+    
+    def is_employee(self):
+        return self.role == 'employee'
 
 
 class Manufacturer(models.Model):
@@ -40,7 +59,6 @@ class CheeseProduct(models.Model):
 class Client(models.Model):
     name = models.CharField(max_length=200)
     phone = models.CharField(max_length=20)
-    email = models.EmailField()
     address = models.TextField()
 
     def __str__(self):

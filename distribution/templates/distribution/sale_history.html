@@ -4,43 +4,103 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>Sale History</h2>
-    <a href="{% url 'sale_create' %}" class="btn btn-primary">Create New Sale</a>
+    <h2><i class="bi bi-receipt-cutoff"></i> Sale History & Analytics</h2>
+    <a href="{% url 'sale_create' %}" class="btn btn-primary">
+        <i class="bi bi-plus-circle"></i> Create New Sale
+    </a>
 </div>
 
-<div class="card">
+<!-- Sales Analytics Cards -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-white bg-primary shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-subtitle mb-2 text-white-50">Today's Sales</h6>
+                        <h4 class="card-title mb-0">PKR {{ daily_total|floatformat:2 }}</h4>
+                        <small class="text-white-50">Profit: PKR {{ daily_profit|floatformat:2 }}</small>
+                    </div>
+                    <i class="bi bi-calendar-day" style="font-size: 3rem; opacity: 0.3;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-success shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-subtitle mb-2 text-white-50">This Month's Sales</h6>
+                        <h4 class="card-title mb-0">PKR {{ monthly_total|floatformat:2 }}</h4>
+                        <small class="text-white-50">Profit: PKR {{ monthly_profit|floatformat:2 }}</small>
+                    </div>
+                    <i class="bi bi-calendar-month" style="font-size: 3rem; opacity: 0.3;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-info shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-subtitle mb-2 text-white-50">This Year's Sales</h6>
+                        <h4 class="card-title mb-0">PKR {{ yearly_total|floatformat:2 }}</h4>
+                        <small class="text-white-50">Profit: PKR {{ yearly_profit|floatformat:2 }}</small>
+                    </div>
+                    <i class="bi bi-calendar-year" style="font-size: 3rem; opacity: 0.3;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sales Table -->
+<div class="card shadow-sm">
+    <div class="card-header bg-dark text-white">
+        <h5 class="mb-0"><i class="bi bi-list-ul"></i> All Sales</h5>
+    </div>
     <div class="card-body">
-        <table class="table table-striped">
-            <thead>
-                <tr>
-                    <th>Sale ID</th>
-                    <th>Client</th>
-                    <th>Date</th>
-                    <th>Total Amount (PKR)</th>
-                    <th>Total Profit (PKR)</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in sales_data %}
-                <tr>
-                    <td>#{{ item.sale.id }}</td>
-                    <td>{{ item.sale.client.name }}</td>
-                    <td>{{ item.sale.sale_date|date:"Y-m-d H:i" }}</td>
-                    <td>{{ item.sale.total_amount|floatformat:2 }}</td>
-                    <td>{{ item.total_profit|floatformat:2 }}</td>
-                    <td>
-                        <a href="{% url 'sale_detail' item.sale.pk %}" class="btn btn-sm btn-info">View Details</a>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="6" class="text-center">No sales found.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Sale ID</th>
+                        <th>Client</th>
+                        <th>Date & Time</th>
+                        <th>Total Amount (PKR)</th>
+                        <th>Total Profit (PKR)</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in sales_data %}
+                    <tr>
+                        <td><strong>#{{ item.sale.id }}</strong></td>
+                        <td>{{ item.sale.client.name }}</td>
+                        <td>{{ item.sale.sale_date|date:"M d, Y H:i" }}</td>
+                        <td><strong>PKR {{ item.sale.total_amount|floatformat:2 }}</strong></td>
+                        <td>
+                            <span class="badge bg-success">PKR {{ item.total_profit|floatformat:2 }}</span>
+                        </td>
+                        <td class="text-end">
+                            <a href="{% url 'sale_detail' item.sale.pk %}" class="btn btn-sm btn-outline-info">
+                                <i class="bi bi-eye"></i> View Details
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                            <p class="mt-2">No sales found. Create your first sale above.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 {% endblock %}
-

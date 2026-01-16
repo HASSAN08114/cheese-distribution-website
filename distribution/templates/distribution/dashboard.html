@@ -3,57 +3,94 @@
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
-<h2 class="mb-4">Dashboard</h2>
+<h2 class="mb-4"><i class="bi bi-speedometer2"></i> Dashboard</h2>
 
 <div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card text-white bg-primary">
+    <div class="col-md-3 mb-3">
+        <div class="card text-white bg-primary shadow-sm">
             <div class="card-body">
-                <h5 class="card-title">Total Profit</h5>
-                <h3 class="card-text">PKR {{ total_profit|floatformat:2 }}</h3>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-subtitle mb-2 text-white-50">Total Profit</h6>
+                        <h3 class="card-text mb-0">PKR {{ total_profit|floatformat:2 }}</h3>
+                    </div>
+                    <i class="bi bi-currency-dollar" style="font-size: 3rem; opacity: 0.3;"></i>
+                </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card text-white bg-success">
+    <div class="col-md-3 mb-3">
+        <div class="card text-white bg-success shadow-sm">
             <div class="card-body">
-                <h5 class="card-title">Total Sales</h5>
-                <h3 class="card-text">PKR {{ total_sales|floatformat:2 }}</h3>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-subtitle mb-2 text-white-50">Total Sales</h6>
+                        <h3 class="card-text mb-0">PKR {{ total_sales|floatformat:2 }}</h3>
+                    </div>
+                    <i class="bi bi-cart-check" style="font-size: 3rem; opacity: 0.3;"></i>
+                </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card text-white bg-info">
+    <div class="col-md-3 mb-3">
+        <div class="card text-white bg-info shadow-sm">
             <div class="card-body">
-                <h5 class="card-title">Remaining Stock Value</h5>
-                <h3 class="card-text">PKR {{ remaining_stock_value|floatformat:2 }}</h3>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-subtitle mb-2 text-white-50">Stock Value</h6>
+                        <h3 class="card-text mb-0">PKR {{ remaining_stock_value|floatformat:2 }}</h3>
+                    </div>
+                    <i class="bi bi-box-seam" style="font-size: 3rem; opacity: 0.3;"></i>
+                </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card text-white bg-secondary">
+    <div class="col-md-3 mb-3">
+        <div class="card text-white bg-secondary shadow-sm">
             <div class="card-body">
-                <h5 class="card-title">Total Products</h5>
-                <h3 class="card-text">{{ total_products }}</h3>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-subtitle mb-2 text-white-50">Total Products</h6>
+                        <h3 class="card-text mb-0">{{ total_products }}</h3>
+                    </div>
+                    <i class="bi bi-box" style="font-size: 3rem; opacity: 0.3;"></i>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 <div class="row mb-4">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Total Clients</h5>
-                <h3 class="card-text">{{ total_clients }}</h3>
+    <div class="col-md-4 mb-3">
+        <div class="card shadow-sm">
+            <div class="card-body text-center">
+                <i class="bi bi-people text-primary" style="font-size: 2.5rem;"></i>
+                <h5 class="card-title mt-3">Total Clients</h5>
+                <h2 class="text-primary">{{ total_clients }}</h2>
             </div>
         </div>
     </div>
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Total Manufacturers</h5>
-                <h3 class="card-text">{{ total_manufacturers }}</h3>
+    <div class="col-md-4 mb-3">
+        <div class="card shadow-sm">
+            <div class="card-body text-center">
+                <i class="bi bi-building text-success" style="font-size: 2.5rem;"></i>
+                <h5 class="card-title mt-3">Total Manufacturers</h5>
+                <h2 class="text-success">{{ total_manufacturers }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card shadow-sm">
+            <div class="card-body text-center">
+                <i class="bi bi-person-badge text-info" style="font-size: 2.5rem;"></i>
+                <h5 class="card-title mt-3">Your Role</h5>
+                <h4>
+                    {% if user_is_owner %}
+                        <span class="badge bg-warning text-dark">Owner</span>
+                    {% else %}
+                        <span class="badge bg-info">Employee</span>
+                    {% endif %}
+                </h4>
             </div>
         </div>
     </div>
@@ -61,16 +98,36 @@
 
 <div class="row">
     <div class="col-md-12">
-        <div class="card">
+        <div class="card shadow-sm">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0"><i class="bi bi-lightning-charge"></i> Quick Actions</h5>
+            </div>
             <div class="card-body">
-                <h5 class="card-title">Quick Actions</h5>
-                <a href="{% url 'sale_create' %}" class="btn btn-primary me-2">Create New Sale</a>
-                <a href="{% url 'cheese_add' %}" class="btn btn-success me-2">Add Cheese Product</a>
-                <a href="{% url 'client_add' %}" class="btn btn-info me-2">Add Client</a>
-                <a href="{% url 'manufacturer_add' %}" class="btn btn-secondary">Add Manufacturer</a>
+                <div class="d-flex flex-wrap gap-2">
+                    <a href="{% url 'sale_create' %}" class="btn btn-primary">
+                        <i class="bi bi-cart-plus"></i> Create New Sale
+                    </a>
+                    <a href="{% url 'client_add' %}" class="btn btn-info">
+                        <i class="bi bi-person-plus"></i> Add Client
+                    </a>
+                    {% if user_is_owner %}
+                    <a href="{% url 'inventory_management' %}" class="btn btn-success">
+                        <i class="bi bi-box-seam"></i> Manage Inventory
+                    </a>
+                    <a href="{% url 'user_list' %}" class="btn btn-warning">
+                        <i class="bi bi-people-fill"></i> Manage Users
+                    </a>
+                    {% else %}
+                    <a href="{% url 'setup_owner' %}" class="btn btn-warning">
+                        <i class="bi bi-shield-check"></i> Setup Owner Account
+                    </a>
+                    {% endif %}
+                    <a href="{% url 'sale_history' %}" class="btn btn-secondary">
+                        <i class="bi bi-receipt-cutoff"></i> View Sales
+                    </a>
+                </div>
             </div>
         </div>
     </div>
 </div>
 {% endblock %}
-
