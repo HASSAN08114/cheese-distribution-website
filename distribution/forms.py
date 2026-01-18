@@ -18,12 +18,12 @@ class ManufacturerForm(forms.ModelForm):
 class CheeseProductForm(forms.ModelForm):
     class Meta:
         model = CheeseProduct
-        fields = ['name', 'manufacturer', 'purchase_price_per_kg', 'available_quantity_kg']
+        fields = ['name', 'manufacturer', 'purchase_price_per_packet', 'available_quantity_packets']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'manufacturer': forms.Select(attrs={'class': 'form-control'}),
-            'purchase_price_per_kg': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
-            'available_quantity_kg': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'purchase_price_per_packet': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'available_quantity_packets': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
         }
 
 
@@ -41,21 +41,21 @@ class ClientForm(forms.ModelForm):
 class SaleItemForm(forms.ModelForm):
     class Meta:
         model = SaleItem
-        fields = ['cheese_product', 'quantity_kg', 'selling_price_per_kg']
+        fields = ['cheese_product', 'quantity_packets', 'selling_price_per_packet']
         widgets = {
             'cheese_product': forms.Select(attrs={'class': 'form-control'}),
-            'quantity_kg': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
-            'selling_price_per_kg': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'quantity_packets': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'selling_price_per_packet': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
         }
 
-    def clean_quantity_kg(self):
-        quantity = self.cleaned_data.get('quantity_kg')
+    def clean_quantity_packets(self):
+        quantity = self.cleaned_data.get('quantity_packets')
         cheese_product = self.cleaned_data.get('cheese_product')
         
         if cheese_product and quantity:
-            if quantity > cheese_product.available_quantity_kg:
+            if quantity > cheese_product.available_quantity_packets:
                 raise forms.ValidationError(
-                    f"Insufficient stock. Available: {cheese_product.available_quantity_kg} kg"
+                    f"Insufficient stock. Available: {cheese_product.available_quantity_packets} packets"
                 )
         return quantity
 

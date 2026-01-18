@@ -6,12 +6,55 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="bi bi-box-seam"></i> Inventory Management</h2>
     <div>
-        <a href="{% url 'manufacturer_add' %}" class="btn btn-primary me-2">
+        <button type="button" class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#manufacturerModal">
             <i class="bi bi-plus-circle"></i> Add Manufacturer
-        </a>
-        <a href="{% url 'cheese_add' %}" class="btn btn-success">
+        </button>
+        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#cheeseProductModal">
             <i class="bi bi-plus-circle"></i> Add Cheese Product
-        </a>
+        </button>
+        <!-- Manufacturer Modal -->
+        <div class="modal fade" id="manufacturerModal" tabindex="-1" aria-labelledby="manufacturerModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="manufacturerModalLabel">Add Manufacturer</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="manufacturerForm" method="post" action="{% url 'manufacturer_add' %}">
+                            {% csrf_token %}
+                            {{ manufacturer_form.as_p }}
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary" form="manufacturerForm">Save</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cheese Product Modal -->
+        <div class="modal fade" id="cheeseProductModal" tabindex="-1" aria-labelledby="cheeseProductModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="cheeseProductModalLabel">Add Cheese Product</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="cheeseProductForm" method="post" action="{% url 'cheese_add' %}">
+                            {% csrf_token %}
+                            {{ cheese_form.as_p }}
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary" form="cheeseProductForm">Save</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -41,10 +84,12 @@
                             <a href="{% url 'manufacturer_edit' manufacturer.pk %}" class="btn btn-sm btn-outline-warning">
                                 <i class="bi bi-pencil"></i> Edit
                             </a>
-                            <a href="{% url 'manufacturer_delete' manufacturer.pk %}" class="btn btn-sm btn-outline-danger">
+                            <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteManufacturerModal{{ manufacturer.pk }}">
                                 <i class="bi bi-trash"></i> Delete
-                            </a>
+                            </button>
                         </td>
+                    {% endfor %}
+                    {% for manufacturer in manufacturers %}
                     </tr>
                     {% empty %}
                     <tr>
@@ -72,8 +117,8 @@
                     <tr>
                         <th>Name</th>
                         <th>Manufacturer</th>
-                        <th>Purchase Price (PKR/kg)</th>
-                        <th>Available Quantity (kg)</th>
+                        <th>Purchase Price (PKR/Packet)</th>
+                        <th>Available Quantity (Packets)</th>
                         <th>Stock Value</th>
                         <th>Date Added</th>
                         <th class="text-end">Actions</th>
@@ -84,10 +129,10 @@
                     <tr>
                         <td><strong>{{ item.product.name }}</strong></td>
                         <td>{{ item.product.manufacturer.name }}</td>
-                        <td>PKR {{ item.product.purchase_price_per_kg|floatformat:2 }}</td>
+                        <td>PKR {{ item.product.purchase_price_per_packet|floatformat:2 }}</td>
                         <td>
-                            <span class="badge {% if item.product.available_quantity_kg > 10 %}bg-success{% elif item.product.available_quantity_kg > 0 %}bg-warning{% else %}bg-danger{% endif %}">
-                                {{ item.product.available_quantity_kg|floatformat:2 }} kg
+                            <span class="badge {% if item.product.available_quantity_packets > 10 %}bg-success{% elif item.product.available_quantity_packets > 0 %}bg-warning{% else %}bg-danger{% endif %}">
+                                {{ item.product.available_quantity_packets|floatformat:2 }} packets
                             </span>
                         </td>
                         <td><strong>PKR {{ item.stock_value|floatformat:2 }}</strong></td>
@@ -96,10 +141,12 @@
                             <a href="{% url 'cheese_edit' item.product.pk %}" class="btn btn-sm btn-outline-warning">
                                 <i class="bi bi-pencil"></i> Edit
                             </a>
-                            <a href="{% url 'cheese_delete' item.product.pk %}" class="btn btn-sm btn-outline-danger">
+                            <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteCheeseModal{{ item.product.pk }}">
                                 <i class="bi bi-trash"></i> Delete
-                            </a>
+                            </button>
                         </td>
+                    {% endfor %}
+                    {% for item in products_with_value %}
                     </tr>
                     {% empty %}
                     <tr>
@@ -114,4 +161,43 @@
         </div>
     </div>
 </div>
+<!-- Delete Modals: Rendered outside main content for proper stacking -->
+{% for manufacturer in manufacturers %}
+    <div class="modal fade" id="deleteManufacturerModal{{ manufacturer.pk }}" tabindex="-1" aria-labelledby="deleteManufacturerModalLabel{{ manufacturer.pk }}" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteManufacturerModalLabel{{ manufacturer.pk }}">Confirm Delete</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    Are you sure you want to delete manufacturer "{{ manufacturer.name }}"?
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <a href="{% url 'manufacturer_delete' manufacturer.pk %}" class="btn btn-danger">Delete</a>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endfor %}
+{% for item in products_with_value %}
+    <div class="modal fade" id="deleteCheeseModal{{ item.product.pk }}" tabindex="-1" aria-labelledby="deleteCheeseModalLabel{{ item.product.pk }}" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteCheeseModalLabel{{ item.product.pk }}">Confirm Delete</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    Are you sure you want to delete cheese product "{{ item.product.name }}"?
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <a href="{% url 'cheese_delete' item.product.pk %}" class="btn btn-danger">Delete</a>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endfor %}
 {% endblock %}

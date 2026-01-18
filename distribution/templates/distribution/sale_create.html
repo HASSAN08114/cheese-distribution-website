@@ -34,17 +34,17 @@
                         {% endif %}
                     </div>
                     <div class="col-md-2">
-                        <label class="form-label">Quantity (kg)</label>
-                        {{ form.quantity_kg }}
-                        {% if form.quantity_kg.errors %}
-                            <div class="text-danger">{{ form.quantity_kg.errors }}</div>
+                        <label class="form-label">Quantity (Packets)</label>
+                        {{ form.quantity_packets }}
+                        {% if form.quantity_packets.errors %}
+                            <div class="text-danger">{{ form.quantity_packets.errors }}</div>
                         {% endif %}
                     </div>
                     <div class="col-md-2">
-                        <label class="form-label">Selling Price (PKR/kg)</label>
-                        {{ form.selling_price_per_kg }}
-                        {% if form.selling_price_per_kg.errors %}
-                            <div class="text-danger">{{ form.selling_price_per_kg.errors }}</div>
+                        <label class="form-label">Selling Price (PKR/Packet)</label>
+                        {{ form.selling_price_per_packet }}
+                        {% if form.selling_price_per_packet.errors %}
+                            <div class="text-danger">{{ form.selling_price_per_packet.errors }}</div>
                         {% endif %}
                     </div>
                     <div class="col-md-2">

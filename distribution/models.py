@@ -37,12 +37,12 @@ class Manufacturer(models.Model):
 class CheeseProduct(models.Model):
     name = models.CharField(max_length=200)
     manufacturer = models.ForeignKey(Manufacturer, on_delete=models.CASCADE)
-    purchase_price_per_kg = models.DecimalField(
+    purchase_price_per_packet = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         validators=[MinValueValidator(Decimal('0.01'))]
     )
-    available_quantity_kg = models.DecimalField(
+    available_quantity_packets = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         validators=[MinValueValidator(Decimal('0.00'))]
@@ -81,7 +81,7 @@ class Sale(models.Model):
         return f"Sale #{self.id} - {self.client.name} - {self.sale_date.date()}"
 
     def calculate_total_profit(self):
-        return sum(item.profit_per_kg * item.quantity_kg for item in self.saleitem_set.all())
+        return sum(item.profit_per_packet * item.quantity_packets for item in self.saleitem_set.all())
 
     class Meta:
         ordering = ['-sale_date']
@@ -90,31 +90,31 @@ class Sale(models.Model):
 class SaleItem(models.Model):
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE)
     cheese_product = models.ForeignKey(CheeseProduct, on_delete=models.CASCADE)
-    quantity_kg = models.DecimalField(
+    quantity_packets = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         validators=[MinValueValidator(Decimal('0.01'))]
     )
-    selling_price_per_kg = models.DecimalField(
+    selling_price_per_packet = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         validators=[MinValueValidator(Decimal('0.01'))]
     )
-    profit_per_kg = models.DecimalField(
+    profit_per_packet = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         default=Decimal('0.00')
     )
 
     def save(self, *args, **kwargs):
-        self.profit_per_kg = self.selling_price_per_kg - self.cheese_product.purchase_price_per_kg
+        self.profit_per_packet = self.selling_price_per_packet - self.cheese_product.purchase_price_per_packet
         super().save(*args, **kwargs)
 
     def get_total_profit(self):
-        return self.profit_per_kg * self.quantity_kg
+        return self.profit_per_packet * self.quantity_packets
 
     def __str__(self):
-        return f"{self.cheese_product.name} - {self.quantity_kg}kg"
+        return f"{self.cheese_product.name} - {self.quantity_packets} packets"
 
     class Meta:
         ordering = ['id']

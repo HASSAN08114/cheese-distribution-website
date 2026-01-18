@@ -22,10 +22,10 @@
             <thead>
                 <tr>
                     <th>Cheese Product</th>
-                    <th>Quantity (kg)</th>
-                    <th>Selling Price (PKR/kg)</th>
-                    <th>Purchase Price (PKR/kg)</th>
-                    <th>Profit per kg (PKR)</th>
+                    <th>Quantity (Packets)</th>
+                    <th>Selling Price (PKR/Packet)</th>
+                    <th>Purchase Price (PKR/Packet)</th>
+                    <th>Profit per Packet (PKR)</th>
                     <th>Total Profit (PKR)</th>
                 </tr>
             </thead>
@@ -33,10 +33,10 @@
                 {% for item in sale_items %}
                 <tr>
                     <td>{{ item.cheese_product.name }}</td>
-                    <td>{{ item.quantity_kg }}</td>
-                    <td>{{ item.selling_price_per_kg }}</td>
-                    <td>{{ item.cheese_product.purchase_price_per_kg }}</td>
-                    <td>{{ item.profit_per_kg }}</td>
+                    <td>{{ item.quantity_packets }}</td>
+                    <td>{{ item.selling_price_per_packet }}</td>
+                    <td>{{ item.cheese_product.purchase_price_per_packet }}</td>
+                    <td>{{ item.profit_per_packet }}</td>
                     <td>{{ item.get_total_profit|floatformat:2 }}</td>
                 </tr>
                 {% endfor %}

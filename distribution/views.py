@@ -49,7 +49,7 @@ def dashboard(request):
     
     products = CheeseProduct.objects.all()
     for product in products:
-        remaining_stock_value += product.available_quantity_kg * product.purchase_price_per_kg
+        remaining_stock_value += product.available_quantity_packets * product.purchase_price_per_packet
     
     user_is_owner = is_owner(request.user)
     
@@ -74,15 +74,25 @@ def inventory_management(request):
     # Calculate stock value for each product
     products_with_value = []
     for product in products:
-        stock_value = product.available_quantity_kg * product.purchase_price_per_kg
+        stock_value = product.available_quantity_packets * product.purchase_price_per_packet
         products_with_value.append({
             'product': product,
             'stock_value': stock_value
         })
     
+    from .forms import ManufacturerForm, CheeseProductForm
+    manufacturer_form = ManufacturerForm()
+    cheese_form = CheeseProductForm()
+    # Create edit forms for each manufacturer and cheese product
+    manufacturer_edit_forms = {m.pk: ManufacturerForm(instance=m) for m in manufacturers}
+    cheese_edit_forms = {p.pk: CheeseProductForm(instance=p) for p in products}
     return render(request, 'distribution/inventory_management.html', {
         'manufacturers': manufacturers,
         'products_with_value': products_with_value,
+        'manufacturer_form': manufacturer_form,
+        'cheese_form': cheese_form,
+        'manufacturer_edit_forms': manufacturer_edit_forms,
+        'cheese_edit_forms': cheese_edit_forms,
     })
 
 
@@ -240,10 +250,10 @@ def sale_create(request):
                 
                 for form in valid_forms:
                     cheese_product = form.cleaned_data['cheese_product']
-                    quantity_kg = form.cleaned_data['quantity_kg']
-                    selling_price_per_kg = form.cleaned_data['selling_price_per_kg']
+                    quantity_packets = form.cleaned_data['quantity_packets']
+                    selling_price_per_packet = form.cleaned_data['selling_price_per_packet']
                     
-                    if quantity_kg > cheese_product.available_quantity_kg:
+                    if quantity_packets > cheese_product.available_quantity_packets:
                         messages.error(request, f'Insufficient stock for {cheese_product.name}.')
                         sale.delete()
                         return render(request, 'distribution/sale_create.html', {
@@ -255,14 +265,14 @@ def sale_create(request):
                     sale_item = SaleItem.objects.create(
                         sale=sale,
                         cheese_product=cheese_product,
-                        quantity_kg=quantity_kg,
-                        selling_price_per_kg=selling_price_per_kg
+                        quantity_packets=quantity_packets,
+                        selling_price_per_packet=selling_price_per_packet
                     )
                     
-                    cheese_product.available_quantity_kg -= quantity_kg
+                    cheese_product.available_quantity_packets -= quantity_packets
                     cheese_product.save()
                     
-                    total_amount += selling_price_per_kg * quantity_kg
+                    total_amount += selling_price_per_packet * quantity_packets
                 
                 sale.total_amount = total_amount
                 sale.save()

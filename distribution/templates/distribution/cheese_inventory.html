@@ -15,8 +15,8 @@
                 <tr>
                     <th>Name</th>
                     <th>Manufacturer</th>
-                    <th>Purchase Price (PKR/kg)</th>
-                    <th>Available Quantity (kg)</th>
+                    <th>Purchase Price (PKR/Packet)</th>
+                    <th>Available Quantity (Packets)</th>
                     <th>Date Added</th>
                     <th>Actions</th>
                 </tr>
@@ -26,8 +26,8 @@
                 <tr>
                     <td>{{ product.name }}</td>
                     <td>{{ product.manufacturer.name }}</td>
-                    <td>{{ product.purchase_price_per_kg }}</td>
-                    <td>{{ product.available_quantity_kg }}</td>
+                    <td>{{ product.purchase_price_per_packet }}</td>
+                    <td>{{ product.available_quantity_packets }}</td>
                     <td>{{ product.date_added|date:"Y-m-d" }}</td>
                     <td>
                         <a href="{% url 'cheese_edit' product.pk %}" class="btn btn-sm btn-warning">Edit</a>
