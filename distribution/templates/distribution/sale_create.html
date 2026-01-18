@@ -47,11 +47,8 @@
                             <div class="text-danger">{{ form.selling_price_per_packet.errors }}</div>
                         {% endif %}
                     </div>
-                    <div class="col-md-2">
-                        <label class="form-label">Delete</label>
-                        <div class="form-check mt-2">
-                            {{ form.DELETE }}
-                        </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="button" class="btn btn-danger btn-sm remove-item" style="margin-top: 1.8em;">Remove</button>
                     </div>
                 </div>
                 {% endfor %}
@@ -75,16 +72,29 @@ document.addEventListener('DOMContentLoaded', function() {
     const totalForms = document.getElementById('id_form-TOTAL_FORMS');
     let formCount = parseInt(totalForms.value);
 
+    function updateRemoveButtons() {
+        container.querySelectorAll('.remove-item').forEach(function(btn) {
+            btn.onclick = function() {
+                const row = btn.closest('.formset-row');
+                if (container.querySelectorAll('.formset-row').length > 1) {
+                    row.remove();
+                    formCount--;
+                    totalForms.value = formCount;
+                }
+            };
+        });
+    }
+
     addButton.addEventListener('click', function() {
         const rows = container.querySelectorAll('.formset-row');
         const lastRow = rows[rows.length - 1];
         const newForm = lastRow.cloneNode(true);
-        
+
         const formRegex = RegExp(`form-(\\d+)-`, 'g');
         newForm.innerHTML = newForm.innerHTML.replace(formRegex, function(match) {
             return match.replace(/\d+/, formCount);
         });
-        
+
         const inputs = newForm.querySelectorAll('input, select');
         inputs.forEach(function(input) {
             if (input.name) {
@@ -100,11 +110,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 input.checked = false;
             }
         });
-        
+
         container.appendChild(newForm);
         formCount++;
         totalForms.value = formCount;
+        updateRemoveButtons();
     });
+
+    updateRemoveButtons();
 });
 </script>
 {% endblock %}

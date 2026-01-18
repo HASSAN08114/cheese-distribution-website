@@ -111,7 +111,7 @@ def inventory_management(request):
     """Merged page for manufacturers and cheese inventory"""
     manufacturers = Manufacturer.objects.all()
     products = CheeseProduct.objects.select_related('manufacturer').all()
-    
+    cheese_types = CheeseType.objects.all()
     # Calculate stock value for each product
     products_with_value = []
     for product in products:
@@ -123,17 +123,21 @@ def inventory_management(request):
     
     from .forms import ManufacturerForm, CheeseProductForm
     manufacturer_form = ManufacturerForm()
-    cheese_form = CheeseProductForm()
+    cheese_product_form = CheeseProductForm()
+    cheese_type_form = CheeseTypeForm()
     # Create edit forms for each manufacturer and cheese product
     manufacturer_edit_forms = {m.pk: ManufacturerForm(instance=m) for m in manufacturers}
     cheese_edit_forms = {p.pk: CheeseProductForm(instance=p) for p in products}
+    cheese_type_edit_forms = {t.pk: CheeseTypeForm(instance=t) for t in cheese_types}
     return render(request, 'distribution/inventory_management.html', {
         'manufacturers': manufacturers,
         'products_with_value': products_with_value,
         'manufacturer_form': manufacturer_form,
-        'cheese_form': cheese_form,
+        'cheese_product_form': cheese_product_form,
+        'cheese_type_form': cheese_type_form,
         'manufacturer_edit_forms': manufacturer_edit_forms,
         'cheese_edit_forms': cheese_edit_forms,
+        'cheese_type_edit_forms': cheese_type_edit_forms,
     })
 
 
@@ -364,35 +368,10 @@ def sale_history(request):
     
     # Calculate analytics
     now = timezone.now()
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    year_start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-    
-    # Daily sales
-    daily_sales = Sale.objects.filter(sale_date__gte=today_start)
-    daily_total = sum(sale.total_amount for sale in daily_sales)
-    daily_profit = sum(sale.calculate_total_profit() for sale in daily_sales)
-    
-    # Monthly sales
-    monthly_sales = Sale.objects.filter(sale_date__gte=month_start)
-    monthly_total = sum(sale.total_amount for sale in monthly_sales)
-    monthly_profit = sum(sale.calculate_total_profit() for sale in monthly_sales)
-    
-    # Yearly sales
-    yearly_sales = Sale.objects.filter(sale_date__gte=year_start)
-    yearly_total = sum(sale.total_amount for sale in yearly_sales)
-    yearly_profit = sum(sale.calculate_total_profit() for sale in yearly_sales)
-    
     user_is_owner = is_owner(request.user)
     
     return render(request, 'distribution/sale_history.html', {
         'sales_data': sales_with_profit,
-        'daily_total': daily_total,
-        'daily_profit': daily_profit,
-        'monthly_total': monthly_total,
-        'monthly_profit': monthly_profit,
-        'yearly_total': yearly_total,
-        'yearly_profit': yearly_profit,
         'user_is_owner': user_is_owner,
     })
 
