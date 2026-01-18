@@ -5,9 +5,31 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="bi bi-people"></i> Clients</h2>
-    <a href="{% url 'client_add' %}" class="btn btn-primary">
+
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#clientModal">
         <i class="bi bi-plus-circle"></i> Add Client
-    </a>
+    </button>
+    <!-- Client Modal -->
+    <div class="modal fade" id="clientModal" tabindex="-1" aria-labelledby="clientModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="clientModalLabel">Add Client</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="clientForm" method="post" action="{% url 'client_add' %}">
+                        {% csrf_token %}
+                        {{ client_form.as_p }}
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" form="clientForm">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="card shadow-sm">
@@ -29,13 +51,13 @@
                     <td>{{ client.phone }}</td>
                     <td>{{ client.address|truncatewords:15 }}</td>
                     <td>
-                        <a href="{% url 'client_edit' client.pk %}" class="btn btn-sm btn-outline-warning">
+                        <button type="button" class="btn btn-sm btn-outline-warning edit-btn" data-edit-url="{% url 'client_edit' client.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal">
                             <i class="bi bi-pencil"></i> Edit
-                        </a>
+                        </button>
                         {% if user_is_owner %}
-                        <a href="{% url 'client_delete' client.pk %}" class="btn btn-sm btn-outline-danger">
+                        <button type="button" class="btn btn-sm btn-outline-danger" data-item-name="{{ client.name }}" data-delete-url="{% url 'client_delete' client.pk %}" data-bs-toggle="modal" data-bs-target="#deleteConfirmModal">
                             <i class="bi bi-trash"></i> Delete
-                        </a>
+                        </button>
                         {% endif %}
                     </td>
                 </tr>
@@ -51,5 +73,84 @@
         </table>
     </div>
 </div>
+
+{% endblock %}
+
+{% block modals %}
+<!-- Delete Modals: Rendered outside main content for proper stacking -->
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+
+            <form method="post" id="delete-form">
+                {% csrf_token %}
+
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirm Delete</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+                    Are you sure you want to delete
+                    <strong id="delete-item-name"></strong>?
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-danger">
+                        Delete
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Generic Modal for Dynamic Edit Forms -->
+<div class="modal fade" id="dynamicEditModal" tabindex="-1" aria-labelledby="dynamicEditModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content" id="dynamicEditModalContent">
+            <!-- Content will be loaded here via AJAX -->
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const deleteModal = document.getElementById("deleteConfirmModal");
+    const deleteName = document.getElementById("delete-item-name");
+    const deleteForm = document.getElementById("delete-form");
+
+    deleteModal.addEventListener("show.bs.modal", function (event) {
+        const button = event.relatedTarget;
+
+        const deleteUrl = button.getAttribute("data-delete-url");
+        const itemName = button.getAttribute("data-item-name");
+
+        deleteName.textContent = itemName;
+        deleteForm.action = deleteUrl;   
+    });
+
+    var dynamicModal = document.getElementById('dynamicEditModal');
+    var modalContent = document.getElementById('dynamicEditModalContent');
+    document.querySelectorAll('.edit-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            var url = btn.getAttribute('data-edit-url');
+            fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+                .then(response => response.text())
+                .then(html => {
+                    modalContent.innerHTML = html;
+                });
+        });
+    });
+    dynamicModal.addEventListener('hidden.bs.modal', function () {
+        modalContent.innerHTML = '';
+    });
+});
+</script>
 {% endblock %}
 

@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth.models import User
-from .models import Manufacturer, CheeseProduct, Client, Sale, SaleItem, UserProfile
+from .models import Manufacturer, CheeseProduct, Client, Sale, SaleItem, UserProfile, CheeseType
 from decimal import Decimal
 
 
@@ -14,14 +14,22 @@ class ManufacturerForm(forms.ModelForm):
             'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
 
+class CheeseTypeForm(forms.ModelForm):
+    class Meta:
+        model = CheeseType
+        fields = ['name']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. Cheddar, Mozzarella'}),
+        }
 
 class CheeseProductForm(forms.ModelForm):
     class Meta:
         model = CheeseProduct
-        fields = ['name', 'manufacturer', 'purchase_price_per_packet', 'available_quantity_packets']
+        fields = ['manufacturer', 'type', 'packet_size', 'purchase_price_per_packet', 'available_quantity_packets']
         widgets = {
-            'name': forms.TextInput(attrs={'class': 'form-control'}),
             'manufacturer': forms.Select(attrs={'class': 'form-control'}),
+            'type': forms.Select(attrs={'class': 'form-control'}),
+            'packet_size': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': 'e.g. 0.5 for 0.5 KG'}),
             'purchase_price_per_packet': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'available_quantity_packets': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
         }

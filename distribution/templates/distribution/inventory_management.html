@@ -9,9 +9,52 @@
         <button type="button" class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#manufacturerModal">
             <i class="bi bi-plus-circle"></i> Add Manufacturer
         </button>
+        <button type="button" class="btn btn-info me-2" id="addCheeseTypeBtn">
+            <i class="bi bi-plus-circle"></i> Add Cheese Type
+        </button>
         <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#cheeseProductModal">
             <i class="bi bi-plus-circle"></i> Add Cheese Product
         </button>
+        <!-- Cheese Types Section -->
+        <div class="card mb-4 shadow-sm">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-tag"></i> Cheese Types</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Name</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cheeseTypeTableBody">
+                            {% for type in cheese_types %}
+                            <tr>
+                                <td><strong>{{ type.name }}</strong></td>
+                                <td class="text-end">
+                                    <button type="button" class="btn btn-sm btn-outline-warning edit-cheese-type-btn" data-edit-url="{% url 'cheese_type_edit' type.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal">
+                                        <i class="bi bi-pencil"></i> Edit
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger delete-cheese-type-btn" data-delete-url="{% url 'cheese_type_delete' type.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal">
+                                        <i class="bi bi-trash"></i> Delete
+                                    </button>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="2" class="text-center text-muted py-4">
+                                    <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                                    <p class="mt-2">No cheese types found. Add your first cheese type above.</p>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
         <!-- Manufacturer Modal -->
         <div class="modal fade" id="manufacturerModal" tabindex="-1" aria-labelledby="manufacturerModalLabel" aria-hidden="true">
             <div class="modal-dialog">
@@ -81,10 +124,10 @@
                         <td>{{ manufacturer.contact_info }}</td>
                         <td>{{ manufacturer.address|truncatewords:10 }}</td>
                         <td class="text-end">
-                            <a href="{% url 'manufacturer_edit' manufacturer.pk %}" class="btn btn-sm btn-outline-warning">
+                            <button type="button" class="btn btn-sm btn-outline-warning edit-btn" data-edit-url="{% url 'manufacturer_edit' manufacturer.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal">
                                 <i class="bi bi-pencil"></i> Edit
-                            </a>
-                            <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteManufacturerModal{{ manufacturer.pk }}">
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger" data-item-name="{{ manufacturer.name }}" data-delete-url="{% url 'manufacturer_delete' manufacturer.pk %}" data-bs-toggle="modal" data-bs-target="#deleteConfirmModal">
                                 <i class="bi bi-trash"></i> Delete
                             </button>
                         </td>
@@ -115,8 +158,8 @@
             <table class="table table-hover">
                 <thead class="table-light">
                     <tr>
-                        <th>Name</th>
                         <th>Manufacturer</th>
+                        <th>Name</th>
                         <th>Purchase Price (PKR/Packet)</th>
                         <th>Available Quantity (Packets)</th>
                         <th>Stock Value</th>
@@ -127,8 +170,8 @@
                 <tbody>
                     {% for item in products_with_value %}
                     <tr>
-                        <td><strong>{{ item.product.name }}</strong></td>
-                        <td>{{ item.product.manufacturer.name }}</td>
+                        <td><strong>{{ item.product.manufacturer.name }}</strong></td>
+                        <td>{{ item.product.name }}</td>
                         <td>PKR {{ item.product.purchase_price_per_packet|floatformat:2 }}</td>
                         <td>
                             <span class="badge {% if item.product.available_quantity_packets > 10 %}bg-success{% elif item.product.available_quantity_packets > 0 %}bg-warning{% else %}bg-danger{% endif %}">
@@ -138,10 +181,10 @@
                         <td><strong>PKR {{ item.stock_value|floatformat:2 }}</strong></td>
                         <td>{{ item.product.date_added|date:"M d, Y" }}</td>
                         <td class="text-end">
-                            <a href="{% url 'cheese_edit' item.product.pk %}" class="btn btn-sm btn-outline-warning">
+                            <button type="button" class="btn btn-sm btn-outline-warning edit-btn" data-edit-url="{% url 'cheese_edit' item.product.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal">
                                 <i class="bi bi-pencil"></i> Edit
-                            </a>
-                            <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteCheeseModal{{ item.product.pk }}">
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger" data-item-name="{{item.product.manufacturer.name}} {{ item.product.name }}" data-delete-url="{% url 'cheese_delete' item.product.pk %}" data-bs-toggle="modal" data-bs-target="#deleteConfirmModal">
                                 <i class="bi bi-trash"></i> Delete
                             </button>
                         </td>
@@ -161,43 +204,247 @@
         </div>
     </div>
 </div>
-<!-- Delete Modals: Rendered outside main content for proper stacking -->
+<!-- Edit Modals: Rendered outside main content for proper stacking -->
 {% for manufacturer in manufacturers %}
-    <div class="modal fade" id="deleteManufacturerModal{{ manufacturer.pk }}" tabindex="-1" aria-labelledby="deleteManufacturerModalLabel{{ manufacturer.pk }}" aria-hidden="true">
+    <div class="modal fade" id="editManufacturerModal{{ manufacturer.pk }}" tabindex="-1" aria-labelledby="editManufacturerModalLabel{{ manufacturer.pk }}" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="deleteManufacturerModalLabel{{ manufacturer.pk }}">Confirm Delete</h5>
+                    <h5 class="modal-title" id="editManufacturerModalLabel{{ manufacturer.pk }}">Edit Manufacturer</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body">
-                    Are you sure you want to delete manufacturer "{{ manufacturer.name }}"?
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <a href="{% url 'manufacturer_delete' manufacturer.pk %}" class="btn btn-danger">Delete</a>
-                </div>
+                <form method="post" action="{% url 'manufacturer_edit' manufacturer.pk %}">
+                    {% csrf_token %}
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="id_name_{{ manufacturer.pk }}" class="form-label">Name</label>
+                            <input type="text" class="form-control" id="id_name_{{ manufacturer.pk }}" name="name" value="{{ manufacturer.name }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_contact_info_{{ manufacturer.pk }}" class="form-label">Contact Info</label>
+                            <input type="text" class="form-control" id="id_contact_info_{{ manufacturer.pk }}" name="contact_info" value="{{ manufacturer.contact_info }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_address_{{ manufacturer.pk }}" class="form-label">Address</label>
+                            <textarea class="form-control" id="id_address_{{ manufacturer.pk }}" name="address" rows="3" required>{{ manufacturer.address }}</textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
 {% endfor %}
+
 {% for item in products_with_value %}
-    <div class="modal fade" id="deleteCheeseModal{{ item.product.pk }}" tabindex="-1" aria-labelledby="deleteCheeseModalLabel{{ item.product.pk }}" aria-hidden="true">
+    <div class="modal fade" id="editCheeseModal{{ item.product.pk }}" tabindex="-1" aria-labelledby="editCheeseModalLabel{{ item.product.pk }}" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="deleteCheeseModalLabel{{ item.product.pk }}">Confirm Delete</h5>
+                    <h5 class="modal-title" id="editCheeseModalLabel{{ item.product.pk }}">Edit Cheese Product</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body">
-                    Are you sure you want to delete cheese product "{{ item.product.name }}"?
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <a href="{% url 'cheese_delete' item.product.pk %}" class="btn btn-danger">Delete</a>
-                </div>
+                <form method="post" action="{% url 'cheese_edit' item.product.pk %}">
+                    {% csrf_token %}
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="id_name_cheese_{{ item.product.pk }}" class="form-label">Name</label>
+                            <input type="text" class="form-control" id="id_name_cheese_{{ item.product.pk }}" name="name" value="{{ item.product.name }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_manufacturer_cheese_{{ item.product.pk }}" class="form-label">Manufacturer</label>
+                            <select class="form-control" id="id_manufacturer_cheese_{{ item.product.pk }}" name="manufacturer">
+                                {% for m in manufacturers %}
+                                    <option value="{{ m.pk }}" {% if m.pk == item.product.manufacturer.pk %}selected{% endif %}>{{ m.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_purchase_price_per_packet_{{ item.product.pk }}" class="form-label">Purchase Price per Packet (PKR)</label>
+                            <input type="number" step="0.01" class="form-control" id="id_purchase_price_per_packet_{{ item.product.pk }}" name="purchase_price_per_packet" value="{{ item.product.purchase_price_per_packet }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_available_quantity_packets_{{ item.product.pk }}" class="form-label">Available Quantity (Packets)</label>
+                            <input type="number" step="0.01" class="form-control" id="id_available_quantity_packets_{{ item.product.pk }}" name="available_quantity_packets" value="{{ item.product.available_quantity_packets }}" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
 {% endfor %}
+           
 {% endblock %}
+
+{% block modals %}
+<!-- Delete Modals: Rendered outside main content for proper stacking -->
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+
+            <form method="post" id="delete-form">
+                {% csrf_token %}
+
+                <div class="modal-header">
+                    <h5 class="modal-title">Confirm Delete</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+                    Are you sure you want to delete
+                    <strong id="delete-item-name"></strong>?
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-danger">
+                        Delete
+                    </button>
+                </div>
+
+            </form>
+
+        </div>
+    </div>
+</div>
+
+<!-- Generic Modal for Dynamic Edit Forms -->
+<div class="modal fade" id="dynamicEditModal" tabindex="-1" aria-labelledby="dynamicEditModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content" id="dynamicEditModalContent">
+            <!-- Content will be loaded here via AJAX -->
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const deleteModal = document.getElementById("deleteConfirmModal");
+});
+</script>
+{% endblock %}
+                    <div class="card-body p-2">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Name</th>
+                                        <th class="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for manufacturer in manufacturers %}
+                                    <tr>
+                                        <td><strong>{{ manufacturer.name }}</strong></td>
+                                        <td class="text-end">
+                                            <button type="button" class="btn btn-xs btn-outline-warning edit-btn" data-edit-url="{% url 'manufacturer_edit' manufacturer.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal"><i class="bi bi-pencil"></i></button>
+                                            <button type="button" class="btn btn-xs btn-outline-danger" data-item-name="{{ manufacturer.name }}" data-delete-url="{% url 'manufacturer_delete' manufacturer.pk %}" data-bs-toggle="modal" data-bs-target="#deleteConfirmModal"><i class="bi bi-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="2" class="text-center text-muted py-2"><i class="bi bi-inbox" style="font-size: 1.2rem;"></i><br>No manufacturers found.</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="card shadow-sm" style="font-size: 0.95em;">
+                    <div class="card-header bg-info text-white py-2">
+                        <h6 class="mb-0"><i class="bi bi-tag"></i> Cheese Types</h6>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Name</th>
+                                        <th class="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cheeseTypeTableBody">
+                                    {% for type in cheese_types %}
+                                    <tr>
+                                        <td><strong>{{ type.name }}</strong></td>
+                                        <td class="text-end">
+                                            <button type="button" class="btn btn-xs btn-outline-warning edit-cheese-type-btn" data-edit-url="{% url 'cheese_type_edit' type.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal"><i class="bi bi-pencil"></i></button>
+                                            <button type="button" class="btn btn-xs btn-outline-danger delete-cheese-type-btn" data-delete-url="{% url 'cheese_type_delete' type.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal"><i class="bi bi-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="2" class="text-center text-muted py-2"><i class="bi bi-inbox" style="font-size: 1.2rem;"></i><br>No cheese types found.</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Right Column: Cheese Products -->
+            <div class="col-md-8 col-lg-9">
+                <div class="card shadow-sm mb-3">
+                    <div class="card-header bg-success text-white py-2 d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0"><i class="bi bi-box"></i> Cheese Products</h6>
+                        <form class="d-flex" style="max-width: 350px;">
+                            <input class="form-control form-control-sm me-2" type="search" placeholder="Search cheese products..." aria-label="Search" id="cheeseProductSearch">
+                            <button class="btn btn-sm btn-outline-light" type="submit"><i class="bi bi-search"></i></button>
+                        </form>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover mb-0" id="cheeseProductTable">
+                                <thead class="table-light">
+                                    <tr style="font-size: 0.95em;">
+                                        <th>Manufacturer</th>
+                                        <th>Name</th>
+                                        <th>Purchase Price (PKR/Packet)</th>
+                                        <th>Available Quantity (Packets)</th>
+                                        <th>Stock Value</th>
+                                        <th>Date Added</th>
+                                        <th class="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in products_with_value %}
+                                    <tr>
+                                        <td><strong>{{ item.product.manufacturer.name }}</strong></td>
+                                        <td>{{ item.product.name }}</td>
+                                        <td>PKR {{ item.product.purchase_price_per_packet|floatformat:2 }}</td>
+                                        <td><span class="badge {% if item.product.available_quantity_packets > 10 %}bg-success{% elif item.product.available_quantity_packets > 0 %}bg-warning{% else %}bg-danger{% endif %}" style="font-size: 0.85em;">{{ item.product.available_quantity_packets|floatformat:2 }} packets</span></td>
+                                        <td><strong>PKR {{ item.stock_value|floatformat:2 }}</strong></td>
+                                        <td>{{ item.product.date_added|date:"M d, Y" }}</td>
+                                        <td class="text-end">
+                                            <button type="button" class="btn btn-xs btn-outline-warning edit-btn" data-edit-url="{% url 'cheese_edit' item.product.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal"><i class="bi bi-pencil"></i></button>
+                                            <button type="button" class="btn btn-xs btn-outline-danger" data-item-name="{{item.product.manufacturer.name}} {{ item.product.name }}" data-delete-url="{% url 'cheese_delete' item.product.pk %}" data-bs-toggle="modal" data-bs-target="#deleteConfirmModal"><i class="bi bi-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="7" class="text-center text-muted py-2"><i class="bi bi-inbox" style="font-size: 1.2rem;"></i><br>No cheese products found.</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+

@@ -34,9 +34,24 @@ class Manufacturer(models.Model):
         ordering = ['name']
 
 
+class CheeseType(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        ordering = ['name']
+
 class CheeseProduct(models.Model):
-    name = models.CharField(max_length=200)
     manufacturer = models.ForeignKey(Manufacturer, on_delete=models.CASCADE)
+    type = models.ForeignKey(CheeseType, on_delete=models.CASCADE)
+    packet_size = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        help_text="Packet size in KG"
+    )
     purchase_price_per_packet = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -50,10 +65,10 @@ class CheeseProduct(models.Model):
     date_added = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.name} - {self.manufacturer.name}"
+        return f"{self.manufacturer.name} {self.type.name} {self.packet_size} kg"
 
     class Meta:
-        ordering = ['name']
+        ordering = ['manufacturer', 'type', 'packet_size']
 
 
 class Client(models.Model):

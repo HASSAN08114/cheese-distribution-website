@@ -1,3 +1,44 @@
+
+from django.http import JsonResponse
+from django.template.loader import render_to_string
+from django.shortcuts import render
+from .forms import CheeseTypeForm
+from .models import CheeseType
+
+def cheese_type_list(request):
+    types = CheeseType.objects.all()
+    return render(request, 'distribution/cheese_type_list.html', {'types': types})
+
+def cheese_type_add(request):
+    if request.method == 'POST':
+        form = CheeseTypeForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return JsonResponse({'success': True})
+    else:
+        form = CheeseTypeForm()
+    html = render_to_string('distribution/partials/edit_cheese_type_form.html', {'form': form}, request=request)
+    return JsonResponse({'html': html})
+
+def cheese_type_edit(request, pk):
+    cheese_type = CheeseType.objects.get(pk=pk)
+    if request.method == 'POST':
+        form = CheeseTypeForm(request.POST, instance=cheese_type)
+        if form.is_valid():
+            form.save()
+            return JsonResponse({'success': True})
+    else:
+        form = CheeseTypeForm(instance=cheese_type)
+    html = render_to_string('distribution/partials/edit_cheese_type_form.html', {'form': form, 'cheese_type': cheese_type}, request=request)
+    return JsonResponse({'html': html})
+
+def cheese_type_delete(request, pk):
+    cheese_type = CheeseType.objects.get(pk=pk)
+    if request.method == 'POST':
+        cheese_type.delete()
+        return JsonResponse({'success': True})
+    html = render_to_string('distribution/cheese_type_delete.html', {'cheese_type': cheese_type}, request=request)
+    return JsonResponse({'html': html})
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
@@ -116,10 +157,14 @@ def manufacturer_edit(request, pk):
         form = ManufacturerForm(request.POST, instance=manufacturer)
         if form.is_valid():
             form.save()
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return render(request, 'distribution/partials/edit_success.html', {'object': manufacturer, 'type': 'manufacturer'})
             messages.success(request, 'Manufacturer updated successfully.')
             return redirect('inventory_management')
     else:
         form = ManufacturerForm(instance=manufacturer)
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return render(request, 'distribution/partials/edit_manufacturer_form.html', {'form': form, 'manufacturer': manufacturer})
     return render(request, 'distribution/manufacturer_form.html', {'form': form, 'title': 'Edit Manufacturer'})
 
 
@@ -153,10 +198,14 @@ def cheese_edit(request, pk):
         form = CheeseProductForm(request.POST, instance=product)
         if form.is_valid():
             form.save()
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return render(request, 'distribution/partials/edit_success.html', {'object': product, 'type': 'cheese'})
             messages.success(request, 'Cheese product updated successfully.')
             return redirect('inventory_management')
     else:
         form = CheeseProductForm(instance=product)
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return render(request, 'distribution/partials/edit_cheese_form.html', {'form': form, 'product': product})
     return render(request, 'distribution/cheese_form.html', {'form': form, 'title': 'Edit Cheese Product'})
 
 
@@ -174,9 +223,12 @@ def cheese_delete(request, pk):
 def client_list(request):
     clients = Client.objects.all()
     user_is_owner = is_owner(request.user)
+    from .forms import ClientForm
+    client_form = ClientForm()
     return render(request, 'distribution/client_list.html', {
         'clients': clients,
-        'user_is_owner': user_is_owner
+        'user_is_owner': user_is_owner,
+        'client_form': client_form,
     })
 
 
@@ -200,10 +252,14 @@ def client_edit(request, pk):
         form = ClientForm(request.POST, instance=client)
         if form.is_valid():
             form.save()
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return render(request, 'distribution/partials/edit_success.html', {'object': client, 'type': 'client'})
             messages.success(request, 'Client updated successfully.')
             return redirect('client_list')
     else:
         form = ClientForm(instance=client)
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return render(request, 'distribution/partials/edit_client_form.html', {'form': form, 'client': client})
     return render(request, 'distribution/client_form.html', {'form': form, 'title': 'Edit Client'})
 
 
