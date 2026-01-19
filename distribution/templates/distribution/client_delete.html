@@ -10,8 +10,8 @@
         <p>Are you sure you want to delete client "{{ client.name }}"?</p>
         <form method="post">
             {% csrf_token %}
-            <button type="submit" class="btn btn-danger">Delete</button>
-            <a href="{% url 'client_list' %}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn">Delete</button>
+            <a href="{% url 'client_list' %}" class="btn">Cancel</a>
         </form>
     </div>
 </div>

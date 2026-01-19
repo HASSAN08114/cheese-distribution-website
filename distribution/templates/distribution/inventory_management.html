@@ -30,7 +30,7 @@
                         <tbody>
                             {% for manufacturer in manufacturers %}
                             <tr>
-                                <td><strong>{{ manufacturer.name }}</strong></td>
+                                <td>{{ manufacturer.name }}</td>
                                 <td class="text-end">
                                     <button type="button" class="btn btn-xs btn-outline-warning edit-btn" data-edit-url="{% url 'manufacturer_edit' manufacturer.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal"><i class="bi bi-pencil"></i></button>
                                     <button type="button" class="btn btn-xs btn-outline-danger" data-item-name="{{ manufacturer.name }}" data-delete-url="{% url 'manufacturer_delete' manufacturer.pk %}" data-bs-toggle="modal" data-bs-target="#deleteConfirmModal"><i class="bi bi-trash"></i></button>
@@ -60,12 +60,13 @@
                             </tr>
                         </thead>
                         <tbody id="cheeseTypeTableBody">
+                            <!-- Debug: {{ cheese_types|length }} cheese types -->
                             {% for type in cheese_types %}
                             <tr>
                                 <td><strong>{{ type.name }}</strong></td>
                                 <td class="text-end">
                                     <button type="button" class="btn btn-xs btn-outline-warning edit-cheese-type-btn" data-edit-url="{% url 'cheese_type_edit' type.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal"><i class="bi bi-pencil"></i></button>
-                                    <button type="button" class="btn btn-xs btn-outline-danger delete-cheese-type-btn" data-delete-url="{% url 'cheese_type_delete' type.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal"><i class="bi bi-trash"></i></button>
+                                    <button type="button" class="btn btn-xs btn-outline-danger delete-cheese-type-btn" data-delete-url="{% url 'cheese_type_delete' type.pk %}" data-bs-toggle="modal" data-bs-target="#deleteConfirmModal"><i class="bi bi-trash"></i></button>
                                 </td>
                             </tr>
                             {% empty %}
@@ -85,12 +86,6 @@
             <div class="card-header bg-success text-white py-2 d-flex justify-content-between align-items-center">
                 <h6 class="mb-0"><i class="bi bi-box"></i> Cheese Products</h6>
                 <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#addStockModal">
-                        <i class="bi bi-plus-circle"></i> Add Stock
-                    </button>
-                    <button type="button" class="btn btn-info btn-sm" data-bs-toggle="modal" data-bs-target="#quickSaleModal">
-                        <i class="bi bi-cart-plus"></i> Add Sale
-                    </button>
                     <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#cheeseProductModal">
                         <i class="bi bi-plus-circle"></i> Add Cheese Product
                     </button>
@@ -103,7 +98,8 @@
                     <thead class="table-light">
                         <tr style="font-size: 0.95em;">
                             <th>Manufacturer</th>
-                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Size</th>
                             <th>Purchase Price (PKR/Packet)</th>
                             <th>Available Quantity (Packets)</th>
                             <th>Stock Value</th>
@@ -114,11 +110,12 @@
                     <tbody>
                         {% for item in products_with_value %}
                         <tr>
-                            <td><strong>{{ item.product.manufacturer.name }}</strong></td>
-                            <td>{{ item.product.name }}</td>
+                            <td>{{ item.product.manufacturer.name }}</td>
+                            <td>{{ item.product.type.name }}</td>
+                            <td>{{ item.product.packet_size }} KG</td>
                             <td>PKR {{ item.product.purchase_price_per_packet|floatformat:2 }}</td>
                             <td><span class="badge {% if item.product.available_quantity_packets > 10 %}bg-success{% elif item.product.available_quantity_packets > 0 %}bg-warning{% else %}bg-danger{% endif %}" style="font-size: 0.85em;">{{ item.product.available_quantity_packets|floatformat:2 }} packets</span></td>
-                            <td><strong>PKR {{ item.stock_value|floatformat:2 }}</strong></td>
+                            <td>PKR {{ item.stock_value|floatformat:2 }}</td>
                             <td>{{ item.product.date_added|date:"M d, Y" }}</td>
                             <td class="text-end">
                                 <button type="button" class="btn btn-xs btn-outline-warning edit-btn" data-edit-url="{% url 'cheese_edit' item.product.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal"><i class="bi bi-pencil"></i></button>
@@ -239,8 +236,9 @@
         </div>
     </div>
 </div>
-<!-- Add Stock Modal -->
-<div class="modal fade" id="addStockModal" tabindex="-1" aria-labelledby="addStockModalLabel" aria-hidden="true">
+
+<!-- Generic Modal for Dynamic Edit Forms -->
+<div class="modal fade" id="dynamicEditModal" tabindex="-1" aria-labelledby="dynamicEditModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content" id="addStockModalContent">
             <!-- Content will be loaded here via AJAX -->
@@ -256,8 +254,6 @@
         </div>
     </div>
 </div>
-
-<!-- Generic Modal for Dynamic Edit Forms -->
 <div class="modal fade" id="dynamicEditModal" tabindex="-1" aria-labelledby="dynamicEditModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content" id="dynamicEditModalContent">
@@ -287,24 +283,14 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
-    // Handle Add Stock Modal
-    const addStockModal = document.getElementById('addStockModal');
-    if (addStockModal) {
-        addStockModal.addEventListener('show.bs.modal', function () {
-            fetch('{% url "add_stock" %}')
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('addStockModalContent').innerHTML = data.html;
-                });
-        });
-
-        // Handle Add Stock Form Submission
-        addStockModal.addEventListener('submit', function(e) {
+    // Handle Cheese Type Modal (AJAX add)
+    const cheeseTypeForm = document.getElementById('cheeseTypeForm');
+    if (cheeseTypeForm) {
+        cheeseTypeForm.addEventListener('submit', function(e) {
             e.preventDefault();
             const form = e.target;
             const formData = new FormData(form);
-
-            fetch('{% url "add_stock" %}', {
+            fetch('{% url "cheese_type_add" %}', {
                 method: 'POST',
                 body: formData,
                 headers: {
@@ -314,46 +300,56 @@ document.addEventListener("DOMContentLoaded", function () {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    location.reload(); // Refresh page to show updated stock
-                }
-            });
-        });
-    }
-
-    // Handle Quick Sale Modal
-    const quickSaleModal = document.getElementById('quickSaleModal');
-    if (quickSaleModal) {
-        quickSaleModal.addEventListener('show.bs.modal', function () {
-            fetch('{% url "quick_sale_create" %}')
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('quickSaleModalContent').innerHTML = data.html;
-                });
-        });
-
-        // Handle Quick Sale Form Submission
-        quickSaleModal.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const form = e.target;
-            const formData = new FormData(form);
-
-            fetch('{% url "quick_sale_create" %}', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    location.reload(); // Refresh page to show updated stock
+                    location.reload();
                 } else {
-                    alert(data.error || 'An error occurred');
+                    document.getElementById('cheeseTypeModal').querySelector('.modal-body').innerHTML = data.html;
                 }
+            })
+            .catch(error => {
+                alert('Error adding cheese type.');
             });
         });
     }
+
+    // Dynamic Edit Modal (AJAX load for edit forms)
+    document.querySelectorAll('.edit-btn, .edit-cheese-type-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            const url = btn.getAttribute('data-edit-url');
+            const modal = document.getElementById('dynamicEditModal');
+            const modalContent = modal.querySelector('.modal-content, #dynamicEditModalContent');
+            if (modalContent) {
+                modalContent.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary" role="status"></div></div>';
+            }
+            fetch(url, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (modalContent) modalContent.innerHTML = data.html;
+            })
+            .catch(() => {
+                if (modalContent) modalContent.innerHTML = '<div class="alert alert-danger m-3">Failed to load form.</div>';
+            });
+        });
+    });
+
+    // Delete Modal (set form action and item name)
+    document.querySelectorAll('[data-delete-url]').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            const deleteUrl = btn.getAttribute('data-delete-url');
+            const itemName = btn.getAttribute('data-item-name') || '';
+            const deleteForm = document.getElementById('delete-form');
+            const nameSpan = document.getElementById('delete-item-name');
+            if (deleteForm && deleteUrl) {
+                deleteForm.setAttribute('action', deleteUrl);
+            }
+            if (nameSpan) {
+                nameSpan.textContent = itemName;
+            }
+        });
+    });
 });
 </script>
 {% endblock %}

@@ -1,44 +1,3 @@
-
-from django.http import JsonResponse
-from django.template.loader import render_to_string
-from django.shortcuts import render
-from .forms import CheeseTypeForm
-from .models import CheeseType
-
-def cheese_type_list(request):
-    types = CheeseType.objects.all()
-    return render(request, 'distribution/cheese_type_list.html', {'types': types})
-
-def cheese_type_add(request):
-    if request.method == 'POST':
-        form = CheeseTypeForm(request.POST)
-        if form.is_valid():
-            form.save()
-            return JsonResponse({'success': True})
-    else:
-        form = CheeseTypeForm()
-    html = render_to_string('distribution/partials/edit_cheese_type_form.html', {'form': form}, request=request)
-    return JsonResponse({'html': html})
-
-def cheese_type_edit(request, pk):
-    cheese_type = CheeseType.objects.get(pk=pk)
-    if request.method == 'POST':
-        form = CheeseTypeForm(request.POST, instance=cheese_type)
-        if form.is_valid():
-            form.save()
-            return JsonResponse({'success': True})
-    else:
-        form = CheeseTypeForm(instance=cheese_type)
-    html = render_to_string('distribution/partials/edit_cheese_type_form.html', {'form': form, 'cheese_type': cheese_type}, request=request)
-    return JsonResponse({'html': html})
-
-def cheese_type_delete(request, pk):
-    cheese_type = CheeseType.objects.get(pk=pk)
-    if request.method == 'POST':
-        cheese_type.delete()
-        return JsonResponse({'success': True})
-    html = render_to_string('distribution/cheese_type_delete.html', {'cheese_type': cheese_type}, request=request)
-    return JsonResponse({'html': html})
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
@@ -56,6 +15,145 @@ from .forms import (
 )
 from .decorators import owner_required, is_owner
 
+
+from django.http import JsonResponse
+from django.template.loader import render_to_string
+from django.shortcuts import render
+from .forms import CheeseTypeForm
+from .models import CheeseType
+
+# AJAX endpoint to process return for sale item
+from django.views.decorators.http import require_POST
+
+@login_required
+@require_POST
+def return_sale_item(request):
+    item_id = request.POST.get('item_id')
+    quantity = request.POST.get('quantity')
+    reason = request.POST.get('reason', '')
+    item = get_object_or_404(SaleItem, pk=item_id)
+    quantity = Decimal(quantity)
+    if quantity > item.quantity_packets:
+        return JsonResponse({'success': False, 'error': 'Return quantity exceeds sold quantity.'})
+    Return.objects.create(sale_item=item, quantity_packets=quantity, reason=reason)
+    item.modified = True
+    item.save()
+    # Optionally, update cheese product stock
+    item.cheese_product.available_quantity_packets += quantity
+    item.cheese_product.save()
+    return JsonResponse({'success': True})
+
+# AJAX endpoint to process return for all sale items in a sale
+@login_required
+@require_POST
+def return_all_sale_items(request):
+    sale_id = request.POST.get('sale_id')
+    reason = request.POST.get('reason', '')
+    sale = get_object_or_404(Sale, pk=sale_id)
+    for item in sale.saleitem_set.all():
+        Return.objects.create(sale_item=item, quantity_packets=item.quantity_packets, reason=reason)
+        item.modified = True
+        item.cheese_product.available_quantity_packets += item.quantity_packets
+        item.cheese_product.save()
+        item.save()
+    return JsonResponse({'success': True})
+
+# AJAX endpoint to process return for stock addition
+@login_required
+@require_POST
+def return_stock_addition(request):
+    addition_id = request.POST.get('addition_id')
+    quantity = request.POST.get('quantity')
+    reason = request.POST.get('reason', '')
+    addition = get_object_or_404(StockAdditionHistory, pk=addition_id)
+    quantity = Decimal(quantity)
+    if quantity > addition.quantity_packets:
+        return JsonResponse({'success': False, 'error': 'Return quantity exceeds added quantity.'})
+    Return.objects.create(stock_addition=addition, quantity_packets=quantity, reason=reason)
+    addition.modified = True
+    addition.save()
+    # Optionally, update cheese product stock
+    addition.cheese_product.available_quantity_packets -= quantity
+    addition.cheese_product.save()
+    return JsonResponse({'success': True})
+
+# AJAX endpoint for sale modal details
+from django.views.decorators.http import require_GET
+
+@login_required
+@require_GET
+def sale_modal_details(request, pk):
+    sale = get_object_or_404(Sale, pk=pk)
+    sale_items = sale.saleitem_set.select_related('cheese_product').all()
+    total_profit = sale.calculate_total_profit()
+    return render(request, 'distribution/partials/sale_modal_details.html', {
+        'sale': sale,
+        'sale_items': sale_items,
+        'total_profit': total_profit
+    })
+
+# AJAX endpoint for stock modal details
+@login_required
+@require_GET
+def stock_modal_details(request, pk):
+    addition = get_object_or_404(StockAdditionHistory, pk=pk)
+    returns = addition.return_set.all()
+    return render(request, 'distribution/partials/stock_modal_details.html', {
+        'addition': addition,
+        'returns': returns
+    })
+
+from .models import StockAdditionHistory, Return
+
+
+@login_required
+def stock_history(request):
+    stock_additions = StockAdditionHistory.objects.select_related('cheese_product', 'added_by').all()
+    return render(request, 'distribution/stock_history.html', {
+        'stock_additions': stock_additions,
+        'add_stock_formset': AddStockFormSet(),
+    })
+
+def cheese_type_list(request):
+    types = CheeseType.objects.all()
+    return render(request, 'distribution/cheese_type_list.html', {'types': types})
+
+@login_required
+def cheese_type_add(request):
+    if request.method == 'POST':
+        form = CheeseTypeForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Cheese type added successfully.')
+            return redirect('inventory_management')
+    else:
+        form = CheeseTypeForm()
+    html = render_to_string('distribution/partials/edit_cheese_type_form.html', {'form': form}, request=request)
+    return JsonResponse({'html': html})
+
+@login_required
+def cheese_type_edit(request, pk):
+    cheese_type = CheeseType.objects.get(pk=pk)
+    if request.method == 'POST':
+        form = CheeseTypeForm(request.POST, instance=cheese_type)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Cheese type updated successfully.')
+            return redirect('inventory_management')
+    else:
+        form = CheeseTypeForm(instance=cheese_type)
+    html = render_to_string('distribution/partials/edit_cheese_type_form.html', {'form': form, 'cheese_type': cheese_type}, request=request)
+    return JsonResponse({'html': html})
+
+@login_required
+def cheese_type_delete(request, pk):
+    cheese_type = CheeseType.objects.get(pk=pk)
+    if request.method == 'POST':
+        cheese_type.delete()
+        messages.success(request, 'Cheese type deleted successfully.')
+        return redirect('inventory_management')
+    html = render_to_string('distribution/cheese_type_delete.html', {'cheese_type': cheese_type}, request=request)
+    return JsonResponse({'html': html})
 
 def login_view(request):
     if request.user.is_authenticated:
@@ -324,10 +422,6 @@ def inventory_management(request):
     cheese_product_form = CheeseProductForm()
     cheese_type_form = CheeseTypeForm()
     add_stock_formset = AddStockFormSet()
-    # Create edit forms for each manufacturer and cheese product
-    manufacturer_edit_forms = {m.pk: ManufacturerForm(instance=m) for m in manufacturers}
-    cheese_edit_forms = {p.pk: CheeseProductForm(instance=p) for p in products}
-    cheese_type_edit_forms = {t.pk: CheeseTypeForm(instance=t) for t in cheese_types}
     return render(request, 'distribution/inventory_management.html', {
         'manufacturers': manufacturers,
         'products_with_value': products_with_value,
@@ -335,9 +429,7 @@ def inventory_management(request):
         'cheese_product_form': cheese_product_form,
         'cheese_type_form': cheese_type_form,
         'add_stock_formset': add_stock_formset,
-        'manufacturer_edit_forms': manufacturer_edit_forms,
-        'cheese_edit_forms': cheese_edit_forms,
-        'cheese_type_edit_forms': cheese_type_edit_forms,
+        'cheese_types': cheese_types,
     })
 
 
@@ -368,7 +460,8 @@ def manufacturer_edit(request, pk):
     else:
         form = ManufacturerForm(instance=manufacturer)
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        return render(request, 'distribution/partials/edit_manufacturer_form.html', {'form': form, 'manufacturer': manufacturer})
+        html = render_to_string('distribution/partials/edit_manufacturer_form.html', {'form': form, 'manufacturer': manufacturer}, request=request)
+        return JsonResponse({'html': html})
     return render(request, 'distribution/manufacturer_form.html', {'form': form, 'title': 'Edit Manufacturer'})
 
 
@@ -387,7 +480,15 @@ def cheese_add(request):
     if request.method == 'POST':
         form = CheeseProductForm(request.POST)
         if form.is_valid():
-            form.save()
+            cheese_product = form.save()
+            # Create stock addition history if initial quantity was added
+            initial_quantity = form.cleaned_data['available_quantity_packets']
+            if initial_quantity > 0:
+                StockAdditionHistory.objects.create(
+                    cheese_product=cheese_product,
+                    added_by=request.user.userprofile,
+                    quantity_packets=initial_quantity
+                )
             messages.success(request, 'Cheese product added successfully.')
             return redirect('inventory_management')
     else:
@@ -409,7 +510,8 @@ def cheese_edit(request, pk):
     else:
         form = CheeseProductForm(instance=product)
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        return render(request, 'distribution/partials/edit_cheese_form.html', {'form': form, 'product': product})
+        html = render_to_string('distribution/partials/edit_cheese_form.html', {'form': form, 'product': product}, request=request)
+        return JsonResponse({'html': html})
     return render(request, 'distribution/cheese_form.html', {'form': form, 'title': 'Edit Cheese Product'})
 
 
@@ -428,7 +530,7 @@ def add_stock(request):
     if request.method == 'POST':
         formset = AddStockFormSet(request.POST)
         if formset.is_valid():
-            valid_forms = [f for f in formset if f.cleaned_data and not f.cleaned_data.get('DELETE', False)]
+            valid_forms = [f for f in formset if f.cleaned_data]
 
             if not valid_forms:
                 return JsonResponse({'success': False, 'error': 'Please add at least one stock item.'})
@@ -440,6 +542,13 @@ def add_stock(request):
 
                 cheese_product.available_quantity_packets += additional_quantity
                 cheese_product.save()
+
+                # Create stock addition history
+                StockAdditionHistory.objects.create(
+                    cheese_product=cheese_product,
+                    added_by=request.user.userprofile,
+                    quantity_packets=additional_quantity
+                )
 
                 stock_added.append(f"{additional_quantity} packets to {cheese_product}")
 
@@ -650,9 +759,11 @@ def sale_history(request):
     sales = Sale.objects.select_related('client').prefetch_related('saleitem_set__cheese_product').all()
     sales_with_profit = []
     for sale in sales:
+        has_modified_items = sale.saleitem_set.filter(modified=True).exists()
         sales_with_profit.append({
             'sale': sale,
-            'total_profit': sale.calculate_total_profit()
+            'total_profit': sale.calculate_total_profit(),
+            'has_modified_items': has_modified_items
         })
     
     # Calculate analytics
@@ -662,6 +773,8 @@ def sale_history(request):
     return render(request, 'distribution/sale_history.html', {
         'sales_data': sales_with_profit,
         'user_is_owner': user_is_owner,
+        'clients': Client.objects.all(),
+        'formset': SaleItemFormSet(),
     })
 
 

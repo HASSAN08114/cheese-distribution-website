@@ -1,0 +1,37 @@
+<div class="modal-dialog">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">Stock Addition #{{ addition.id }} Details</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+            <p><strong>Product:</strong> {{ addition.cheese_product }}</p>
+            <p><strong>Quantity Added:</strong> {{ addition.quantity_packets }}</p>
+            <p><strong>Added By:</strong> {{ addition.added_by.user.username if addition.added_by else 'N/A' }}</p>
+            <p><strong>Date Added:</strong> {{ addition.date_added }}</p>
+            <hr>
+            <h6>Returns</h6>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Quantity Returned</th>
+                        <th>Date Returned</th>
+                        <th>Reason</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ret in returns %}
+                    <tr>
+                        <td>{{ ret.quantity_packets }}</td>
+                        <td>{{ ret.date_returned }}</td>
+                        <td>{{ ret.reason }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="3">No returns.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <button class="btn btn-outline-danger return-stock" data-id="{{ addition.id }}">Return Stock</button>
+        </div>
+    </div>
+</div>

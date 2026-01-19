@@ -3,37 +3,37 @@
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
-<h2 class="mb-4"><i class="bi bi-speedometer2"></i> Business Analytics Dashboard</h2>
+<h2 class="mb-4">Business Analytics Dashboard</h2>
 
 <!-- Time Period Filters -->
 <div class="card mb-4">
-    <div class="card-header bg-primary text-white">
-        <h6 class="mb-0"><i class="bi bi-filter"></i> Time Period Filters</h6>
+    <div class="card-header">
+        <h6 class="mb-0">Time Period Filters</h6>
     </div>
     <div class="card-body">
         <div class="row">
             <div class="col-md-12">
                 <div class="btn-group flex-wrap" role="group" aria-label="Time period filters">
                     <button type="button" class="btn btn-outline-primary active" data-period="all">
-                        <i class="bi bi-calendar-check"></i> All Time
+                        All Time
                     </button>
                     <button type="button" class="btn btn-outline-primary" data-period="today">
-                        <i class="bi bi-calendar-day"></i> Today
+                        Today
                     </button>
                     <button type="button" class="btn btn-outline-primary" data-period="week">
-                        <i class="bi bi-calendar-week"></i> Last 7 Days
+                        Last 7 Days
                     </button>
                     <button type="button" class="btn btn-outline-primary" data-period="month">
-                        <i class="bi bi-calendar-month"></i> Last 30 Days
+                        Last 30 Days
                     </button>
                     <button type="button" class="btn btn-outline-primary" data-period="quarter">
-                        <i class="bi bi-calendar"></i> Last 90 Days
+                        Last 90 Days
                     </button>
                     <button type="button" class="btn btn-outline-primary" data-period="6months">
-                        <i class="bi bi-calendar-event"></i> Last 6 Months
+                        Last 6 Months
                     </button>
                     <button type="button" class="btn btn-outline-primary" data-period="year">
-                        <i class="bi bi-calendar-date"></i> Last Year
+                        Last Year
                     </button>
                 </div>
             </div>
@@ -45,12 +45,12 @@
 <ul class="nav nav-tabs mb-4" id="analyticsTabs" role="tablist">
     <li class="nav-item" role="presentation">
         <button class="nav-link active" id="clients-tab" data-bs-toggle="tab" data-bs-target="#clients" type="button" role="tab">
-            <i class="bi bi-people"></i> Client Analytics
+            Client Analytics
         </button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="products-tab" data-bs-toggle="tab" data-bs-target="#products" type="button" role="tab">
-            <i class="bi bi-box"></i> Product Analytics
+            Product Analytics
         </button>
     </li>
 </ul>
@@ -61,40 +61,37 @@
         <!-- Client Summary Cards -->
         <div class="row mb-4" id="client-summary-cards">
             <div class="col-md-3 mb-3">
-                <div class="card text-white bg-success shadow-sm">
+                <div class="card">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <h6 class="card-subtitle mb-2 text-white-50">Total Revenue</h6>
+                                <h6 class="card-subtitle mb-2 text-muted">Total Revenue</h6>
                                 <h3 class="card-text mb-0" id="client-total-revenue">PKR 0.00</h3>
                             </div>
-                            <i class="bi bi-currency-dollar" style="font-size: 3rem; opacity: 0.3;"></i>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="col-md-3 mb-3">
-                <div class="card text-white bg-primary shadow-sm">
+                <div class="card">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <h6 class="card-subtitle mb-2 text-white-50">Total Profit</h6>
+                                <h6 class="card-subtitle mb-2 text-muted">Total Profit</h6>
                                 <h3 class="card-text mb-0" id="client-total-profit">PKR 0.00</h3>
                             </div>
-                            <i class="bi bi-graph-up" style="font-size: 3rem; opacity: 0.3;"></i>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="col-md-3 mb-3">
-                <div class="card text-white bg-info shadow-sm">
+                <div class="card">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <h6 class="card-subtitle mb-2 text-white-50">Total Clients</h6>
+                                <h6 class="card-subtitle mb-2 text-muted">Total Clients</h6>
                                 <h3 class="card-text mb-0" id="client-total-clients">0</h3>
                             </div>
-                            <i class="bi bi-people" style="font-size: 3rem; opacity: 0.3;"></i>
                         </div>
                     </div>
                 </div>

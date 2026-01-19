@@ -50,7 +50,7 @@ class AddStockForm(forms.Form):
     )
 
 
-AddStockFormSet = forms.formset_factory(AddStockForm, extra=1, can_delete=True)
+AddStockFormSet = forms.formset_factory(AddStockForm, extra=1, can_delete=False)
 
 
 class ClientForm(forms.ModelForm):

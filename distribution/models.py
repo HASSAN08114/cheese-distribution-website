@@ -102,6 +102,7 @@ class Sale(models.Model):
         ordering = ['-sale_date']
 
 
+
 class SaleItem(models.Model):
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE)
     cheese_product = models.ForeignKey(CheeseProduct, on_delete=models.CASCADE)
@@ -120,6 +121,7 @@ class SaleItem(models.Model):
         decimal_places=2,
         default=Decimal('0.00')
     )
+    modified = models.BooleanField(default=False, help_text="True if item was returned or modified")
 
     def save(self, *args, **kwargs):
         self.profit_per_packet = self.selling_price_per_packet - self.cheese_product.purchase_price_per_packet
@@ -133,4 +135,38 @@ class SaleItem(models.Model):
 
     class Meta:
         ordering = ['id']
+
+
+# Tracks each stock addition event
+class StockAdditionHistory(models.Model):
+    cheese_product = models.ForeignKey(CheeseProduct, on_delete=models.CASCADE)
+    added_by = models.ForeignKey(UserProfile, on_delete=models.SET_NULL, null=True)
+    quantity_packets = models.DecimalField(max_digits=10, decimal_places=2)
+    date_added = models.DateTimeField(auto_now_add=True)
+    modified = models.BooleanField(default=False, help_text="True if stock addition was returned or modified")
+
+    def __str__(self):
+        return f"{self.cheese_product} - {self.quantity_packets} packets on {self.date_added}" 
+
+    class Meta:
+        ordering = ['-date_added']
+
+
+# Tracks returns for both sales and stock additions
+class Return(models.Model):
+    sale_item = models.ForeignKey(SaleItem, on_delete=models.CASCADE, null=True, blank=True)
+    stock_addition = models.ForeignKey(StockAdditionHistory, on_delete=models.CASCADE, null=True, blank=True)
+    quantity_packets = models.DecimalField(max_digits=10, decimal_places=2)
+    date_returned = models.DateTimeField(auto_now_add=True)
+    reason = models.TextField(blank=True)
+
+    def __str__(self):
+        if self.sale_item:
+            return f"Return for SaleItem {self.sale_item.id} - {self.quantity_packets} packets"
+        elif self.stock_addition:
+            return f"Return for StockAddition {self.stock_addition.id} - {self.quantity_packets} packets"
+        return "Return"
+
+    class Meta:
+        ordering = ['-date_returned']
 
