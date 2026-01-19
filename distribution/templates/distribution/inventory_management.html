@@ -84,9 +84,17 @@
         <div class="card shadow-sm mb-3 flex-grow-1 d-flex flex-column">
             <div class="card-header bg-success text-white py-2 d-flex justify-content-between align-items-center">
                 <h6 class="mb-0"><i class="bi bi-box"></i> Cheese Products</h6>
-                <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#cheeseProductModal">
-                    <i class="bi bi-plus-circle"></i> Add Cheese Product
-                </button>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#addStockModal">
+                        <i class="bi bi-plus-circle"></i> Add Stock
+                    </button>
+                    <button type="button" class="btn btn-info btn-sm" data-bs-toggle="modal" data-bs-target="#quickSaleModal">
+                        <i class="bi bi-cart-plus"></i> Add Sale
+                    </button>
+                    <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#cheeseProductModal">
+                        <i class="bi bi-plus-circle"></i> Add Cheese Product
+                    </button>
+                </div>
                 <input class="form-control form-control-sm ms-2" type="search" placeholder="Search cheese products..." aria-label="Search" id="cheeseProductSearch" style="max-width: 350px;">
             </div>
         <div class="card-body p-2 flex-grow-1 d-flex flex-column">
@@ -231,6 +239,24 @@
         </div>
     </div>
 </div>
+<!-- Add Stock Modal -->
+<div class="modal fade" id="addStockModal" tabindex="-1" aria-labelledby="addStockModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content" id="addStockModalContent">
+            <!-- Content will be loaded here via AJAX -->
+        </div>
+    </div>
+</div>
+
+<!-- Quick Sale Modal -->
+<div class="modal fade" id="quickSaleModal" tabindex="-1" aria-labelledby="quickSaleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content" id="quickSaleModalContent">
+            <!-- Content will be loaded here via AJAX -->
+        </div>
+    </div>
+</div>
+
 <!-- Generic Modal for Dynamic Edit Forms -->
 <div class="modal fade" id="dynamicEditModal" tabindex="-1" aria-labelledby="dynamicEditModalLabel" aria-hidden="true">
     <div class="modal-dialog">
@@ -246,19 +272,88 @@
 <script>
 document.addEventListener("DOMContentLoaded", function () {
     const deleteModal = document.getElementById("deleteConfirmModal");
-        // Live search for cheese products
-        const searchInput = document.getElementById('cheeseProductSearch');
-        const cheeseTable = document.getElementById('cheeseProductTable');
-        if (searchInput && cheeseTable) {
-            searchInput.addEventListener('input', function() {
-                const filter = searchInput.value.toLowerCase();
-                const rows = cheeseTable.querySelectorAll('tbody tr');
-                rows.forEach(row => {
-                    const text = row.textContent.toLowerCase();
-                    row.style.display = text.includes(filter) ? '' : 'none';
-                });
+
+    // Live search for cheese products
+    const searchInput = document.getElementById('cheeseProductSearch');
+    const cheeseTable = document.getElementById('cheeseProductTable');
+    if (searchInput && cheeseTable) {
+        searchInput.addEventListener('input', function() {
+            const filter = searchInput.value.toLowerCase();
+            const rows = cheeseTable.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(filter) ? '' : 'none';
             });
-        }
+        });
+    }
+
+    // Handle Add Stock Modal
+    const addStockModal = document.getElementById('addStockModal');
+    if (addStockModal) {
+        addStockModal.addEventListener('show.bs.modal', function () {
+            fetch('{% url "add_stock" %}')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('addStockModalContent').innerHTML = data.html;
+                });
+        });
+
+        // Handle Add Stock Form Submission
+        addStockModal.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const form = e.target;
+            const formData = new FormData(form);
+
+            fetch('{% url "add_stock" %}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload(); // Refresh page to show updated stock
+                }
+            });
+        });
+    }
+
+    // Handle Quick Sale Modal
+    const quickSaleModal = document.getElementById('quickSaleModal');
+    if (quickSaleModal) {
+        quickSaleModal.addEventListener('show.bs.modal', function () {
+            fetch('{% url "quick_sale_create" %}')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('quickSaleModalContent').innerHTML = data.html;
+                });
+        });
+
+        // Handle Quick Sale Form Submission
+        quickSaleModal.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const form = e.target;
+            const formData = new FormData(form);
+
+            fetch('{% url "quick_sale_create" %}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload(); // Refresh page to show updated stock
+                } else {
+                    alert(data.error || 'An error occurred');
+                }
+            });
+        });
+    }
 });
 </script>
 {% endblock %}

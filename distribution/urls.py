@@ -9,6 +9,8 @@ urlpatterns = [
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
     path('dashboard/', views.dashboard, name='dashboard'),
+    path('api/client-analytics/', views.get_client_analytics, name='get_client_analytics'),
+    path('api/product-analytics/', views.get_product_analytics, name='get_product_analytics'),
     
     # Merged inventory management (manufacturers + cheese)
     path('inventory/', views.inventory_management, name='inventory_management'),
@@ -19,6 +21,8 @@ urlpatterns = [
     path('cheese/add/', views.cheese_add, name='cheese_add'),
     path('cheese/<int:pk>/edit/', views.cheese_edit, name='cheese_edit'),
     path('cheese/<int:pk>/delete/', views.cheese_delete, name='cheese_delete'),
+    path('stock/add/', views.add_stock, name='add_stock'),
+    path('sales/quick-create/', views.quick_sale_create, name='quick_sale_create'),
     
     path('clients/', views.client_list, name='client_list'),
     path('clients/add/', views.client_add, name='client_add'),

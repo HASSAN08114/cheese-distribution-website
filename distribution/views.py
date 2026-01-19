@@ -43,6 +43,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
+from django.db import models
 from django.db.models import Sum, Q
 from django.db import transaction
 from django.utils import timezone
@@ -51,7 +52,7 @@ from decimal import Decimal
 from .models import Manufacturer, CheeseProduct, Client, Sale, SaleItem, UserProfile
 from .forms import (
     ManufacturerForm, CheeseProductForm, ClientForm,
-    SaleItemForm, SaleItemFormSet, UserForm, UserRoleForm
+    SaleItemForm, SaleItemFormSet, UserForm, UserRoleForm, AddStockForm, AddStockFormSet
 )
 from .decorators import owner_required, is_owner
 
@@ -79,31 +80,228 @@ def logout_view(request):
 
 @login_required
 def dashboard(request):
-    total_profit = Decimal('0.00')
-    total_sales = Decimal('0.00')
-    remaining_stock_value = Decimal('0.00')
-    
-    sales = Sale.objects.all()
-    for sale in sales:
-        total_profit += sale.calculate_total_profit()
-        total_sales += sale.total_amount
-    
-    products = CheeseProduct.objects.all()
-    for product in products:
-        remaining_stock_value += product.available_quantity_packets * product.purchase_price_per_packet
-    
     user_is_owner = is_owner(request.user)
-    
+
     context = {
-        'total_profit': total_profit,
-        'total_sales': total_sales,
-        'remaining_stock_value': remaining_stock_value,
-        'total_products': products.count(),
-        'total_clients': Client.objects.count(),
-        'total_manufacturers': Manufacturer.objects.count(),
         'user_is_owner': user_is_owner,
     }
     return render(request, 'distribution/dashboard.html', context)
+
+
+@login_required
+def get_client_analytics(request):
+    """AJAX endpoint to get client analytics based on time period"""
+    period = request.GET.get('period', 'all')
+
+    now = timezone.now()
+
+    if period == 'today':
+        start_date = now.date()
+        end_date = now.date()
+    elif period == 'week':
+        start_date = now.date() - timedelta(days=7)
+        end_date = now.date()
+    elif period == 'month':
+        start_date = now.date() - timedelta(days=30)
+        end_date = now.date()
+    elif period == 'quarter':
+        start_date = now.date() - timedelta(days=90)
+        end_date = now.date()
+    elif period == '6months':
+        start_date = now.date() - timedelta(days=180)
+        end_date = now.date()
+    elif period == 'year':
+        start_date = now.date() - timedelta(days=365)
+        end_date = now.date()
+    else:  # 'all'
+        start_date = None
+        end_date = None
+
+    # Get all clients
+    clients = Client.objects.all()
+    client_data = []
+
+    for client in clients:
+        # Filter sales by date range
+        if start_date and end_date:
+            client_sales = Sale.objects.filter(client=client, sale_date__date__range=[start_date, end_date])
+        else:
+            client_sales = Sale.objects.filter(client=client)
+
+        if client_sales.exists():
+            total_sales = client_sales.aggregate(
+                total=Sum('total_amount')
+            )['total'] or Decimal('0.00')
+
+            total_profit = sum(sale.calculate_total_profit() for sale in client_sales)
+
+            # Count total sales transactions
+            total_transactions = client_sales.count()
+
+            # Get last sale date
+            last_sale_date = client_sales.order_by('-sale_date').first().sale_date.date() if client_sales.exists() else None
+
+            client_data.append({
+                'id': client.id,
+                'name': client.name,
+                'phone': client.phone,
+                'total_sales': float(total_sales),
+                'total_profit': float(total_profit),
+                'total_transactions': total_transactions,
+                'last_sale_date': last_sale_date.strftime('%Y-%m-%d') if last_sale_date else None,
+                'avg_sale': float(total_sales / total_transactions) if total_transactions > 0 else 0,
+            })
+
+    # Sort by profit descending
+    client_data.sort(key=lambda x: x['total_profit'], reverse=True)
+
+    # Calculate summary stats
+    total_clients = len(client_data)
+    total_revenue = sum(client['total_sales'] for client in client_data)
+    total_profit_all = sum(client['total_profit'] for client in client_data)
+    total_transactions_all = sum(client['total_transactions'] for client in client_data)
+
+    summary = {
+        'total_clients': total_clients,
+        'total_revenue': float(total_revenue),
+        'total_profit': float(total_profit_all),
+        'total_transactions': total_transactions_all,
+        'avg_client_value': float(total_revenue / total_clients) if total_clients > 0 else 0,
+    }
+
+    return JsonResponse({
+        'clients': client_data,
+        'summary': summary,
+        'period': period
+    })
+
+
+@login_required
+def get_product_analytics(request):
+    """AJAX endpoint to get product analytics based on time period"""
+    period = request.GET.get('period', 'all')
+
+    now = timezone.now()
+
+    if period == 'today':
+        start_date = now.date()
+        end_date = now.date()
+    elif period == 'week':
+        start_date = now.date() - timedelta(days=7)
+        end_date = now.date()
+    elif period == 'month':
+        start_date = now.date() - timedelta(days=30)
+        end_date = now.date()
+    elif period == 'quarter':
+        start_date = now.date() - timedelta(days=90)
+        end_date = now.date()
+    elif period == '6months':
+        start_date = now.date() - timedelta(days=180)
+        end_date = now.date()
+    elif period == 'year':
+        start_date = now.date() - timedelta(days=365)
+        end_date = now.date()
+    else:  # 'all'
+        start_date = None
+        end_date = None
+
+    # Get all products with sales data
+    products = CheeseProduct.objects.all()
+    product_data = []
+
+    for product in products:
+        # Filter sale items by date range
+        if start_date and end_date:
+            product_sales = SaleItem.objects.filter(
+                cheese_product=product,
+                sale__sale_date__date__range=[start_date, end_date]
+            )
+        else:
+            product_sales = SaleItem.objects.filter(cheese_product=product)
+
+        if product_sales.exists():
+            # Total quantity sold
+            total_quantity = product_sales.aggregate(
+                total=Sum('quantity_packets')
+            )['total'] or Decimal('0.00')
+
+            # Total revenue
+            total_revenue = product_sales.aggregate(
+                total=Sum(models.F('quantity_packets') * models.F('selling_price_per_packet'))
+            )['total'] or Decimal('0.00')
+
+            # Total profit
+            total_profit = sum(
+                (item.selling_price_per_packet - item.cheese_product.purchase_price_per_packet) * item.quantity_packets
+                for item in product_sales
+            )
+
+            # Transaction count
+            transaction_count = product_sales.count()
+
+            # Current stock level
+            current_stock = product.available_quantity_packets
+
+            # Stock turnover (sold / current stock)
+            stock_turnover = float(total_quantity / current_stock) if current_stock > 0 else 0
+
+            # Profit margin percentage
+            total_cost = total_quantity * product.purchase_price_per_packet
+            profit_margin = (total_profit / float(total_revenue) * 100) if total_revenue > 0 else 0
+
+            product_data.append({
+                'id': product.id,
+                'name': f"{product.manufacturer.name} {product.type.name} {product.packet_size}kg",
+                'manufacturer': product.manufacturer.name,
+                'type': product.type.name,
+                'packet_size': float(product.packet_size),
+                'purchase_price': float(product.purchase_price_per_packet),
+                'total_quantity_sold': float(total_quantity),
+                'total_revenue': float(total_revenue),
+                'total_profit': float(total_profit),
+                'transaction_count': transaction_count,
+                'current_stock': float(current_stock),
+                'stock_turnover': stock_turnover,
+                'profit_margin': profit_margin,
+                'avg_sale_price': float(total_revenue / total_quantity) if total_quantity > 0 else 0,
+            })
+
+    # Sort by revenue descending (most sold)
+    product_data.sort(key=lambda x: x['total_revenue'], reverse=True)
+
+    # Calculate summary stats
+    total_products = len(product_data)
+    total_revenue = sum(product['total_revenue'] for product in product_data)
+    total_profit = sum(product['total_profit'] for product in product_data)
+    total_quantity = sum(product['total_quantity_sold'] for product in product_data)
+
+    # Get top and bottom performers
+    top_performers = product_data[:5] if len(product_data) >= 5 else product_data
+    bottom_performers = product_data[-5:] if len(product_data) >= 5 else product_data[-len(product_data):]
+
+    # Stock alerts
+    low_stock_products = [p for p in product_data if p['current_stock'] < 10]
+    out_of_stock_products = [p for p in product_data if p['current_stock'] == 0]
+
+    summary = {
+        'total_products': total_products,
+        'total_revenue': float(total_revenue),
+        'total_profit': float(total_profit),
+        'total_quantity_sold': float(total_quantity),
+        'avg_product_revenue': float(total_revenue / total_products) if total_products > 0 else 0,
+        'low_stock_count': len(low_stock_products),
+        'out_of_stock_count': len(out_of_stock_products),
+    }
+
+    return JsonResponse({
+        'products': product_data,
+        'top_performers': top_performers,
+        'bottom_performers': bottom_performers,
+        'low_stock_products': low_stock_products,
+        'out_of_stock_products': out_of_stock_products,
+        'summary': summary,
+        'period': period
+    })
 
 
 @owner_required
@@ -120,11 +318,12 @@ def inventory_management(request):
             'product': product,
             'stock_value': stock_value
         })
-    
+
     from .forms import ManufacturerForm, CheeseProductForm
     manufacturer_form = ManufacturerForm()
     cheese_product_form = CheeseProductForm()
     cheese_type_form = CheeseTypeForm()
+    add_stock_formset = AddStockFormSet()
     # Create edit forms for each manufacturer and cheese product
     manufacturer_edit_forms = {m.pk: ManufacturerForm(instance=m) for m in manufacturers}
     cheese_edit_forms = {p.pk: CheeseProductForm(instance=p) for p in products}
@@ -135,6 +334,7 @@ def inventory_management(request):
         'manufacturer_form': manufacturer_form,
         'cheese_product_form': cheese_product_form,
         'cheese_type_form': cheese_type_form,
+        'add_stock_formset': add_stock_formset,
         'manufacturer_edit_forms': manufacturer_edit_forms,
         'cheese_edit_forms': cheese_edit_forms,
         'cheese_type_edit_forms': cheese_type_edit_forms,
@@ -221,6 +421,95 @@ def cheese_delete(request, pk):
         messages.success(request, 'Cheese product deleted successfully.')
         return redirect('inventory_management')
     return render(request, 'distribution/cheese_delete.html', {'product': product})
+
+
+@login_required
+def add_stock(request):
+    if request.method == 'POST':
+        formset = AddStockFormSet(request.POST)
+        if formset.is_valid():
+            valid_forms = [f for f in formset if f.cleaned_data and not f.cleaned_data.get('DELETE', False)]
+
+            if not valid_forms:
+                return JsonResponse({'success': False, 'error': 'Please add at least one stock item.'})
+
+            stock_added = []
+            for form in valid_forms:
+                cheese_product = form.cleaned_data['cheese_product']
+                additional_quantity = form.cleaned_data['additional_quantity']
+
+                cheese_product.available_quantity_packets += additional_quantity
+                cheese_product.save()
+
+                stock_added.append(f"{additional_quantity} packets to {cheese_product}")
+
+            messages.success(request, f'Successfully added stock: {", ".join(stock_added)}.')
+            return JsonResponse({'success': True})
+        else:
+            return JsonResponse({'success': False, 'error': 'Please correct the errors below.'})
+    else:
+        formset = AddStockFormSet()
+
+    html = render_to_string('distribution/partials/add_stock_form.html', {'formset': formset}, request=request)
+    return JsonResponse({'html': html})
+
+
+@login_required
+def quick_sale_create(request):
+    """Quick sale creation from inventory page - same logic as sale_create"""
+    if request.method == 'POST':
+        client_id = request.POST.get('client')
+        if not client_id:
+            return JsonResponse({'success': False, 'error': 'Please select a client.'})
+
+        client = get_object_or_404(Client, pk=client_id)
+        formset = SaleItemFormSet(request.POST)
+
+        if formset.is_valid():
+            valid_forms = [f for f in formset if f.cleaned_data and not f.cleaned_data.get('DELETE', False)]
+
+            if not valid_forms:
+                return JsonResponse({'success': False, 'error': 'Please add at least one item to the sale.'})
+
+            with transaction.atomic():
+                sale = Sale.objects.create(client=client, total_amount=Decimal('0.00'))
+                total_amount = Decimal('0.00')
+
+                for form in valid_forms:
+                    cheese_product = form.cleaned_data['cheese_product']
+                    quantity_packets = form.cleaned_data['quantity_packets']
+                    selling_price_per_packet = form.cleaned_data['selling_price_per_packet']
+
+                    if quantity_packets > cheese_product.available_quantity_packets:
+                        sale.delete()
+                        return JsonResponse({'success': False, 'error': f'Insufficient stock for {cheese_product.name}.'})
+
+                    sale_item = SaleItem.objects.create(
+                        sale=sale,
+                        cheese_product=cheese_product,
+                        quantity_packets=quantity_packets,
+                        selling_price_per_packet=selling_price_per_packet
+                    )
+
+                    cheese_product.available_quantity_packets -= quantity_packets
+                    cheese_product.save()
+
+                    total_amount += selling_price_per_packet * quantity_packets
+
+                sale.total_amount = total_amount
+                sale.save()
+
+                return JsonResponse({'success': True, 'message': 'Sale created successfully.'})
+        else:
+            return JsonResponse({'success': False, 'error': 'Please correct the errors below.'})
+    else:
+        formset = SaleItemFormSet()
+
+    html = render_to_string('distribution/partials/quick_sale_form.html', {
+        'formset': formset,
+        'clients': Client.objects.all()
+    }, request=request)
+    return JsonResponse({'html': html})
 
 
 @login_required

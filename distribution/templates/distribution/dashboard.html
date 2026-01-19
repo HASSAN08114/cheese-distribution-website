@@ -3,96 +3,599 @@
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
-<h2 class="mb-4"><i class="bi bi-speedometer2"></i> Dashboard</h2>
+<h2 class="mb-4"><i class="bi bi-speedometer2"></i> Business Analytics Dashboard</h2>
 
-<div class="row mb-4">
-    <div class="col-md-3 mb-3">
-        <div class="card text-white bg-primary shadow-sm">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="card-subtitle mb-2 text-white-50">Total Profit</h6>
-                        <h3 class="card-text mb-0">PKR {{ total_profit|floatformat:2 }}</h3>
-                    </div>
-                    <i class="bi bi-currency-dollar" style="font-size: 3rem; opacity: 0.3;"></i>
-                </div>
-            </div>
-        </div>
+<!-- Time Period Filters -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h6 class="mb-0"><i class="bi bi-filter"></i> Time Period Filters</h6>
     </div>
-    <div class="col-md-3 mb-3">
-        <div class="card text-white bg-success shadow-sm">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="card-subtitle mb-2 text-white-50">Total Sales</h6>
-                        <h3 class="card-text mb-0">PKR {{ total_sales|floatformat:2 }}</h3>
-                    </div>
-                    <i class="bi bi-cart-check" style="font-size: 3rem; opacity: 0.3;"></i>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 mb-3">
-        <div class="card text-white bg-info shadow-sm">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="card-subtitle mb-2 text-white-50">Stock Value</h6>
-                        <h3 class="card-text mb-0">PKR {{ remaining_stock_value|floatformat:2 }}</h3>
-                    </div>
-                    <i class="bi bi-box-seam" style="font-size: 3rem; opacity: 0.3;"></i>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 mb-3">
-        <div class="card text-white bg-secondary shadow-sm">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="card-subtitle mb-2 text-white-50">Total Products</h6>
-                        <h3 class="card-text mb-0">{{ total_products }}</h3>
-                    </div>
-                    <i class="bi bi-box" style="font-size: 3rem; opacity: 0.3;"></i>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="btn-group flex-wrap" role="group" aria-label="Time period filters">
+                    <button type="button" class="btn btn-outline-primary active" data-period="all">
+                        <i class="bi bi-calendar-check"></i> All Time
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" data-period="today">
+                        <i class="bi bi-calendar-day"></i> Today
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" data-period="week">
+                        <i class="bi bi-calendar-week"></i> Last 7 Days
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" data-period="month">
+                        <i class="bi bi-calendar-month"></i> Last 30 Days
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" data-period="quarter">
+                        <i class="bi bi-calendar"></i> Last 90 Days
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" data-period="6months">
+                        <i class="bi bi-calendar-event"></i> Last 6 Months
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" data-period="year">
+                        <i class="bi bi-calendar-date"></i> Last Year
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row mb-4">
-    <div class="col-md-4 mb-3">
+<!-- Analytics Tabs -->
+<ul class="nav nav-tabs mb-4" id="analyticsTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="clients-tab" data-bs-toggle="tab" data-bs-target="#clients" type="button" role="tab">
+            <i class="bi bi-people"></i> Client Analytics
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="products-tab" data-bs-toggle="tab" data-bs-target="#products" type="button" role="tab">
+            <i class="bi bi-box"></i> Product Analytics
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="analyticsTabsContent">
+    <!-- Client Analytics Tab -->
+    <div class="tab-pane fade show active" id="clients" role="tabpanel">
+        <!-- Client Summary Cards -->
+        <div class="row mb-4" id="client-summary-cards">
+            <div class="col-md-3 mb-3">
+                <div class="card text-white bg-success shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-subtitle mb-2 text-white-50">Total Revenue</h6>
+                                <h3 class="card-text mb-0" id="client-total-revenue">PKR 0.00</h3>
+                            </div>
+                            <i class="bi bi-currency-dollar" style="font-size: 3rem; opacity: 0.3;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card text-white bg-primary shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-subtitle mb-2 text-white-50">Total Profit</h6>
+                                <h3 class="card-text mb-0" id="client-total-profit">PKR 0.00</h3>
+                            </div>
+                            <i class="bi bi-graph-up" style="font-size: 3rem; opacity: 0.3;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card text-white bg-info shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-subtitle mb-2 text-white-50">Total Clients</h6>
+                                <h3 class="card-text mb-0" id="client-total-clients">0</h3>
+                            </div>
+                            <i class="bi bi-people" style="font-size: 3rem; opacity: 0.3;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card text-white bg-warning shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-subtitle mb-2 text-white-50">Avg Client Value</h6>
+                                <h3 class="card-text mb-0" id="client-avg-client-value">PKR 0.00</h3>
+                            </div>
+                            <i class="bi bi-person-lines-fill" style="font-size: 3rem; opacity: 0.3;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Client Analytics Table -->
         <div class="card shadow-sm">
-            <div class="card-body text-center">
-                <i class="bi bi-people text-primary" style="font-size: 2.5rem;"></i>
-                <h5 class="card-title mt-3">Total Clients</h5>
-                <h2 class="text-primary">{{ total_clients }}</h2>
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-table"></i> Client Performance Analytics</h6>
+                <div class="d-flex gap-2">
+                    <input type="text" class="form-control form-control-sm" id="client-search" placeholder="Search clients..." style="width: 250px;">
+                    <button type="button" class="btn btn-sm btn-outline-light" id="client-export-btn">
+                        <i class="bi bi-download"></i> Export
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="client-analytics-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th><i class="bi bi-person"></i> Client Name</th>
+                                <th><i class="bi bi-telephone"></i> Phone</th>
+                                <th><i class="bi bi-receipt"></i> Total Sales</th>
+                                <th><i class="bi bi-graph-up"></i> Total Profit</th>
+                                <th><i class="bi bi-hash"></i> Transactions</th>
+                                <th><i class="bi bi-calculator"></i> Avg Sale</th>
+                                <th><i class="bi bi-calendar-event"></i> Last Sale</th>
+                            </tr>
+                        </thead>
+                        <tbody id="client-table-body">
+                            <!-- Data will be loaded via AJAX -->
+                            <tr>
+                                <td colspan="7" class="text-center py-4">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p class="mt-2 text-muted">Loading client analytics...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
-    <div class="col-md-4 mb-3">
-        <div class="card shadow-sm">
-            <div class="card-body text-center">
-                <i class="bi bi-building text-success" style="font-size: 2.5rem;"></i>
-                <h5 class="card-title mt-3">Total Manufacturers</h5>
-                <h2 class="text-success">{{ total_manufacturers }}</h2>
+
+    <!-- Product Analytics Tab -->
+    <div class="tab-pane fade" id="products" role="tabpanel">
+        <!-- Product Summary Cards -->
+        <div class="row mb-4" id="product-summary-cards">
+            <div class="col-md-3 mb-3">
+                <div class="card text-white bg-success shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-subtitle mb-2 text-white-50">Total Revenue</h6>
+                                <h3 class="card-text mb-0" id="product-total-revenue">PKR 0.00</h3>
+                            </div>
+                            <i class="bi bi-currency-dollar" style="font-size: 3rem; opacity: 0.3;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card text-white bg-primary shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-subtitle mb-2 text-white-50">Total Profit</h6>
+                                <h3 class="card-text mb-0" id="product-total-profit">PKR 0.00</h3>
+                            </div>
+                            <i class="bi bi-graph-up" style="font-size: 3rem; opacity: 0.3;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card text-white bg-warning shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-subtitle mb-2 text-white-50">Items Sold</h6>
+                                <h3 class="card-text mb-0" id="product-total-quantity">0</h3>
+                            </div>
+                            <i class="bi bi-box-seam" style="font-size: 3rem; opacity: 0.3;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card text-white bg-danger shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-subtitle mb-2 text-white-50">Low Stock Alerts</h6>
+                                <h3 class="card-text mb-0" id="low-stock-count">0</h3>
+                            </div>
+                            <i class="bi bi-exclamation-triangle" style="font-size: 3rem; opacity: 0.3;"></i>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-    <div class="col-md-4 mb-3">
+
+        <!-- Top/Bottom Performers -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-success text-white">
+                        <h6 class="mb-0"><i class="bi bi-trophy"></i> Top 5 Best-Selling Products</h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="top-performers-list">
+                            <div class="text-center py-3">
+                                <div class="spinner-border text-success" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-warning text-dark">
+                        <h6 class="mb-0"><i class="bi bi-arrow-down"></i> Bottom 5 Least-Selling Products</h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="bottom-performers-list">
+                            <div class="text-center py-3">
+                                <div class="spinner-border text-warning" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Product Analytics Table -->
         <div class="card shadow-sm">
-            <div class="card-body text-center">
-                <i class="bi bi-person-badge text-info" style="font-size: 2.5rem;"></i>
-                <h5 class="card-title mt-3">Your Role</h5>
-                <h4>
-                    {% if user_is_owner %}
-                        <span class="badge bg-warning text-dark">Owner</span>
-                    {% else %}
-                        <span class="badge bg-info">Employee</span>
-                    {% endif %}
-                </h4>
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-table"></i> Product Performance Analytics</h6>
+                <div class="d-flex gap-2">
+                    <input type="text" class="form-control form-control-sm" id="product-search" placeholder="Search products..." style="width: 250px;">
+                    <button type="button" class="btn btn-sm btn-outline-light" id="product-export-btn">
+                        <i class="bi bi-download"></i> Export
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="product-analytics-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th><i class="bi bi-box"></i> Product Name</th>
+                                <th><i class="bi bi-hash"></i> Quantity Sold</th>
+                                <th><i class="bi bi-currency-dollar"></i> Revenue</th>
+                                <th><i class="bi bi-graph-up"></i> Profit</th>
+                                <th><i class="bi bi-percent"></i> Margin</th>
+                                <th><i class="bi bi-package"></i> Current Stock</th>
+                                <th><i class="bi bi-arrow-repeat"></i> Turnover</th>
+                                <th><i class="bi bi-receipt"></i> Transactions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="product-table-body">
+                            <!-- Data will be loaded via AJAX -->
+                            <tr>
+                                <td colspan="8" class="text-center py-4">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p class="mt-2 text-muted">Loading product analytics...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Your Role Card -->
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let currentPeriod = 'all';
+    let allClientData = [];
+    let allProductData = [];
+
+    // Load initial data
+    loadClientAnalytics('all');
+    loadProductAnalytics('all');
+
+    // Time period filter buttons
+    document.querySelectorAll('[data-period]').forEach(button => {
+        button.addEventListener('click', function() {
+            // Remove active class from all buttons
+            document.querySelectorAll('[data-period]').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Add active class to clicked button
+            this.classList.add('active');
+
+            // Load data for selected period for both tabs
+            currentPeriod = this.dataset.period;
+            loadClientAnalytics(currentPeriod);
+            loadProductAnalytics(currentPeriod);
+        });
+    });
+
+    // Tab switching - load data when switching to product tab
+    document.getElementById('products-tab').addEventListener('shown.bs.tab', function() {
+        if (allProductData.length === 0) {
+            loadProductAnalytics(currentPeriod);
+        }
+    });
+
+    // Client search functionality
+    document.getElementById('client-search').addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        filterClients(searchTerm);
+    });
+
+    // Product search functionality
+    document.getElementById('product-search').addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        filterProducts(searchTerm);
+    });
+
+    function loadClientAnalytics(period) {
+        fetch(`/api/client-analytics/?period=${period}`)
+            .then(response => response.json())
+            .then(data => {
+                allClientData = data.clients;
+                updateClientSummaryCards(data.summary);
+                renderClientTable(data.clients);
+            })
+            .catch(error => {
+                console.error('Error loading client analytics:', error);
+                document.getElementById('client-table-body').innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center text-danger py-4">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            Error loading client data. Please try again.
+                        </td>
+                    </tr>
+                `;
+            });
+    }
+
+    function loadProductAnalytics(period) {
+        fetch(`/api/product-analytics/?period=${period}`)
+            .then(response => response.json())
+            .then(data => {
+                allProductData = data.products;
+                updateProductSummaryCards(data.summary);
+                renderProductTable(data.products);
+                renderTopPerformers(data.top_performers);
+                renderBottomPerformers(data.bottom_performers);
+            })
+            .catch(error => {
+                console.error('Error loading product analytics:', error);
+                document.getElementById('product-table-body').innerHTML = `
+                    <tr>
+                        <td colspan="8" class="text-center text-danger py-4">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            Error loading product data. Please try again.
+                        </td>
+                    </tr>
+                `;
+            });
+    }
+
+    function updateClientSummaryCards(summary) {
+        document.getElementById('client-total-revenue').textContent = `PKR ${summary.total_revenue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('client-total-profit').textContent = `PKR ${summary.total_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('client-total-clients').textContent = summary.total_clients;
+        document.getElementById('client-avg-client-value').textContent = `PKR ${summary.avg_client_value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    }
+
+    function updateProductSummaryCards(summary) {
+        document.getElementById('product-total-revenue').textContent = `PKR ${summary.total_revenue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('product-total-profit').textContent = `PKR ${summary.total_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('product-total-quantity').textContent = summary.total_quantity_sold.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById('low-stock-count').textContent = summary.low_stock_count;
+    }
+
+    function renderClientTable(clients) {
+        const tbody = document.getElementById('client-table-body');
+
+        if (clients.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center text-muted py-4">
+                        <i class="bi bi-inbox"></i> No client data available for this period
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        const rows = clients.map(client => `
+            <tr>
+                <td><strong>${client.name}</strong></td>
+                <td>${client.phone}</td>
+                <td><span class="badge bg-primary">PKR ${client.total_sales.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
+                <td><span class="badge bg-success">PKR ${client.total_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
+                <td><span class="badge bg-secondary">${client.total_transactions}</span></td>
+                <td>PKR ${client.avg_sale.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                <td>${client.last_sale_date ? new Date(client.last_sale_date).toLocaleDateString('en-US') : 'Never'}</td>
+            </tr>
+        `).join('');
+
+        tbody.innerHTML = rows;
+    }
+
+    function renderProductTable(products) {
+        const tbody = document.getElementById('product-table-body');
+
+        if (products.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8" class="text-center text-muted py-4">
+                        <i class="bi bi-inbox"></i> No product data available for this period
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        const rows = products.map(product => {
+            const stockClass = product.current_stock < 10 ? 'text-danger' : product.current_stock < 50 ? 'text-warning' : 'text-success';
+            const stockIcon = product.current_stock < 10 ? 'bi-exclamation-triangle' : product.current_stock < 50 ? 'bi-dash-circle' : 'bi-check-circle';
+
+            return `
+                <tr>
+                    <td><strong>${product.name}</strong></td>
+                    <td><span class="badge bg-info">${product.total_quantity_sold.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
+                    <td><span class="badge bg-primary">PKR ${product.total_revenue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
+                    <td><span class="badge bg-success">PKR ${product.total_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
+                    <td><span class="badge bg-secondary">${product.profit_margin.toFixed(1)}%</span></td>
+                    <td><span class="text-${stockClass.split('-')[1]}"><i class="bi ${stockIcon}"></i> ${product.current_stock.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
+                    <td><span class="badge bg-light text-dark">${product.stock_turnover.toFixed(2)}x</span></td>
+                    <td><span class="badge bg-dark">${product.transaction_count}</span></td>
+                </tr>
+            `;
+        }).join('');
+
+        tbody.innerHTML = rows;
+    }
+
+    function renderTopPerformers(products) {
+        const container = document.getElementById('top-performers-list');
+
+        if (products.length === 0) {
+            container.innerHTML = '<p class="text-muted text-center py-3">No data available</p>';
+            return;
+        }
+
+        const list = products.map((product, index) => `
+            <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded">
+                <div>
+                    <strong class="text-success">#${index + 1}</strong>
+                    <span class="ms-2">${product.name}</span>
+                </div>
+                <div class="text-end">
+                    <div class="fw-bold text-primary">PKR ${product.total_revenue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                    <small class="text-muted">${product.total_quantity_sold.toFixed(2)} sold</small>
+                </div>
+            </div>
+        `).join('');
+
+        container.innerHTML = list;
+    }
+
+    function renderBottomPerformers(products) {
+        const container = document.getElementById('bottom-performers-list');
+
+        if (products.length === 0) {
+            container.innerHTML = '<p class="text-muted text-center py-3">No data available</p>';
+            return;
+        }
+
+        const list = products.map((product, index) => `
+            <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded">
+                <div>
+                    <strong class="text-warning">#${products.length - index}</strong>
+                    <span class="ms-2">${product.name}</span>
+                </div>
+                <div class="text-end">
+                    <div class="fw-bold text-primary">PKR ${product.total_revenue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+                    <small class="text-muted">${product.total_quantity_sold.toFixed(2)} sold</small>
+                </div>
+            </div>
+        `).join('');
+
+        container.innerHTML = list;
+    }
+
+    function filterClients(searchTerm) {
+        const filteredClients = allClientData.filter(client =>
+            client.name.toLowerCase().includes(searchTerm) ||
+            client.phone.toLowerCase().includes(searchTerm)
+        );
+        renderClientTable(filteredClients);
+    }
+
+    function filterProducts(searchTerm) {
+        const filteredProducts = allProductData.filter(product =>
+            product.name.toLowerCase().includes(searchTerm) ||
+            product.manufacturer.toLowerCase().includes(searchTerm) ||
+            product.type.toLowerCase().includes(searchTerm)
+        );
+        renderProductTable(filteredProducts);
+    }
+
+    // Export functionality
+    document.getElementById('client-export-btn').addEventListener('click', function() {
+        const csvContent = generateClientCSV(allClientData);
+        downloadCSV(csvContent, `client_analytics_${currentPeriod}_${new Date().toISOString().split('T')[0]}.csv`);
+    });
+
+    document.getElementById('product-export-btn').addEventListener('click', function() {
+        const csvContent = generateProductCSV(allProductData);
+        downloadCSV(csvContent, `product_analytics_${currentPeriod}_${new Date().toISOString().split('T')[0]}.csv`);
+    });
+
+    function generateClientCSV(clients) {
+        const headers = ['Client Name', 'Phone', 'Total Sales', 'Total Profit', 'Transactions', 'Avg Sale', 'Last Sale'];
+        const rows = clients.map(client => [
+            client.name,
+            client.phone,
+            client.total_sales,
+            client.total_profit,
+            client.total_transactions,
+            client.avg_sale,
+            client.last_sale_date || 'Never'
+        ]);
+
+        const csvContent = [headers, ...rows]
+            .map(row => row.map(field => `"${field}"`).join(','))
+            .join('\n');
+
+        return csvContent;
+    }
+
+    function generateProductCSV(products) {
+        const headers = ['Product Name', 'Manufacturer', 'Type', 'Quantity Sold', 'Revenue', 'Profit', 'Profit Margin', 'Current Stock', 'Stock Turnover', 'Transactions'];
+        const rows = products.map(product => [
+            product.name,
+            product.manufacturer,
+            product.type,
+            product.total_quantity_sold,
+            product.total_revenue,
+            product.total_profit,
+            product.profit_margin,
+            product.current_stock,
+            product.stock_turnover,
+            product.transaction_count
+        ]);
+
+        const csvContent = [headers, ...rows]
+            .map(row => row.map(field => `"${field}"`).join(','))
+            .join('\n');
+
+        return csvContent;
+    }
+
+    function downloadCSV(content, filename) {
+        const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+});
+</script>
 {% endblock %}

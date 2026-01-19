@@ -35,6 +35,24 @@ class CheeseProductForm(forms.ModelForm):
         }
 
 
+class AddStockForm(forms.Form):
+    cheese_product = forms.ModelChoiceField(
+        queryset=CheeseProduct.objects.all(),
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        label="Select Product"
+    )
+    additional_quantity = forms.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=0.01,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+        label="Quantity to Add (Packets)"
+    )
+
+
+AddStockFormSet = forms.formset_factory(AddStockForm, extra=1, can_delete=True)
+
+
 class ClientForm(forms.ModelForm):
     class Meta:
         model = Client
