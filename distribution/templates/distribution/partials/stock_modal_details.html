@@ -7,7 +7,7 @@
         <div class="modal-body">
             <p><strong>Product:</strong> {{ addition.cheese_product }}</p>
             <p><strong>Quantity Added:</strong> {{ addition.quantity_packets }}</p>
-            <p><strong>Added By:</strong> {{ addition.added_by.user.username if addition.added_by else 'N/A' }}</p>
+            <p><strong>Added By:</strong> {% if addition.added_by %}{{ addition.added_by.user.username }}{% else %}N/A{% endif %}</p>
             <p><strong>Date Added:</strong> {{ addition.date_added }}</p>
             <hr>
             <h6>Returns</h6>

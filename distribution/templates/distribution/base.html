@@ -41,20 +41,24 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'sale_create' %}">
-                            <i class="bi bi-cart-plus"></i> New Sale
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'sale_history' %}">
-                            <i class="bi bi-receipt-cutoff"></i> Sales
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'stock_history' %}">
-                            <i class="bi bi-boxes"></i> Stock History
-                        </a>
-                    </li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="saleDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-cart"></i> Sale
+                            </a>
+                            <ul class="dropdown-menu" aria-labelledby="saleDropdown">
+                                <li><a class="dropdown-item" href="{% url 'sale_create' %}"><i class="bi bi-cart-plus"></i> New Sale</a></li>
+                                <li><a class="dropdown-item" href="{% url 'sale_history' %}"><i class="bi bi-receipt-cutoff"></i> Sale History</a></li>
+                            </ul>
+                        </li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="stockDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-boxes"></i> Stock
+                            </a>
+                            <ul class="dropdown-menu" aria-labelledby="stockDropdown">
+                                <li><a class="dropdown-item" href="{% url 'add_stock' %}"><i class="bi bi-box-seam"></i> Add Stock</a></li>
+                                <li><a class="dropdown-item" href="{% url 'stock_history' %}"><i class="bi bi-clock-history"></i> Stock History</a></li>
+                            </ul>
+                        </li>
                 </ul>
                 <ul class="navbar-nav">
                     <li class="nav-item">
@@ -94,6 +98,15 @@
      {% block modals %}{% endblock %}
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+        <style>
+        /* Show dropdown on hover for navbar */
+        @media (min-width: 992px) {
+            .navbar .dropdown:hover .dropdown-menu {
+                display: block;
+                margin-top: 0;
+            }
+        }
+        </style>
     {% block extra_js %}
     {% endblock %}
 </body>

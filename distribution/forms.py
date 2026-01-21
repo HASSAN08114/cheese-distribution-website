@@ -41,16 +41,22 @@ class AddStockForm(forms.Form):
         widget=forms.Select(attrs={'class': 'form-control'}),
         label="Select Product"
     )
-    additional_quantity = forms.DecimalField(
+    quantity_packets = forms.DecimalField(
         max_digits=10,
         decimal_places=2,
         min_value=0.01,
         widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
         label="Quantity to Add (Packets)"
     )
+    purchase_price_per_packet = forms.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=0.01,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+        label="Purchase Price (PKR/Packet)"
+    )
 
-
-AddStockFormSet = forms.formset_factory(AddStockForm, extra=1, can_delete=False)
+AddStockFormSet = forms.formset_factory(AddStockForm, extra=1, can_delete=True)
 
 
 class ClientForm(forms.ModelForm):

@@ -22,7 +22,6 @@ urlpatterns = [
     path('cheese/<int:pk>/edit/', views.cheese_edit, name='cheese_edit'),
     path('cheese/<int:pk>/delete/', views.cheese_delete, name='cheese_delete'),
     path('stock/add/', views.add_stock, name='add_stock'),
-    path('sales/quick-create/', views.quick_sale_create, name='quick_sale_create'),
     
     path('clients/', views.client_list, name='client_list'),
     path('clients/add/', views.client_add, name='client_add'),
@@ -35,6 +34,8 @@ urlpatterns = [
     path('sales/<int:pk>/modal/', views.sale_modal_details, name='sale_modal_details'),
     path('stock/history/', views.stock_history, name='stock_history'),
     path('stock/<int:pk>/modal/', views.stock_modal_details, name='stock_modal_details'),
+        path('sales/modal/<int:pk>/', views.sale_modal_details, name='sale_modal_details_alt'),
+        path('stock/modal/<int:pk>/', views.stock_modal_details, name='stock_modal_details_alt'),
     path('returns/sale-item/', views.return_sale_item, name='return_sale_item'),
     path('returns/sale-all/', views.return_all_sale_items, name='return_all_sale_items'),
     path('returns/stock/', views.return_stock_addition, name='return_stock_addition'),

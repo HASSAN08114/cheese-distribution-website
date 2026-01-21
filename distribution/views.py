@@ -345,7 +345,7 @@ def get_product_analytics(request):
 
             # Profit margin percentage
             total_cost = total_quantity * product.purchase_price_per_packet
-            profit_margin = (total_profit / float(total_revenue) * 100) if total_revenue > 0 else 0
+            profit_margin = (total_profit / total_revenue * Decimal('100.0')) if total_revenue > 0 else Decimal('0.0')
 
             product_data.append({
                 'id': product.id,
@@ -530,96 +530,36 @@ def add_stock(request):
     if request.method == 'POST':
         formset = AddStockFormSet(request.POST)
         if formset.is_valid():
-            valid_forms = [f for f in formset if f.cleaned_data]
-
+            valid_forms = [f for f in formset if f.cleaned_data and not f.cleaned_data.get('DELETE', False)]
             if not valid_forms:
-                return JsonResponse({'success': False, 'error': 'Please add at least one stock item.'})
-
-            stock_added = []
+                messages.error(request, 'Please add at least one stock item.')
+                return render(request, 'distribution/add_stock.html', {
+                    'formset': formset
+                })
             for form in valid_forms:
                 cheese_product = form.cleaned_data['cheese_product']
-                additional_quantity = form.cleaned_data['additional_quantity']
-
-                cheese_product.available_quantity_packets += additional_quantity
+                quantity_packets = form.cleaned_data['quantity_packets']
+                purchase_price_per_packet = form.cleaned_data['purchase_price_per_packet']
+                # Update cheese product stock and price
+                cheese_product.available_quantity_packets += quantity_packets
+                cheese_product.purchase_price_per_packet = purchase_price_per_packet
                 cheese_product.save()
-
                 # Create stock addition history
                 StockAdditionHistory.objects.create(
                     cheese_product=cheese_product,
                     added_by=request.user.userprofile,
-                    quantity_packets=additional_quantity
+                    quantity_packets=quantity_packets
                 )
-
-                stock_added.append(f"{additional_quantity} packets to {cheese_product}")
-
-            messages.success(request, f'Successfully added stock: {", ".join(stock_added)}.')
-            return JsonResponse({'success': True})
+            messages.success(request, 'Stock added successfully.')
+            return redirect('stock_history')
         else:
-            return JsonResponse({'success': False, 'error': 'Please correct the errors below.'})
+            messages.error(request, 'Please correct the errors below.')
     else:
         formset = AddStockFormSet()
 
-    html = render_to_string('distribution/partials/add_stock_form.html', {'formset': formset}, request=request)
-    return JsonResponse({'html': html})
-
-
-@login_required
-def quick_sale_create(request):
-    """Quick sale creation from inventory page - same logic as sale_create"""
-    if request.method == 'POST':
-        client_id = request.POST.get('client')
-        if not client_id:
-            return JsonResponse({'success': False, 'error': 'Please select a client.'})
-
-        client = get_object_or_404(Client, pk=client_id)
-        formset = SaleItemFormSet(request.POST)
-
-        if formset.is_valid():
-            valid_forms = [f for f in formset if f.cleaned_data and not f.cleaned_data.get('DELETE', False)]
-
-            if not valid_forms:
-                return JsonResponse({'success': False, 'error': 'Please add at least one item to the sale.'})
-
-            with transaction.atomic():
-                sale = Sale.objects.create(client=client, total_amount=Decimal('0.00'))
-                total_amount = Decimal('0.00')
-
-                for form in valid_forms:
-                    cheese_product = form.cleaned_data['cheese_product']
-                    quantity_packets = form.cleaned_data['quantity_packets']
-                    selling_price_per_packet = form.cleaned_data['selling_price_per_packet']
-
-                    if quantity_packets > cheese_product.available_quantity_packets:
-                        sale.delete()
-                        return JsonResponse({'success': False, 'error': f'Insufficient stock for {cheese_product.name}.'})
-
-                    sale_item = SaleItem.objects.create(
-                        sale=sale,
-                        cheese_product=cheese_product,
-                        quantity_packets=quantity_packets,
-                        selling_price_per_packet=selling_price_per_packet
-                    )
-
-                    cheese_product.available_quantity_packets -= quantity_packets
-                    cheese_product.save()
-
-                    total_amount += selling_price_per_packet * quantity_packets
-
-                sale.total_amount = total_amount
-                sale.save()
-
-                return JsonResponse({'success': True, 'message': 'Sale created successfully.'})
-        else:
-            return JsonResponse({'success': False, 'error': 'Please correct the errors below.'})
-    else:
-        formset = SaleItemFormSet()
-
-    html = render_to_string('distribution/partials/quick_sale_form.html', {
-        'formset': formset,
-        'clients': Client.objects.all()
-    }, request=request)
-    return JsonResponse({'html': html})
-
+    return render(request, 'distribution/add_stock.html', {
+        'formset': formset
+    })
 
 @login_required
 def client_list(request):
