@@ -1,3 +1,7 @@
+from .forms_payment import PaymentForm
+from .models import Payment
+# Payment views
+from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
@@ -24,6 +28,23 @@ from .models import CheeseType
 
 # AJAX endpoint to process return for sale item
 from django.views.decorators.http import require_POST
+
+@login_required
+def make_payment(request):
+    if request.method == 'POST':
+        form = PaymentForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Payment recorded successfully.')
+            return redirect('payment_history')
+    else:
+        form = PaymentForm()
+    return render(request, 'distribution/make_payment.html', {'form': form})
+
+@login_required
+def payment_history(request):
+    payments = Payment.objects.select_related('client').all()
+    return render(request, 'distribution/payment_history.html', {'payments': payments})
 
 @login_required
 @require_POST
@@ -180,8 +201,22 @@ def logout_view(request):
 def dashboard(request):
     user_is_owner = is_owner(request.user)
 
+    # Calculate statistics
+    total_sales = Sale.objects.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    total_payments = Payment.objects.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    total_clients = Client.objects.count()
+    total_credits_owed = sum(client.amount_owed for client in Client.objects.all())
+    total_profit = sum(sale.calculate_total_profit() for sale in Sale.objects.all())
+    total_products = CheeseProduct.objects.count()
+
     context = {
         'user_is_owner': user_is_owner,
+        'total_sales': total_sales,
+        'total_payments': total_payments,
+        'total_clients': total_clients,
+        'total_credits_owed': total_credits_owed,
+        'total_profit': total_profit,
+        'total_products': total_products,
     }
     return render(request, 'distribution/dashboard.html', context)
 

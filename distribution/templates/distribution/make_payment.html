@@ -1,0 +1,58 @@
+{% extends 'distribution/base.html' %}
+
+{% block title %}Make Payment{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Make Payment</h2>
+<div class="card">
+    <div class="card-body">
+        <form method="post" id="paymentForm">
+            {% csrf_token %}
+            {{ form.non_field_errors }}
+            <div class="mb-3">
+                <label for="id_client" class="form-label">Client</label>
+                {{ form.client }}
+                {{ form.client.errors }}
+            </div>
+            <div class="mb-3">
+                <label for="id_amount" class="form-label">Amount</label>
+                {{ form.amount }}
+                {{ form.amount.errors }}
+            </div>
+            <div class="mb-3">
+                <label for="id_mode" class="form-label">Payment Mode</label>
+                {{ form.mode }}
+                {{ form.mode.errors }}
+            </div>
+            <div class="mb-3" id="bank-field" style="display:none;">
+                <label for="id_bank" class="form-label">Bank/Wallet</label>
+                {{ form.bank }}
+                {{ form.bank.errors }}
+            </div>
+            <button type="submit" class="btn btn-primary">Submit Payment</button>
+            <a href="{% url 'payment_history' %}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleBankField(sel) {
+    var bankField = document.getElementById('bank-field');
+    if (sel.value === 'online') {
+        bankField.style.display = '';
+    } else {
+        bankField.style.display = 'none';
+        document.getElementById('id_bank').value = '';
+    }
+}
+document.addEventListener('DOMContentLoaded', function() {
+    var modeSel = document.getElementById('id_mode');
+    if (modeSel) {
+        toggleBankField(modeSel);
+        modeSel.addEventListener('change', function() { toggleBankField(this); });
+    }
+});
+</script>
+{% endblock %}

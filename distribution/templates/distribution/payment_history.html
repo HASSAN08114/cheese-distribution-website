@@ -1,0 +1,37 @@
+{% extends 'distribution/base.html' %}
+
+{% block title %}Payment History{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Payment History</h2>
+<div class="card">
+    <div class="card-body">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>Client</th>
+                    <th>Amount</th>
+                    <th>Mode</th>
+                    <th>Bank/Wallet</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for payment in payments %}
+                <tr>
+                    <td>{{ payment.client.name }}</td>
+                    <td>PKR {{ payment.amount|floatformat:2 }}</td>
+                    <td>{{ payment.get_mode_display }}</td>
+                    <td>{% if payment.mode == 'online' %}{{ payment.bank }}{% else %}-{% endif %}</td>
+                    <td>{{ payment.date|date:"M d, Y H:i" }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center text-muted">No payments found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

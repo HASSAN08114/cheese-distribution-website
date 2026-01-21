@@ -71,6 +71,7 @@ class CheeseProduct(models.Model):
         ordering = ['manufacturer', 'type', 'packet_size']
 
 
+
 class Client(models.Model):
     name = models.CharField(max_length=200)
     phone = models.CharField(max_length=20)
@@ -79,8 +80,35 @@ class Client(models.Model):
     def __str__(self):
         return self.name
 
+    @property
+    def amount_owed(self):
+        # Total sales minus total payments
+        from django.db.models import Sum
+        total_sales = self.sale_set.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+        total_paid = self.payment_set.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        return total_sales - total_paid
+
     class Meta:
         ordering = ['name']
+
+
+# Payment model for client payments
+class Payment(models.Model):
+    PAYMENT_MODES = [
+        ('cash', 'Cash'),
+        ('online', 'Online'),
+    ]
+    client = models.ForeignKey(Client, on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    date = models.DateTimeField(auto_now_add=True)
+    mode = models.CharField(max_length=10, choices=PAYMENT_MODES)
+    bank = models.CharField(max_length=100, blank=True, help_text="Required if mode is online")
+
+    def __str__(self):
+        return f"{self.client.name} - {self.amount} ({self.get_mode_display()}) on {self.date.date()}"
+
+    class Meta:
+        ordering = ['-date']
 
 
 class Sale(models.Model):

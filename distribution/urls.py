@@ -34,11 +34,15 @@ urlpatterns = [
     path('sales/<int:pk>/modal/', views.sale_modal_details, name='sale_modal_details'),
     path('stock/history/', views.stock_history, name='stock_history'),
     path('stock/<int:pk>/modal/', views.stock_modal_details, name='stock_modal_details'),
-        path('sales/modal/<int:pk>/', views.sale_modal_details, name='sale_modal_details_alt'),
-        path('stock/modal/<int:pk>/', views.stock_modal_details, name='stock_modal_details_alt'),
+    path('sales/modal/<int:pk>/', views.sale_modal_details, name='sale_modal_details_alt'),
+    path('stock/modal/<int:pk>/', views.stock_modal_details, name='stock_modal_details_alt'),
     path('returns/sale-item/', views.return_sale_item, name='return_sale_item'),
     path('returns/sale-all/', views.return_all_sale_items, name='return_all_sale_items'),
     path('returns/stock/', views.return_stock_addition, name='return_stock_addition'),
+    
+    #Payment Management
+    path('payments/make/', views.make_payment, name='make_payment'),
+    path('payments/history/', views.payment_history, name='payment_history'),
     
     # Setup and User Management
     path('setup-owner/', views.setup_owner, name='setup_owner'),
