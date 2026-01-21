@@ -12,14 +12,13 @@ from django.db import transaction
 from django.utils import timezone
 from datetime import datetime, timedelta
 from decimal import Decimal
-from .models import Manufacturer, CheeseProduct, Client, Sale, SaleItem, UserProfile
+from .models import *
 from .forms import (
     ManufacturerForm, CheeseProductForm, ClientForm,
     SaleItemForm, SaleItemFormSet, UserForm, UserRoleForm, AddStockForm, AddStockFormSet
 )
 from .decorators import owner_required, is_owner
-
-
+from django.http import HttpResponseNotAllowed
 from django.http import JsonResponse
 from django.template.loader import render_to_string
 from django.shortcuts import render
@@ -173,9 +172,9 @@ def cheese_type_delete(request, pk):
         cheese_type.delete()
         messages.success(request, 'Cheese type deleted successfully.')
         return redirect('inventory_management')
-    html = render_to_string('distribution/cheese_type_delete.html', {'cheese_type': cheese_type}, request=request)
-    return JsonResponse({'html': html})
-
+    else:
+        return HttpResponseNotAllowed(['POST'])
+    
 def login_view(request):
     if request.user.is_authenticated:
         return redirect('dashboard')
@@ -476,9 +475,7 @@ def manufacturer_add(request):
             form.save()
             messages.success(request, 'Manufacturer added successfully.')
             return redirect('inventory_management')
-    else:
-        form = ManufacturerForm()
-    return render(request, 'distribution/manufacturer_form.html', {'form': form, 'title': 'Add Manufacturer'})
+    return HttpResponseNotAllowed(['POST'])
 
 
 @owner_required
@@ -507,7 +504,7 @@ def manufacturer_delete(request, pk):
         manufacturer.delete()
         messages.success(request, 'Manufacturer deleted successfully.')
         return redirect('inventory_management')
-    return render(request, 'distribution/manufacturer_delete.html', {'manufacturer': manufacturer})
+    return HttpResponseNotAllowed(['POST'])
 
 
 @owner_required
@@ -526,9 +523,7 @@ def cheese_add(request):
                 )
             messages.success(request, 'Cheese product added successfully.')
             return redirect('inventory_management')
-    else:
-        form = CheeseProductForm()
-    return render(request, 'distribution/cheese_form.html', {'form': form, 'title': 'Add Cheese Product'})
+    return HttpResponseNotAllowed(['POST'])
 
 
 @owner_required
@@ -547,7 +542,6 @@ def cheese_edit(request, pk):
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
         html = render_to_string('distribution/partials/edit_cheese_form.html', {'form': form, 'product': product}, request=request)
         return JsonResponse({'html': html})
-    return render(request, 'distribution/cheese_form.html', {'form': form, 'title': 'Edit Cheese Product'})
 
 
 @owner_required
@@ -557,8 +551,8 @@ def cheese_delete(request, pk):
         product.delete()
         messages.success(request, 'Cheese product deleted successfully.')
         return redirect('inventory_management')
-    return render(request, 'distribution/cheese_delete.html', {'product': product})
-
+    else:
+        return HttpResponseNotAllowed(['POST'])
 
 @login_required
 def add_stock(request):
@@ -568,7 +562,7 @@ def add_stock(request):
             valid_forms = [f for f in formset if f.cleaned_data and not f.cleaned_data.get('DELETE', False)]
             if not valid_forms:
                 messages.error(request, 'Please add at least one stock item.')
-                return render(request, 'distribution/add_stock.html', {
+                return render(request, 'distribution/stock_add.html', {
                     'formset': formset
                 })
             for form in valid_forms:
@@ -592,7 +586,7 @@ def add_stock(request):
     else:
         formset = AddStockFormSet()
 
-    return render(request, 'distribution/add_stock.html', {
+    return render(request, 'distribution/stock_add.html', {
         'formset': formset
     })
 
@@ -602,7 +596,7 @@ def client_list(request):
     user_is_owner = is_owner(request.user)
     from .forms import ClientForm
     client_form = ClientForm()
-    return render(request, 'distribution/client_list.html', {
+    return render(request, 'distribution/clients.html', {
         'clients': clients,
         'user_is_owner': user_is_owner,
         'client_form': client_form,
@@ -617,9 +611,7 @@ def client_add(request):
             form.save()
             messages.success(request, 'Client added successfully.')
             return redirect('client_list')
-    else:
-        form = ClientForm()
-    return render(request, 'distribution/client_form.html', {'form': form, 'title': 'Add Client'})
+    return HttpResponseNotAllowed(['POST'])
 
 
 @login_required
@@ -647,7 +639,7 @@ def client_delete(request, pk):
         client.delete()
         messages.success(request, 'Client deleted successfully.')
         return redirect('client_list')
-    return render(request, 'distribution/client_delete.html', {'client': client})
+    return HttpResponseNotAllowed(['POST'])
 
 
 @login_required
@@ -752,44 +744,6 @@ def sale_history(request):
         'formset': SaleItemFormSet(),
     })
 
-
-@login_required
-def sale_detail(request, pk):
-    sale = get_object_or_404(Sale, pk=pk)
-    sale_items = sale.saleitem_set.select_related('cheese_product').all()
-    total_profit = sale.calculate_total_profit()
-    
-    return render(request, 'distribution/sale_detail.html', {
-        'sale': sale,
-        'sale_items': sale_items,
-        'total_profit': total_profit
-    })
-
-
-@login_required
-def setup_owner(request):
-    """Setup page to make first user owner if no owners exist"""
-    # Check if any owner exists
-    owners = UserProfile.objects.filter(role='owner')
-    if owners.exists():
-        messages.info(request, 'An owner already exists. Please contact them to change your role.')
-        return redirect('dashboard')
-    
-    # If current user doesn't have profile, create one
-    try:
-        profile = UserProfile.objects.get(user=request.user)
-    except UserProfile.DoesNotExist:
-        profile = UserProfile.objects.create(user=request.user, role='employee')
-    
-    if request.method == 'POST':
-        profile.role = 'owner'
-        profile.save()
-        messages.success(request, 'You have been set as the owner. You now have full access to all features!')
-        return redirect('user_list')
-    
-    return render(request, 'distribution/setup_owner.html', {'user': request.user})
-
-
 @owner_required
 def user_list(request):
     """List all users with their roles"""
@@ -809,13 +763,12 @@ def user_list(request):
             'role': role,
             'profile': profile
         })
-    return render(request, 'distribution/user_list.html', {'users_with_roles': users_with_roles})
+    return render(request, 'distribution/users.html', {'users_with_roles': users_with_roles})
 
 
 @owner_required
 def user_add(request):
     """Create a new user"""
-    from django.contrib.auth.models import User
     if request.method == 'POST':
         form = UserForm(request.POST)
         if form.is_valid():
@@ -824,13 +777,12 @@ def user_add(request):
             return redirect('user_list')
     else:
         form = UserForm()
-    return render(request, 'distribution/user_form.html', {'form': form, 'title': 'Add User'})
+    return render(request, 'distribution/user_form.html', {'form': form})
 
 
 @owner_required
 def user_edit_role(request, pk):
     """Edit user role"""
-    from django.contrib.auth.models import User
     user = get_object_or_404(User, pk=pk)
     try:
         profile = UserProfile.objects.get(user=user)
@@ -843,13 +795,7 @@ def user_edit_role(request, pk):
             form.save()
             messages.success(request, f'Role updated successfully for "{user.username}".')
             return redirect('user_list')
-    else:
-        form = UserRoleForm(instance=profile)
-    return render(request, 'distribution/user_role_form.html', {
-        'form': form,
-        'user': user,
-        'title': f'Edit Role for {user.username}'
-    })
+    return HttpResponseNotAllowed(['POST'])
 
 
 @owner_required
@@ -868,4 +814,5 @@ def user_delete(request, pk):
         user.delete()
         messages.success(request, f'User "{username}" deleted successfully.')
         return redirect('user_list')
-    return render(request, 'distribution/user_delete.html', {'user': user})
+    
+    return HttpResponseNotAllowed(['POST'])

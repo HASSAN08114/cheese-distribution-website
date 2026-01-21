@@ -14,10 +14,7 @@
         <div class="row">
             <div class="col-md-12">
                 <div class="btn-group flex-wrap" role="group" aria-label="Time period filters">
-                    <button type="button" class="btn btn-outline-primary active" data-period="all">
-                        All Time
-                    </button>
-                    <button type="button" class="btn btn-outline-primary" data-period="today">
+                    <button type="button" class="btn btn-outline-primary active" data-period="today">
                         Today
                     </button>
                     <button type="button" class="btn btn-outline-primary" data-period="week">
@@ -34,6 +31,9 @@
                     </button>
                     <button type="button" class="btn btn-outline-primary" data-period="year">
                         Last Year
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" data-period="all">
+                        All Time
                     </button>
                 </div>
             </div>
@@ -92,19 +92,6 @@
                                 <h6 class="card-subtitle mb-2 text-muted">Total Clients</h6>
                                 <h3 class="card-text mb-0" id="client-total-clients">0</h3>
                             </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3 mb-3">
-                <div class="card text-white bg-warning shadow-sm">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="card-subtitle mb-2 text-white-50">Avg Client Value</h6>
-                                <h3 class="card-text mb-0" id="client-avg-client-value">PKR 0.00</h3>
-                            </div>
-                            <i class="bi bi-person-lines-fill" style="font-size: 3rem; opacity: 0.3;"></i>
                         </div>
                     </div>
                 </div>
@@ -391,7 +378,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('client-total-revenue').textContent = `PKR ${summary.total_revenue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         document.getElementById('client-total-profit').textContent = `PKR ${summary.total_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         document.getElementById('client-total-clients').textContent = summary.total_clients;
-        document.getElementById('client-avg-client-value').textContent = `PKR ${summary.avg_client_value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     }
 
     function updateProductSummaryCards(summary) {

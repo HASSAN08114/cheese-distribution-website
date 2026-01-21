@@ -4,6 +4,11 @@ body {
     min-height: 100vh;
 }
 
+.container {
+    min-width: 90%;
+    max-width: 95%;
+}
+
 .login-body {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     min-height: 100vh;
@@ -15,17 +20,10 @@ body {
 .card {
     border: none;
     border-radius: 12px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
-}
-
 .card-header {
-    border-radius: 12px 12px 0 0 !important;
     border-bottom: none;
     font-weight: 600;
 }
@@ -42,13 +40,11 @@ body {
 
 .nav-link {
     transition: all 0.2s;
-    border-radius: 6px;
     margin: 0 2px;
 }
 
 .nav-link:hover {
     background-color: rgba(255, 255, 255, 0.1);
-    transform: translateY(-1px);
 }
 
 .table {
@@ -78,11 +74,6 @@ body {
     font-weight: 500;
     transition: all 0.2s;
     border: none;
-}
-
-.btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
 .btn-sm {
@@ -135,7 +126,6 @@ body {
 .login-card {
     background: white;
     border-radius: 16px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
 }
 
 /* Responsive improvements */

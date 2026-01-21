@@ -30,7 +30,6 @@ urlpatterns = [
     
     path('sales/create/', views.sale_create, name='sale_create'),
     path('sales/', views.sale_history, name='sale_history'),
-    path('sales/<int:pk>/', views.sale_detail, name='sale_detail'),
     path('sales/<int:pk>/modal/', views.sale_modal_details, name='sale_modal_details'),
     path('stock/history/', views.stock_history, name='stock_history'),
     path('stock/<int:pk>/modal/', views.stock_modal_details, name='stock_modal_details'),
@@ -44,8 +43,6 @@ urlpatterns = [
     path('payments/make/', views.make_payment, name='make_payment'),
     path('payments/history/', views.payment_history, name='payment_history'),
     
-    # Setup and User Management
-    path('setup-owner/', views.setup_owner, name='setup_owner'),
     # User Management (Owner only)
     path('users/', views.user_list, name='user_list'),
     path('users/add/', views.user_add, name='user_add'),

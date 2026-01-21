@@ -11,14 +11,14 @@
                 <i class="bi bi-plus-circle"></i> Add Manufacturer
             </button>
             <button type="button" class="btn btn-info btn-sm w-100 mb-2" data-bs-toggle="modal" data-bs-target="#cheeseTypeModal">
-                <i class="bi bi-plus-circle"></i> Add Cheese Type
+                <i class="bi bi-plus-circle"></i> Add Type
             </button>
         </div>
-        <div class="card shadow-sm" style="font-size: 0.95em;">
+        <div class="card" style="font-size: 0.95em;">
             <div class="card-header bg-primary text-white py-2">
-                <h6 class="mb-0"><i class="bi bi-building"></i> Manufacturers</h6>
+                <h6 class="mb-0">Manufacturers</h6>
             </div>
-            <div class="card-body p-2">
+            <div class="card-body" style="padding: 0 0.5rem 0 0.5rem;">
                 <div class="table-responsive">
                     <table class="table table-sm table-hover mb-0">
                         <thead class="table-light">
@@ -46,11 +46,11 @@
                 </div>
             </div>
         </div>
-        <div class="card shadow-sm" style="font-size: 0.95em;">
+        <div class="card" style="font-size: 0.95em;">
             <div class="card-header bg-info text-white py-2">
-                <h6 class="mb-0"><i class="bi bi-tag"></i> Cheese Types</h6>
+                <h6 class="mb-0">Types</h6>
             </div>
-            <div class="card-body p-2">
+            <div class="card-body" style="padding: 0 0.5rem 0 0.5rem;">
                 <div class="table-responsive">
                     <table class="table table-sm table-hover mb-0">
                         <thead class="table-light">
@@ -63,7 +63,7 @@
                             <!-- Debug: {{ cheese_types|length }} cheese types -->
                             {% for type in cheese_types %}
                             <tr>
-                                <td><strong>{{ type.name }}</strong></td>
+                                <td>{{ type.name }}</td>
                                 <td class="text-end">
                                     <button type="button" class="btn btn-xs btn-outline-warning edit-cheese-type-btn" data-edit-url="{% url 'cheese_type_edit' type.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal"><i class="bi bi-pencil"></i></button>
                                     <button type="button" class="btn btn-xs btn-outline-danger delete-cheese-type-btn" data-delete-url="{% url 'cheese_type_delete' type.pk %}" data-bs-toggle="modal" data-bs-target="#deleteConfirmModal"><i class="bi bi-trash"></i></button>
@@ -82,9 +82,9 @@
     </div>
     <!-- Right: Cheese Products -->
     <div class="flex-grow-1 d-flex flex-column">
-        <div class="card shadow-sm mb-3 flex-grow-1 d-flex flex-column">
+        <div class="card mb-3 flex-grow-1 d-flex flex-column">
             <div class="card-header bg-success text-white py-2 d-flex justify-content-between align-items-center">
-                <h6 class="mb-0"><i class="bi bi-box"></i> Cheese Products</h6>
+                <h6 class="mb-0">Products</h6>
                 <div class="d-flex gap-2">
                     <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#cheeseProductModal">
                         <i class="bi bi-plus-circle"></i> Add Cheese Product
@@ -92,7 +92,7 @@
                 </div>
                 <input class="form-control form-control-sm ms-2" type="search" placeholder="Search cheese products..." aria-label="Search" id="cheeseProductSearch" style="max-width: 350px;">
             </div>
-        <div class="card-body p-2 flex-grow-1 d-flex flex-column">
+        <div class="card-body flex-grow-1 d-flex flex-column" style="padding: 0 0.5rem 0 0.5rem;">
             <div class="table-responsive flex-grow-1">
                 <table class="table table-sm table-hover mb-0" id="cheeseProductTable">
                     <thead class="table-light">
@@ -220,7 +220,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="cheeseTypeModalLabel">Add Cheese Type</h5>
+                <h5 class="modal-title" id="cheeseTypeModalLabel">Add Type</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
@@ -306,7 +306,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 }
             })
             .catch(error => {
-                alert('Error adding cheese type.');
+                alert('Error adding type.');
             });
         });
     }
