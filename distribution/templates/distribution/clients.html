@@ -24,7 +24,7 @@
                         <th>Phone</th>
                         <th>Address</th>
                         <th>Amount Owed</th>
-                        <th>Actions</th>
+                        <th class="text-end">Actions</th>
                     </tr>
                 </thead>
             <tbody>
@@ -34,13 +34,13 @@
                     <td>{{ client.phone }}</td>
                     <td>{{ client.address|truncatewords:15 }}</td>
                     <td>PKR {{ client.amount_owed|floatformat:2 }}</td>
-                    <td>
-                        <button type="button" class="btn btn-sm edit-btn" data-edit-url="{% url 'client_edit' client.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal">
-                            Edit
+                    <td class="text-end">
+                        <button type="button" class="btn btn-xs btn-outline-warning edit-btn" data-edit-url="{% url 'client_edit' client.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal">
+                            <i class="bi bi-pencil"></i>
                         </button>
                         {% if user_is_owner %}
-                        <button type="button" class="btn btn-sm" data-item-name="{{ client.name }}" data-delete-url="{% url 'client_delete' client.pk %}" data-bs-toggle="modal" data-bs-target="#deleteConfirmModal">
-                            Delete
+                        <button type="button" class="btn btn-xs btn-outline-danger delete-btn" data-item-name="{{ client.name }}" data-delete-url="{% url 'client_delete' client.pk %}" data-bs-toggle="modal" data-bs-target="#deleteConfirmModal">
+                            <i class="bi bi-trash"></i>
                         </button>
                         {% endif %}
                     </td>

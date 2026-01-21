@@ -89,8 +89,20 @@
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <h6 class="card-subtitle mb-2 text-muted">Total Clients</h6>
-                                <h3 class="card-text mb-0" id="client-total-clients">0</h3>
+                                <h6 class="card-subtitle mb-2 text-muted">Total Debited</h6>
+                                <h3 class="card-text mb-0" id="client-total-debited">PKR 0.00</h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-subtitle mb-2 text-muted">Total Owed</h6>
+                                <h3 class="card-text mb-0" id="client-total-owed">PKR 0.00</h3>
                             </div>
                         </div>
                     </div>
@@ -118,15 +130,18 @@
                                 <th><i class="bi bi-telephone"></i> Phone</th>
                                 <th><i class="bi bi-receipt"></i> Total Sales</th>
                                 <th><i class="bi bi-graph-up"></i> Total Profit</th>
+                                <th><i class="bi bi-wallet2"></i> Total Debited</th>
+                                <th><i class="bi bi-credit-card"></i> Amount Owed</th>
                                 <th><i class="bi bi-hash"></i> Transactions</th>
                                 <th><i class="bi bi-calculator"></i> Avg Sale</th>
                                 <th><i class="bi bi-calendar-event"></i> Last Sale</th>
+                                <th><i class="bi bi-cash-coin"></i> Last Payment</th>
                             </tr>
                         </thead>
                         <tbody id="client-table-body">
                             <!-- Data will be loaded via AJAX -->
                             <tr>
-                                <td colspan="7" class="text-center py-4">
+                                <td colspan="10" class="text-center py-4">
                                     <div class="spinner-border text-primary" role="status">
                                         <span class="visually-hidden">Loading...</span>
                                     </div>
@@ -278,8 +293,6 @@
     </div>
 </div>
 
-<!-- Your Role Card -->
-
 {% endblock %}
 
 {% block extra_js %}
@@ -342,7 +355,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.error('Error loading client analytics:', error);
                 document.getElementById('client-table-body').innerHTML = `
                     <tr>
-                        <td colspan="7" class="text-center text-danger py-4">
+                        <td colspan="10" class="text-center text-danger py-4">
                             <i class="bi bi-exclamation-triangle"></i>
                             Error loading client data. Please try again.
                         </td>
@@ -377,7 +390,8 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateClientSummaryCards(summary) {
         document.getElementById('client-total-revenue').textContent = `PKR ${summary.total_revenue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         document.getElementById('client-total-profit').textContent = `PKR ${summary.total_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-        document.getElementById('client-total-clients').textContent = summary.total_clients;
+        document.getElementById('client-total-debited').textContent = `PKR ${summary.total_debited.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('client-total-owed').textContent = `PKR ${summary.total_owed.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     }
 
     function updateProductSummaryCards(summary) {
@@ -393,7 +407,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (clients.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="7" class="text-center text-muted py-4">
+                    <td colspan="10" class="text-center text-muted py-4">
                         <i class="bi bi-inbox"></i> No client data available for this period
                     </td>
                 </tr>
@@ -401,17 +415,25 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        const rows = clients.map(client => `
-            <tr>
-                <td><strong>${client.name}</strong></td>
-                <td>${client.phone}</td>
-                <td><span class="badge bg-primary">PKR ${client.total_sales.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
-                <td><span class="badge bg-success">PKR ${client.total_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
-                <td><span class="badge bg-secondary">${client.total_transactions}</span></td>
-                <td>PKR ${client.avg_sale.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                <td>${client.last_sale_date ? new Date(client.last_sale_date).toLocaleDateString('en-US') : 'Never'}</td>
-            </tr>
-        `).join('');
+        const rows = clients.map(client => {
+            const owedClass = client.amount_owed > 0 ? 'text-danger' : 'text-success';
+            const owedIcon = client.amount_owed > 0 ? 'bi-exclamation-circle' : 'bi-check-circle';
+            
+            return `
+                <tr>
+                    <td><strong>${client.name}</strong></td>
+                    <td>${client.phone}</td>
+                    <td><span class="badge bg-primary">PKR ${client.total_sales.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
+                    <td><span class="badge bg-success">PKR ${client.total_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
+                    <td><span class="badge bg-info">PKR ${client.total_payments.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
+                    <td><span class="${owedClass}"><i class="bi ${owedIcon}"></i> PKR ${client.amount_owed.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
+                    <td><span class="badge bg-secondary">${client.total_transactions}</span></td>
+                    <td>PKR ${client.avg_sale.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    <td>${client.last_sale_date ? new Date(client.last_sale_date).toLocaleDateString('en-US') : 'Never'}</td>
+                    <td>${client.last_payment_date ? new Date(client.last_payment_date).toLocaleDateString('en-US') : 'Never'}</td>
+                </tr>
+            `;
+        }).join('');
 
         tbody.innerHTML = rows;
     }
@@ -441,7 +463,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <td><span class="badge bg-primary">PKR ${product.total_revenue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
                     <td><span class="badge bg-success">PKR ${product.total_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
                     <td><span class="badge bg-secondary">${product.profit_margin.toFixed(1)}%</span></td>
-                    <td><span class="text-${stockClass.split('-')[1]}"><i class="bi ${stockIcon}"></i> ${product.current_stock.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
+                    <td><span class="${stockClass}"><i class="bi ${stockIcon}"></i> ${product.current_stock.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
                     <td><span class="badge bg-light text-dark">${product.stock_turnover.toFixed(2)}x</span></td>
                     <td><span class="badge bg-dark">${product.transaction_count}</span></td>
                 </tr>
@@ -528,15 +550,18 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function generateClientCSV(clients) {
-        const headers = ['Client Name', 'Phone', 'Total Sales', 'Total Profit', 'Transactions', 'Avg Sale', 'Last Sale'];
+        const headers = ['Client Name', 'Phone', 'Total Sales', 'Total Profit', 'Total Debited', 'Amount Owed', 'Transactions', 'Avg Sale', 'Last Sale', 'Last Payment'];
         const rows = clients.map(client => [
             client.name,
             client.phone,
             client.total_sales,
             client.total_profit,
+            client.total_payments,
+            client.amount_owed,
             client.total_transactions,
             client.avg_sale,
-            client.last_sale_date || 'Never'
+            client.last_sale_date || 'Never',
+            client.last_payment_date || 'Never'
         ]);
 
         const csvContent = [headers, ...rows]

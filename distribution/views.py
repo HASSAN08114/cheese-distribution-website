@@ -257,8 +257,10 @@ def get_client_analytics(request):
         # Filter sales by date range
         if start_date and end_date:
             client_sales = Sale.objects.filter(client=client, sale_date__date__range=[start_date, end_date])
+            client_payments = Payment.objects.filter(client=client, date__date__range=[start_date, end_date])
         else:
             client_sales = Sale.objects.filter(client=client)
+            client_payments = Payment.objects.filter(client=client)
 
         if client_sales.exists():
             total_sales = client_sales.aggregate(
@@ -272,6 +274,14 @@ def get_client_analytics(request):
 
             # Get last sale date
             last_sale_date = client_sales.order_by('-sale_date').first().sale_date.date() if client_sales.exists() else None
+            
+            # Get last payment date
+            last_payment = client_payments.order_by('-date').first()
+            last_payment_date = last_payment.date.date() if last_payment else None
+            
+            # Calculate amount owed and total paid (for display purposes in the period)
+            total_payments = client_payments.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            amount_owed = total_sales - total_payments
 
             client_data.append({
                 'id': client.id,
@@ -279,8 +289,11 @@ def get_client_analytics(request):
                 'phone': client.phone,
                 'total_sales': float(total_sales),
                 'total_profit': float(total_profit),
+                'total_payments': float(total_payments),
                 'total_transactions': total_transactions,
                 'last_sale_date': last_sale_date.strftime('%Y-%m-%d') if last_sale_date else None,
+                'last_payment_date': last_payment_date.strftime('%Y-%m-%d') if last_payment_date else None,
+                'amount_owed': float(amount_owed),
                 'avg_sale': float(total_sales / total_transactions) if total_transactions > 0 else 0,
             })
 
@@ -292,12 +305,16 @@ def get_client_analytics(request):
     total_revenue = sum(client['total_sales'] for client in client_data)
     total_profit_all = sum(client['total_profit'] for client in client_data)
     total_transactions_all = sum(client['total_transactions'] for client in client_data)
+    total_owed = sum(client['amount_owed'] for client in client_data)
+    total_debited = sum(client['total_payments'] for client in client_data)
 
     summary = {
         'total_clients': total_clients,
         'total_revenue': float(total_revenue),
         'total_profit': float(total_profit_all),
         'total_transactions': total_transactions_all,
+        'total_owed': float(total_owed),
+        'total_debited': float(total_debited),
         'avg_client_value': float(total_revenue / total_clients) if total_clients > 0 else 0,
     }
 
@@ -337,7 +354,7 @@ def get_product_analytics(request):
         start_date = None
         end_date = None
 
-    # Get all products with sales data
+    # Get all products
     products = CheeseProduct.objects.all()
     product_data = []
 
@@ -351,52 +368,51 @@ def get_product_analytics(request):
         else:
             product_sales = SaleItem.objects.filter(cheese_product=product)
 
+        # Get sales data whether or not there are sales (to show all products)
+        total_quantity = product_sales.aggregate(
+            total=Sum('quantity_packets')
+        )['total'] or Decimal('0.00')
+
+        total_revenue = product_sales.aggregate(
+            total=Sum(models.F('quantity_packets') * models.F('selling_price_per_packet'))
+        )['total'] or Decimal('0.00')
+
+        # Total profit
+        total_profit = Decimal('0.00')
         if product_sales.exists():
-            # Total quantity sold
-            total_quantity = product_sales.aggregate(
-                total=Sum('quantity_packets')
-            )['total'] or Decimal('0.00')
-
-            # Total revenue
-            total_revenue = product_sales.aggregate(
-                total=Sum(models.F('quantity_packets') * models.F('selling_price_per_packet'))
-            )['total'] or Decimal('0.00')
-
-            # Total profit
             total_profit = sum(
                 (item.selling_price_per_packet - item.cheese_product.purchase_price_per_packet) * item.quantity_packets
                 for item in product_sales
             )
 
-            # Transaction count
-            transaction_count = product_sales.count()
+        # Transaction count
+        transaction_count = product_sales.count()
 
-            # Current stock level
-            current_stock = product.available_quantity_packets
+        # Current stock level
+        current_stock = product.available_quantity_packets
 
-            # Stock turnover (sold / current stock)
-            stock_turnover = float(total_quantity / current_stock) if current_stock > 0 else 0
+        # Stock turnover (sold / current stock)
+        stock_turnover = float(total_quantity / current_stock) if current_stock > 0 else 0
 
-            # Profit margin percentage
-            total_cost = total_quantity * product.purchase_price_per_packet
-            profit_margin = (total_profit / total_revenue * Decimal('100.0')) if total_revenue > 0 else Decimal('0.0')
+        # Profit margin percentage
+        profit_margin = (total_profit / total_revenue * Decimal('100.0')) if total_revenue > 0 else Decimal('0.0')
 
-            product_data.append({
-                'id': product.id,
-                'name': f"{product.manufacturer.name} {product.type.name} {product.packet_size}kg",
-                'manufacturer': product.manufacturer.name,
-                'type': product.type.name,
-                'packet_size': float(product.packet_size),
-                'purchase_price': float(product.purchase_price_per_packet),
-                'total_quantity_sold': float(total_quantity),
-                'total_revenue': float(total_revenue),
-                'total_profit': float(total_profit),
-                'transaction_count': transaction_count,
-                'current_stock': float(current_stock),
-                'stock_turnover': stock_turnover,
-                'profit_margin': profit_margin,
-                'avg_sale_price': float(total_revenue / total_quantity) if total_quantity > 0 else 0,
-            })
+        product_data.append({
+            'id': product.id,
+            'name': f"{product.manufacturer.name} {product.type.name} {product.packet_size}kg",
+            'manufacturer': product.manufacturer.name,
+            'type': product.type.name,
+            'packet_size': float(product.packet_size),
+            'purchase_price': float(product.purchase_price_per_packet),
+            'total_quantity_sold': float(total_quantity),
+            'total_revenue': float(total_revenue),
+            'total_profit': float(total_profit),
+            'transaction_count': transaction_count,
+            'current_stock': float(current_stock),
+            'stock_turnover': stock_turnover,
+            'profit_margin': float(profit_margin),
+            'avg_sale_price': float(total_revenue / total_quantity) if total_quantity > 0 else 0,
+        })
 
     # Sort by revenue descending (most sold)
     product_data.sort(key=lambda x: x['total_revenue'], reverse=True)
@@ -407,9 +423,10 @@ def get_product_analytics(request):
     total_profit = sum(product['total_profit'] for product in product_data)
     total_quantity = sum(product['total_quantity_sold'] for product in product_data)
 
-    # Get top and bottom performers
-    top_performers = product_data[:5] if len(product_data) >= 5 else product_data
-    bottom_performers = product_data[-5:] if len(product_data) >= 5 else product_data[-len(product_data):]
+    # Get top and bottom performers (only products with sales)
+    products_with_sales = [p for p in product_data if p['total_revenue'] > 0]
+    top_performers = products_with_sales[:5] if len(products_with_sales) >= 5 else products_with_sales
+    bottom_performers = products_with_sales[-5:] if len(products_with_sales) >= 5 else []
 
     # Stock alerts
     low_stock_products = [p for p in product_data if p['current_stock'] < 10]
@@ -420,7 +437,7 @@ def get_product_analytics(request):
         'total_revenue': float(total_revenue),
         'total_profit': float(total_profit),
         'total_quantity_sold': float(total_quantity),
-        'avg_product_revenue': float(total_revenue / total_products) if total_products > 0 else 0,
+        'avg_product_revenue': float(total_revenue / len(products_with_sales)) if len(products_with_sales) > 0 else 0,
         'low_stock_count': len(low_stock_products),
         'out_of_stock_count': len(out_of_stock_products),
     }
