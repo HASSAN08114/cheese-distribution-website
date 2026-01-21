@@ -89,20 +89,20 @@
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <h6 class="card-subtitle mb-2 text-muted">Total Debited</h6>
-                                <h3 class="card-text mb-0" id="client-total-debited">PKR 0.00</h3>
+                                <h6 class="card-subtitle mb-2 text-muted">Total Owed</h6>
+                                <h3 class="card-text mb-0" id="client-total-owed">PKR 0.00</h3>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            </div>            
             <div class="col-md-3 mb-3">
                 <div class="card">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <h6 class="card-subtitle mb-2 text-muted">Total Owed</h6>
-                                <h3 class="card-text mb-0" id="client-total-owed">PKR 0.00</h3>
+                                <h6 class="card-subtitle mb-2 text-muted">Total Debited</h6>
+                                <h3 class="card-text mb-0" id="client-total-debited">PKR 0.00</h3>
                             </div>
                         </div>
                     </div>
@@ -111,7 +111,7 @@
         </div>
 
         <!-- Client Analytics Table -->
-        <div class="card shadow-sm">
+        <div class="card" style="padding: 0 0.5rem 0 0.5rem;">
             <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
                 <h6 class="mb-0"><i class="bi bi-table"></i> Client Performance Analytics</h6>
                 <div class="d-flex gap-2">
@@ -130,9 +130,8 @@
                                 <th><i class="bi bi-telephone"></i> Phone</th>
                                 <th><i class="bi bi-receipt"></i> Total Sales</th>
                                 <th><i class="bi bi-graph-up"></i> Total Profit</th>
-                                <th><i class="bi bi-wallet2"></i> Total Debited</th>
                                 <th><i class="bi bi-credit-card"></i> Amount Owed</th>
-                                <th><i class="bi bi-hash"></i> Transactions</th>
+                                <th><i class="bi bi-wallet2"></i> Total Debited</th>
                                 <th><i class="bi bi-calculator"></i> Avg Sale</th>
                                 <th><i class="bi bi-calendar-event"></i> Last Sale</th>
                                 <th><i class="bi bi-cash-coin"></i> Last Payment</th>
@@ -160,53 +159,49 @@
         <!-- Product Summary Cards -->
         <div class="row mb-4" id="product-summary-cards">
             <div class="col-md-3 mb-3">
-                <div class="card text-white bg-success shadow-sm">
+                <div class="card">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <h6 class="card-subtitle mb-2 text-white-50">Total Revenue</h6>
+                                <h6 class="card-subtitle mb-2 text-muted">Total Revenue</h6>
                                 <h3 class="card-text mb-0" id="product-total-revenue">PKR 0.00</h3>
                             </div>
-                            <i class="bi bi-currency-dollar" style="font-size: 3rem; opacity: 0.3;"></i>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="col-md-3 mb-3">
-                <div class="card text-white bg-primary shadow-sm">
+                <div class="card ">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <h6 class="card-subtitle mb-2 text-white-50">Total Profit</h6>
+                                <h6 class="card-subtitle mb-2 text-muted">Total Profit</h6>
                                 <h3 class="card-text mb-0" id="product-total-profit">PKR 0.00</h3>
                             </div>
-                            <i class="bi bi-graph-up" style="font-size: 3rem; opacity: 0.3;"></i>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="col-md-3 mb-3">
-                <div class="card text-white bg-warning shadow-sm">
+                <div class="card">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <h6 class="card-subtitle mb-2 text-white-50">Items Sold</h6>
+                                <h6 class="card-subtitle mb-2 text-muted">Items Sold</h6>
                                 <h3 class="card-text mb-0" id="product-total-quantity">0</h3>
                             </div>
-                            <i class="bi bi-box-seam" style="font-size: 3rem; opacity: 0.3;"></i>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="col-md-3 mb-3">
-                <div class="card text-white bg-danger shadow-sm">
+                <div class="card">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <h6 class="card-subtitle mb-2 text-white-50">Low Stock Alerts</h6>
+                                <h6 class="card-subtitle mb-2 text-muted">Low Stock Alerts</h6>
                                 <h3 class="card-text mb-0" id="low-stock-count">0</h3>
                             </div>
-                            <i class="bi bi-exclamation-triangle" style="font-size: 3rem; opacity: 0.3;"></i>
                         </div>
                     </div>
                 </div>
@@ -260,7 +255,7 @@
                     </button>
                 </div>
             </div>
-            <div class="card-body">
+            <div class="card-body" style="padding:0 0.5rem 0 0.5rem;">
                 <div class="table-responsive">
                     <table class="table table-hover" id="product-analytics-table">
                         <thead class="table-light">
@@ -272,7 +267,6 @@
                                 <th><i class="bi bi-percent"></i> Margin</th>
                                 <th><i class="bi bi-package"></i> Current Stock</th>
                                 <th><i class="bi bi-arrow-repeat"></i> Turnover</th>
-                                <th><i class="bi bi-receipt"></i> Transactions</th>
                             </tr>
                         </thead>
                         <tbody id="product-table-body">
@@ -416,18 +410,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const rows = clients.map(client => {
-            const owedClass = client.amount_owed > 0 ? 'text-danger' : 'text-success';
-            const owedIcon = client.amount_owed > 0 ? 'bi-exclamation-circle' : 'bi-check-circle';
-            
             return `
                 <tr>
-                    <td><strong>${client.name}</strong></td>
+                    <td>${client.name}</td>
                     <td>${client.phone}</td>
-                    <td><span class="badge bg-primary">PKR ${client.total_sales.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
-                    <td><span class="badge bg-success">PKR ${client.total_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
-                    <td><span class="badge bg-info">PKR ${client.total_payments.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
-                    <td><span class="${owedClass}"><i class="bi ${owedIcon}"></i> PKR ${client.amount_owed.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
-                    <td><span class="badge bg-secondary">${client.total_transactions}</span></td>
+                    <td>PKR ${client.total_sales.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    <td>PKR ${client.total_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    <td><span class="text-danger">PKR ${client.amount_owed.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
+                    <td><span class="text-success">PKR ${client.total_payments.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
                     <td>PKR ${client.avg_sale.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                     <td>${client.last_sale_date ? new Date(client.last_sale_date).toLocaleDateString('en-US') : 'Never'}</td>
                     <td>${client.last_payment_date ? new Date(client.last_payment_date).toLocaleDateString('en-US') : 'Never'}</td>
@@ -458,14 +448,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
             return `
                 <tr>
-                    <td><strong>${product.name}</strong></td>
-                    <td><span class="badge bg-info">${product.total_quantity_sold.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
-                    <td><span class="badge bg-primary">PKR ${product.total_revenue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
-                    <td><span class="badge bg-success">PKR ${product.total_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
-                    <td><span class="badge bg-secondary">${product.profit_margin.toFixed(1)}%</span></td>
+                    <td>${product.name}</td>
+                    <td>${product.total_quantity_sold.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    <td>PKR ${product.total_revenue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    <td>PKR ${product.total_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    <td>${product.profit_margin.toFixed(1)}%</td>
                     <td><span class="${stockClass}"><i class="bi ${stockIcon}"></i> ${product.current_stock.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
-                    <td><span class="badge bg-light text-dark">${product.stock_turnover.toFixed(2)}x</span></td>
-                    <td><span class="badge bg-dark">${product.transaction_count}</span></td>
+                    <td>${product.stock_turnover.toFixed(2)}x</td>
                 </tr>
             `;
         }).join('');
@@ -550,15 +539,14 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function generateClientCSV(clients) {
-        const headers = ['Client Name', 'Phone', 'Total Sales', 'Total Profit', 'Total Debited', 'Amount Owed', 'Transactions', 'Avg Sale', 'Last Sale', 'Last Payment'];
+        const headers = ['Client Name', 'Phone', 'Total Sales', 'Total Profit', 'Amount Owed', 'Total Debited', 'Avg Sale', 'Last Sale', 'Last Payment'];
         const rows = clients.map(client => [
             client.name,
             client.phone,
             client.total_sales,
             client.total_profit,
-            client.total_payments,
             client.amount_owed,
-            client.total_transactions,
+            client.total_payments,
             client.avg_sale,
             client.last_sale_date || 'Never',
             client.last_payment_date || 'Never'
@@ -572,7 +560,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function generateProductCSV(products) {
-        const headers = ['Product Name', 'Manufacturer', 'Type', 'Quantity Sold', 'Revenue', 'Profit', 'Profit Margin', 'Current Stock', 'Stock Turnover', 'Transactions'];
+        const headers = ['Product Name', 'Manufacturer', 'Type', 'Quantity Sold', 'Revenue', 'Profit', 'Profit Margin','Current Stock', 'Stock Turnover'];
         const rows = products.map(product => [
             product.name,
             product.manufacturer,
@@ -583,7 +571,6 @@ document.addEventListener('DOMContentLoaded', function() {
             product.profit_margin,
             product.current_stock,
             product.stock_turnover,
-            product.transaction_count
         ]);
 
         const csvContent = [headers, ...rows]

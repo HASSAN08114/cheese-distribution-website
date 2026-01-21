@@ -19,7 +19,6 @@ body {
 
 .card {
     border: none;
-    border-radius: 12px;
     transition: transform 0.2s, box-shadow 0.2s;
 }
 
@@ -49,8 +48,8 @@ body {
 
 .table {
     background-color: white;
-    border-radius: 8px;
     overflow: hidden;
+    margin-bottom: 0;
 }
 
 .table thead th {
@@ -109,7 +108,6 @@ body {
 
 /* Dashboard Cards */
 .card.text-white {
-    border-radius: 12px;
     transition: transform 0.2s;
 }
 
@@ -153,11 +151,6 @@ body {
 
 .text-muted {
     animation: fadeIn 0.5s ease-in;
-}
-
-/* Table responsive wrapper */
-.table-responsive {
-    border-radius: 8px;
 }
 
 /* Icon spacing */

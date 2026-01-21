@@ -15,7 +15,7 @@
     <div class="card-header bg-dark text-white">
         <h5 class="mb-0"><i class="bi bi-list-ul"></i> All Clients</h5>
     </div>
-    <div class="card-body">
+    <div class="card-body" style="padding: 0 0.5rem 0 0.5rem">
         <div class="table-responsive">
             <table class="table">
                 <thead class="table-light">
@@ -30,7 +30,7 @@
             <tbody>
                 {% for client in clients %}
                 <tr>
-                    <td><strong>{{ client.name }}</strong></td>
+                    <td>{{ client.name }}</td>
                     <td>{{ client.phone }}</td>
                     <td>{{ client.address|truncatewords:15 }}</td>
                     <td>PKR {{ client.amount_owed|floatformat:2 }}</td>

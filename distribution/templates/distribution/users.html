@@ -14,7 +14,7 @@
     <div class="card-header bg-dark text-white">
         <h5 class="mb-0"><i class="bi bi-list-ul"></i> All Users</h5>
     </div>
-    <div class="card-body">
+    <div class="card-body" style="padding: 0 0.5rem 0 0.5rem;">
         <div class="table-responsive">
             <table class="table">
                 <thead class="table-light">
@@ -35,29 +35,25 @@
                         <td>{{ item.user.email|default:"—" }}</td>
                         <td>
                             {% if item.role == 'owner' %}
-                                <span class="badge bg-warning text-dark">
-                                    <i class="bi bi-shield-check"></i> Owner
-                                </span>
+                                Owner
                             {% else %}
-                                <span class="badge bg-info">
-                                    <i class="bi bi-person"></i> Employee
-                                </span>
+                                Employee
                             {% endif %}
                         </td>
                         <td>
                             {% if item.user.is_active %}
-                                <span class="badge bg-success">Active</span>
+                                Active
                             {% else %}
-                                <span class="badge bg-secondary">Inactive</span>
+                                Inactive
                             {% endif %}
                         </td>
                         <td class="text-end">
                             <a href="{% url 'user_edit_role' item.user.pk %}" class="btn btn-sm btn-outline-warning">
-                                <i class="bi bi-pencil"></i> Edit Role
+                                <i class="bi bi-pencil"></i>
                             </a>
                             {% if item.user != user %}
                             <a href="{% url 'user_delete' item.user.pk %}" class="btn btn-sm btn-outline-danger">
-                                <i class="bi bi-trash"></i> Delete
+                                <i class="bi bi-trash"></i>
                             </a>
                             {% else %}
                             <span class="text-muted small">(You)</span>

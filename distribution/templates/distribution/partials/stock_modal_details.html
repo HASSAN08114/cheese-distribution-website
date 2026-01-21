@@ -1,7 +1,7 @@
 <div class="modal-dialog">
     <div class="modal-content">
         <div class="modal-header">
-            <h5 class="modal-title">Stock Addition #{{ addition.id }} Details</h5>
+            <h5 class="modal-title">Stock Addition #{{ addition.id }}</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
@@ -31,7 +31,11 @@
                     {% endfor %}
                 </tbody>
             </table>
-            <button class="btn btn-outline-danger return-stock" data-id="{{ addition.id }}">Return Stock</button>
+            <div class="row justify-content-end">
+                <div class="col-auto">
+                    <button class="btn btn-outline-danger return-stock" data-id="{{ addition.id }}">Return Stock</button>
+                </div>
+            </div>
         </div>
     </div>
 </div>
