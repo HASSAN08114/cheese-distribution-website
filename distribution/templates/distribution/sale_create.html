@@ -20,6 +20,27 @@
                 </select>
             </div>
 
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="payment_method" class="form-label">Payment Method</label>
+                    <select name="payment_method" id="payment_method" class="form-control">
+                        <option value="">Select payment method</option>
+                        <option value="cash">Cash</option>
+                        <option value="bank_transfer">Bank Transfer</option>
+                        <option value="jazzcash">JazzCash</option>
+                        <option value="easypaisa">EasyPaisa</option>
+                        <option value="sadapay">SadaPay</option>
+                        <option value="online_banking">Online Banking</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label for="amount_paid" class="form-label">Amount Paid Now (PKR)</label>
+                    <input type="number" name="amount_paid" id="amount_paid" class="form-control" step="0.01" min="0" value="0">
+                    <small class="text-muted">Leave as 0 if payment will be made later</small>
+                </div>
+            </div>
+
             <h5 class="mt-4 mb-3">Sale Items</h5>
             {{ formset.management_form }}
             <div id="formset-container">

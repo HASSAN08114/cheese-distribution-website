@@ -1,6 +1,9 @@
 from django import forms
 from django.contrib.auth.models import User
-from .models import Manufacturer, CheeseProduct, Client, Sale, SaleItem, UserProfile, CheeseType
+from .models import (
+    Manufacturer, CheeseProduct, Client, Sale, SaleItem, UserProfile, CheeseType, Payment,
+    DeliveryEmployee, DeliveryExpense,
+)
 from decimal import Decimal
 
 
@@ -93,6 +96,143 @@ class SaleItemForm(forms.ModelForm):
 
 
 SaleItemFormSet = forms.formset_factory(SaleItemForm, extra=1, can_delete=True)
+
+class PaymentForm(forms.ModelForm):
+    class Meta:
+        model = Payment
+        fields = ['client', 'amount', 'mode', 'bank']
+        widgets = {
+            'client': forms.Select(attrs={'class': 'form-control'}),
+            'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'mode': forms.Select(attrs={'class': 'form-control'}),
+            'bank': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        mode = cleaned_data.get('mode')
+        bank = (cleaned_data.get('bank') or '').strip()
+
+        # If payment is online, bank/wallet identifier is required.
+        if mode == 'online' and not bank:
+            self.add_error('bank', 'Bank/Wallet is required for online payments.')
+        # For cash payments, clear bank to avoid misleading data.
+        if mode == 'cash':
+            cleaned_data['bank'] = ''
+
+        return cleaned_data
+
+
+class DeliveryEmployeeForm(forms.ModelForm):
+    class Meta:
+        model = DeliveryEmployee
+        fields = ['name', 'id_card_number', 'joining_date', 'route_from', 'route_to']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'id_card_number': forms.TextInput(attrs={'class': 'form-control'}),
+            'joining_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'route_from': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'From where'}),
+            'route_to': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'To where'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Backfill new From/To fields from the legacy `route` field when editing
+        # employees that were created before this change.
+        instance = kwargs.get("instance")
+        if instance and not (getattr(instance, "route_from", "") and getattr(instance, "route_to", "")):
+            legacy = (getattr(instance, "route", "") or "").strip()
+            if "->" in legacy:
+                parts = legacy.split("->", 1)
+                self.initial.setdefault("route_from", parts[0].strip())
+                self.initial.setdefault("route_to", parts[1].strip())
+
+    def clean_id_card_number(self):
+        # Allow user to type "1234-56789012-3" etc; validate using digits only.
+        raw = (self.cleaned_data.get('id_card_number') or '')
+        digits_only = ''.join(ch for ch in raw if ch.isdigit())
+        if len(digits_only) != 13:
+            raise forms.ValidationError('ID Card Number must be exactly 13 digits.')
+        return digits_only
+
+    def clean(self):
+        cleaned_data = super().clean()
+        rf = (cleaned_data.get('route_from') or '').strip()
+        rt = (cleaned_data.get('route_to') or '').strip()
+
+        if not rf:
+            self.add_error('route_from', 'Please enter where the delivery route starts (From where).')
+        if not rt:
+            self.add_error('route_to', 'Please enter where the delivery route ends (To where).')
+
+        return cleaned_data
+
+    def save(self, commit=True):
+        # Keep the legacy `route` string synchronized for display/search compatibility.
+        instance = super().save(commit=False)
+        route_from = (self.cleaned_data.get('route_from') or '').strip()
+        route_to = (self.cleaned_data.get('route_to') or '').strip()
+        if route_from and route_to:
+            instance.route = f'{route_from} -> {route_to}'
+        if commit:
+            instance.save()
+        return instance
+
+
+class DeliveryExpenseForm(forms.ModelForm):
+    class Meta:
+        model = DeliveryExpense
+        fields = ['employee', 'expense_type', 'amount', 'note', 'expense_date']
+        widgets = {
+            'employee': forms.Select(attrs={'class': 'form-control'}),
+            'expense_type': forms.Select(attrs={'class': 'form-control'}),
+            'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'note': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'expense_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+        }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        expense_type = cleaned_data.get('expense_type')
+        amount = cleaned_data.get('amount')
+        note = (cleaned_data.get('note') or '').strip()
+
+        # For note-only entries, allow amount=0 and rely on note.
+        if expense_type == 'note' and amount is not None and amount > 0:
+            # Keep it allowed, but nudge user to use notes.
+            pass
+
+        if expense_type == 'note' and not note:
+            self.add_error('note', 'Please enter a note for note-only expense.')
+
+        return cleaned_data
+
+
+class SaleForm(forms.ModelForm):
+    """Form for creating sales with payment information"""
+    class Meta:
+        model = Sale
+        fields = ['client', 'payment_method', 'amount_paid']
+        widgets = {
+            'client': forms.Select(attrs={'class': 'form-control'}),
+        }
+
+    payment_method = forms.ChoiceField(
+        choices=Sale.PAYMENT_METHOD_CHOICES,
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        required=False,
+        label="Payment Method"
+    )
+
+    amount_paid = forms.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=0,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+        initial=0,
+        label="Amount Paid Now"
+    )
 
 
 class UserForm(forms.ModelForm):

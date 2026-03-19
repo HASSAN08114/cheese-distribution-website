@@ -1,0 +1,260 @@
+{% extends 'distribution/base.html' %}
+
+{% block title %}Add Stock{% endblock %}
+
+{% block content %}
+<h2 class="mb-4"><i class="bi bi-plus-circle-fill"></i> Add Stock to Products</h2>
+
+
+<!-- Stock Addition Form -->
+<div class="card shadow-sm">
+    <div class="card-header bg-primary text-white">
+        <h6 class="mb-0"><i class="bi bi-box-seam"></i> Add Stock Form</h6>
+    </div>
+    <div class="card-body">
+        <form id="addStockForm" method="post" action="{% url 'add_stock' %}">
+            {% csrf_token %}
+
+            <!-- Stock Items Container -->
+            <div class="mb-4">
+                <h6 class="text-primary mb-3">Stock Items</h6>
+                {{ add_stock_formset.management_form }}
+                <div id="stock-formset-container">
+                    {% for form in add_stock_formset %}
+                    <div class="row mb-3 stock-formset-row border-bottom pb-4">
+                        {{ form.id }}
+                        <div class="col-md-5">
+                            <label class="form-label fw-bold">Select Product</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-box"></i></span>
+                                {{ form.cheese_product }}
+                            </div>
+                            {% if form.cheese_product.errors %}
+                                <div class="text-danger mt-1">{{ form.cheese_product.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Quantity to Add (Packets)</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-plus"></i></span>
+                                {{ form.additional_quantity }}
+                            </div>
+                            {% if form.additional_quantity.errors %}
+                                <div class="text-danger mt-1">{{ form.additional_quantity.errors }}</div>
+                            {% endif %}
+                            <small class="text-muted">Enter the number of packets to add to stock</small>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold">Current Stock</label>
+                            <div class="form-control bg-light" id="current-stock-{{ forloop.counter0 }}" style="cursor: not-allowed;">
+                                <small class="text-muted">Select product to see current stock</small>
+                            </div>
+                        </div>
+                        <div class="col-md-1 d-flex align-items-end">
+                            {% if forloop.first %}
+                                <button type="button" class="btn btn-success btn-sm w-100" id="add-stock-item" title="Add Another Product">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                            {% else %}
+                                <button type="button" class="btn btn-danger btn-sm w-100 remove-stock-item" title="Remove This Product">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'inventory_management' %}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Back to Inventory
+                        </a>
+                        <div>
+                            <button type="button" class="btn btn-outline-primary me-2" onclick="clearForm()">
+                                <i class="bi bi-x-circle"></i> Clear All
+                            </button>
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="bi bi-check-circle"></i> Add Stock
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const addButton = document.getElementById('add-stock-item');
+    const container = document.getElementById('stock-formset-container');
+    const totalForms = document.getElementById('id_form-TOTAL_FORMS');
+    let formCount = parseInt(totalForms.value);
+
+    // Product stock data cache
+    const productStockData = {};
+
+
+    // Update current stock when product is selected
+    document.addEventListener('change', function(e) {
+        if (e.target.classList.contains('form-control') && e.target.name.includes('cheese_product')) {
+            updateCurrentStock(e.target);
+        }
+    });
+
+    function updateRemoveButtons() {
+        container.querySelectorAll('.remove-stock-item').forEach(function(btn) {
+            btn.onclick = function() {
+                const row = btn.closest('.stock-formset-row');
+                if (container.querySelectorAll('.stock-formset-row').length > 1) {
+                    row.remove();
+                    formCount--;
+                    totalForms.value = formCount;
+                }
+            };
+        });
+    }
+
+    if (addButton) {
+        addButton.addEventListener('click', function() {
+            const rows = container.querySelectorAll('.stock-formset-row');
+            const lastRow = rows[rows.length - 1];
+            const newForm = lastRow.cloneNode(true);
+
+            const formRegex = RegExp(`form-(\\d+)-`, 'g');
+            newForm.innerHTML = newForm.innerHTML.replace(formRegex, function(match) {
+                return match.replace(/\\d+/, formCount);
+            });
+
+            // Update button from add to remove
+            const buttonCol = newForm.querySelector('.col-md-1');
+            buttonCol.innerHTML = `
+                <button type="button" class="btn btn-danger btn-sm w-100 remove-stock-item" title="Remove This Product">
+                    <i class="bi bi-trash"></i>
+                </button>
+            `;
+
+            // Clear form values
+            const inputs = newForm.querySelectorAll('input, select');
+            inputs.forEach(function(input) {
+                if (input.type !== 'hidden') {
+                    input.value = '';
+                }
+            });
+
+            // Reset current stock display
+            const stockDisplay = newForm.querySelector('[id^="current-stock-"]');
+            if (stockDisplay) {
+                stockDisplay.innerHTML = '<small class="text-muted">Select product to see current stock</small>';
+            }
+
+            container.appendChild(newForm);
+            formCount++;
+            totalForms.value = formCount;
+            updateRemoveButtons();
+        });
+    }
+
+    updateRemoveButtons();
+
+    // Function to update current stock display
+    function updateCurrentStock(selectElement) {
+        const productId = selectElement.value;
+        const row = selectElement.closest('.stock-formset-row');
+        const stockDisplay = row.querySelector('[id^="current-stock-"]');
+
+        if (!productId) {
+            stockDisplay.innerHTML = '<small class="text-muted">Select product to see current stock</small>';
+            return;
+        }
+
+        // Check if we already have this product's data
+        if (productStockData[productId]) {
+            displayStockInfo(stockDisplay, productStockData[productId]);
+        } else {
+            // Fetch product data via AJAX
+            fetch(`/api/product-stock/${productId}/`)
+                .then(response => response.json())
+                .then(data => {
+                    productStockData[productId] = data;
+                    displayStockInfo(stockDisplay, data);
+                })
+                .catch(error => {
+                    console.error('Error fetching product stock:', error);
+                    stockDisplay.innerHTML = '<small class="text-danger">Error loading stock data</small>';
+                });
+        }
+    }
+
+    function displayStockInfo(element, data) {
+        const stockLevel = data.available_quantity_packets;
+        const stockClass = stockLevel < 10 ? 'text-danger' : stockLevel < 50 ? 'text-warning' : 'text-success';
+        const stockIcon = stockLevel < 10 ? 'bi-exclamation-triangle' : stockLevel < 50 ? 'bi-dash-circle' : 'bi-check-circle';
+
+        element.innerHTML = `
+            <i class="bi ${stockIcon} ${stockClass}"></i>
+            <strong class="${stockClass}">${stockLevel}</strong> packets
+        `;
+    }
+
+    // Function to clear all form data
+    window.clearForm = function() {
+        // Reset formset to initial state
+        container.innerHTML = '';
+        formCount = 1;
+        totalForms.value = 1;
+
+        // Recreate first form row
+        const firstRow = `
+            <div class="row mb-3 stock-formset-row border-bottom pb-4">
+                <input type="hidden" name="form-TOTAL_FORMS" value="1" id="id_form-TOTAL_FORMS">
+                <input type="hidden" name="form-INITIAL_FORMS" value="0" id="id_form-INITIAL_FORMS">
+                <input type="hidden" name="form-MIN_NUM_FORMS" value="0" id="id_form-MIN_NUM_FORMS">
+                <input type="hidden" name="form-MAX_NUM_FORMS" value="1000" id="id_form-MAX_NUM_FORMS">
+                <input type="hidden" name="form-0-id" id="id_form-0-id">
+                <div class="col-md-5">
+                    <label class="form-label fw-bold">Select Product</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-box"></i></span>
+                        <select name="form-0-cheese_product" class="form-control">
+                            <option value="">---------</option>
+                            {% for product in add_stock_formset.0.cheese_product.field.queryset %}
+                            <option value="{{ product.pk }}">{{ product.manufacturer.name }} {{ product.type.name }} {{ product.packet_size }}kg</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">Quantity to Add (Packets)</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-plus"></i></span>
+                        <input type="number" name="form-0-additional_quantity" class="form-control" step="0.01" min="0.01" placeholder="0.00">
+                    </div>
+                    <small class="text-muted">Enter the number of packets to add to stock</small>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold">Current Stock</label>
+                    <div class="form-control bg-light" id="current-stock-0" style="cursor: not-allowed;">
+                        <small class="text-muted">Select product to see current stock</small>
+                    </div>
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                    <button type="button" class="btn btn-success btn-sm w-100" id="add-stock-item" title="Add Another Product">
+                        <i class="bi bi-plus-lg"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        container.innerHTML = firstRow;
+    };
+
+});
+</script>
+{% endblock %}

@@ -1,0 +1,376 @@
+{% extends 'distribution/base.html' %}
+
+{% block title %}Sales & Stock History{% endblock %}
+
+{% block content %}
+<h2 class="mb-4"><i class="bi bi-clock-history"></i> Sales & Stock History</h2>
+
+<!-- Toggle Buttons -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-primary" id="toggle-sales">
+                <i class="bi bi-receipt-cutoff"></i> Sales History
+            </button>
+            <button type="button" class="btn btn-outline-secondary" id="toggle-stock">
+                <i class="bi bi-box-seam"></i> Stock History
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Content Area -->
+<div id="history-content">
+    <!-- Sales History Table -->
+    <div id="sales-content">
+        <div class="card">
+            <div class="card-header">
+                <h5>Sales History</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Client</th>
+                                <th>Date</th>
+                                <th>Total Amount</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sale in sales %}
+                            <tr>
+                                <td>{{ sale.id }}</td>
+                                <td>{{ sale.client.name }}</td>
+                                <td>{{ sale.sale_date|date:"M d, Y H:i" }}</td>
+                                <td>PKR {{ sale.total_amount|floatformat:2 }}</td>
+                                <td>
+                                    {% if sale.payment_status == 'paid' %}
+                                        <span class="badge bg-success">Paid</span>
+                                    {% elif sale.payment_status == 'partial' %}
+                                        <span class="badge bg-warning">Partial</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">Unpaid</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{% url 'sale_detail' sale.id %}" class="btn btn-sm btn-info">View</a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="6" class="text-center">No sales found.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stock History Table -->
+    <div id="stock-content" style="display: none;">
+        <div class="card">
+            <div class="card-header">
+                <h5>Stock History</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Product</th>
+                                <th>Quantity Added</th>
+                                <th>Date Added</th>
+                                <th>Added By</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for stock in stock_history %}
+                            <tr>
+                                <td>{{ stock.id }}</td>
+                                <td>{{ stock.product_name }}</td>
+                                <td>{{ stock.quantity_packets }} packets</td>
+                                <td>{{ stock.date_added|date:"M d, Y H:i" }}</td>
+                                <td>{{ stock.added_by }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center">No stock additions found.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+
+    // Get DOM elements first
+    const toggleStock = document.getElementById('toggle-stock');
+    const toggleSales = document.getElementById('toggle-sales');
+    const salesContent = document.getElementById('sales-content');
+    const stockContent = document.getElementById('stock-content');
+
+    // Check if all elements exist
+    if (!toggleStock || !toggleSales || !salesContent || !stockContent) {
+        console.error('Required elements not found');
+        return;
+    }
+
+    // Add event listeners
+    toggleSales.addEventListener('click', function() {
+
+        // Reset all buttons
+        toggleStock.classList.remove('btn-primary');
+        toggleStock.classList.add('btn-outline-secondary');
+        toggleSales.classList.remove('btn-outline-secondary');
+        toggleSales.classList.add('btn-primary');
+
+        // Show sales content, hide stock content
+        stockContent.style.display = 'none';
+        salesContent.style.display = 'block';
+
+    });
+
+    toggleStock.addEventListener('click', function() {
+
+        // Reset all buttons
+        toggleSales.classList.remove('btn-primary');
+        toggleSales.classList.add('btn-outline-secondary');
+        toggleStock.classList.remove('btn-outline-secondary');
+        toggleStock.classList.add('btn-primary');
+
+        // Show stock content, hide sales content
+        salesContent.style.display = 'none';
+        stockContent.style.display = 'block';
+
+    });
+});
+
+    // Toggle buttons for sales/stock view
+    document.getElementById('toggle-sales').addEventListener('click', function() {
+        document.querySelectorAll('#toggle-sales, #toggle-stock').forEach(btn => btn.classList.remove('active'));
+        this.classList.add('active');
+        currentView = 'sales';
+        document.getElementById('sales-content').style.display = 'block';
+        document.getElementById('stock-content').style.display = 'none';
+        loadSalesHistory(currentPeriod);
+    });
+
+    document.getElementById('toggle-stock').addEventListener('click', function() {
+        document.querySelectorAll('#toggle-sales, #toggle-stock').forEach(btn => btn.classList.remove('active'));
+        this.classList.add('active');
+        currentView = 'stock';
+        document.getElementById('sales-content').style.display = 'none';
+        document.getElementById('stock-content').style.display = 'block';
+        loadStockHistory(currentPeriod);
+    });
+
+    // Time period filter buttons
+    document.querySelectorAll('[data-period]').forEach(button => {
+        button.addEventListener('click', function() {
+            // Remove active class from all buttons
+            document.querySelectorAll('[data-period]').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            // Add active class to clicked button
+            this.classList.add('active');
+
+            // Load data for selected period for current view
+            currentPeriod = this.dataset.period;
+            if (currentView === 'sales') {
+                loadSalesHistory(currentPeriod);
+            } else {
+                loadStockHistory(currentPeriod);
+            }
+        });
+    });
+
+    // Search functionality
+    document.getElementById('sales-search').addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        filterSales(searchTerm);
+    });
+
+    document.getElementById('stock-search').addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        filterStock(searchTerm);
+    });
+
+    function loadSalesHistory(period) {
+        fetch(`/api/sales-history/?period=${period}`)
+            .then(response => response.json())
+            .then(data => {
+                updateSalesSummaryCards(data.summary);
+                renderSalesTable(data.sales);
+            })
+            .catch(error => {
+                console.error('Error loading sales history:', error);
+                document.getElementById('sales-table-body').innerHTML = `
+                    <tr>
+                        <td colspan="9" class="text-center text-danger py-4">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            Error loading sales data. Please try again.
+                        </td>
+                    </tr>
+                `;
+            });
+    }
+
+    function loadStockHistory(period) {
+        fetch(`/api/stock-history/?period=${period}`)
+            .then(response => response.json())
+            .then(data => {
+                updateStockSummaryCards(data.summary);
+                renderStockTable(data.stock_history);
+            })
+            .catch(error => {
+                console.error('Error loading stock history:', error);
+                document.getElementById('stock-table-body').innerHTML = `
+                    <tr>
+                        <td colspan="6" class="text-center text-danger py-4">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            Error loading stock data. Please try again.
+                        </td>
+                    </tr>
+                `;
+            });
+    }
+
+    function updateSalesSummaryCards(summary) {
+        document.getElementById('sales-total-revenue').textContent = `PKR ${summary.total_revenue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('sales-total-paid').textContent = `PKR ${summary.total_paid.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('sales-total-outstanding').textContent = `PKR ${summary.total_outstanding.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('sales-total-count').textContent = summary.total_sales;
+        document.getElementById('unpaid-count').textContent = summary.unpaid_count;
+        document.getElementById('partial-count').textContent = summary.partial_count;
+        document.getElementById('paid-count').textContent = summary.paid_count;
+    }
+
+    function updateStockSummaryCards(summary) {
+        document.getElementById('stock-total-additions').textContent = summary.total_stock_additions;
+        document.getElementById('stock-total-packets').textContent = summary.total_packets_added.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById('stock-unique-products').textContent = summary.unique_products;
+        const avgAddition = summary.total_stock_additions > 0 ?
+            (summary.total_packets_added / summary.total_stock_additions).toFixed(2) : 0;
+        document.getElementById('stock-avg-addition').textContent = avgAddition;
+    }
+
+    function renderSalesTable(sales) {
+        const tbody = document.getElementById('sales-table-body');
+
+        if (sales.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="9" class="text-center text-muted py-4">
+                        <i class="bi bi-inbox"></i> No sales data available for this period
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        const rows = sales.map(sale => {
+            let statusBadge = '';
+            switch(sale.payment_status) {
+                case 'paid':
+                    statusBadge = '<span class="badge bg-success">Paid</span>';
+                    break;
+                case 'partial':
+                    statusBadge = '<span class="badge bg-warning text-dark">Partial</span>';
+                    break;
+                case 'unpaid':
+                    statusBadge = '<span class="badge bg-danger">Unpaid</span>';
+                    break;
+            }
+
+            const outstandingClass = sale.outstanding_amount > 0 ? 'text-danger fw-bold' : 'text-success';
+
+            return `
+                <tr>
+                    <td><strong>#${sale.id}</strong></td>
+                    <td>${sale.client_name}<br><small class="text-muted">${sale.client_phone}</small></td>
+                    <td>${new Date(sale.sale_date).toLocaleDateString('en-US')}</td>
+                    <td><span class="badge bg-primary">PKR ${sale.total_amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
+                    <td><span class="badge bg-info">PKR ${sale.amount_paid.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
+                    <td><span class="badge ${outstandingClass}">PKR ${sale.outstanding_amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
+                    <td>${statusBadge}</td>
+                    <td>${sale.payment_method || 'N/A'}</td>
+                    <td><span class="badge bg-success">PKR ${sale.total_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
+                </tr>
+            `;
+        }).join('');
+
+        tbody.innerHTML = rows;
+    }
+
+    function renderStockTable(stockHistory) {
+        const tbody = document.getElementById('stock-table-body');
+
+        if (stockHistory.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-4">
+                        <i class="bi bi-inbox"></i> No stock data available for this period
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        const rows = stockHistory.map(stock => `
+            <tr>
+                <td><strong>#${stock.id}</strong></td>
+                <td>${stock.product_name}</td>
+                <td><span class="badge bg-success">${stock.quantity_packets.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} packets</span></td>
+                <td>${new Date(stock.date_added).toLocaleDateString('en-US')}</td>
+                <td>${stock.added_by}</td>
+                <td>${stock.modified ? '<span class="badge bg-warning text-dark">Modified</span>' : '<span class="badge bg-success">Active</span>'}</td>
+            </tr>
+        `).join('');
+
+        tbody.innerHTML = rows;
+    }
+
+    function filterSales(searchTerm) {
+        const rows = document.querySelectorAll('#sales-table-body tr');
+        rows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            row.style.display = text.includes(searchTerm) ? '' : 'none';
+        });
+    }
+
+    function filterStock(searchTerm) {
+        const rows = document.querySelectorAll('#stock-table-body tr');
+        rows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            row.style.display = text.includes(searchTerm) ? '' : 'none';
+        });
+    }
+
+    // Export functionality
+    document.getElementById('sales-export-btn').addEventListener('click', function() {
+        // This would need to be implemented with the sales data
+        alert('Sales export functionality would be implemented here');
+    });
+
+    document.getElementById('stock-export-btn').addEventListener('click', function() {
+        // This would need to be implemented with the stock data
+        alert('Stock export functionality would be implemented here');
+    });
+});
+</script>
+{% endblock %}

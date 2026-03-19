@@ -1,0 +1,185 @@
+{% extends 'distribution/base.html' %}
+
+{% block title %}Expense Management{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2><i class="bi bi-cash-coin"></i> Expense Management</h2>
+  <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addExpenseModal">
+    <i class="bi bi-plus-circle"></i> Add Expense
+  </button>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-header bg-dark text-white">
+    <h5 class="mb-0"><i class="bi bi-list-ul"></i> Bike / Delivery Expenses</h5>
+  </div>
+  <div class="card-body" style="padding: 0 0.5rem 0 0.5rem;">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Date</th>
+            <th>Employee</th>
+            <th>Type</th>
+            <th>Amount</th>
+            <th>Note</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for exp in expenses %}
+          <tr>
+            <td>{{ exp.expense_date|date:"M d, Y" }}</td>
+            <td>{{ exp.employee.name }}</td>
+            <td>{{ exp.get_expense_type_display }}</td>
+            <td>PKR {{ exp.amount|floatformat:2 }}</td>
+            <td>{{ exp.note|default:"-"|truncatewords:12 }}</td>
+            <td class="text-end">
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-primary edit-expense-btn"
+                data-edit-url="{% url 'expense_edit' exp.pk %}"
+                data-bs-toggle="modal"
+                data-bs-target="#dynamicExpenseEditModal"
+              >
+                <i class="bi bi-pencil"></i> Edit
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-danger delete-expense-btn"
+                data-delete-url="{% url 'expense_delete' exp.pk %}"
+                data-expense-note="{{ exp.get_expense_type_display }}"
+                data-bs-toggle="modal"
+                data-bs-target="#deleteExpenseConfirmModal"
+              >
+                <i class="bi bi-trash"></i> Remove
+              </button>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" class="text-center text-muted py-4">
+              No expenses recorded yet.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{# Add Expense Modal #}
+<div class="modal fade" id="addExpenseModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Add Expense</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" action="{% url 'expense_management' %}">
+        {% csrf_token %}
+        <div class="modal-body">
+          {{ form.non_field_errors }}
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">{{ form.employee.label }}</label>
+              {{ form.employee }}
+              {{ form.employee.errors }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">{{ form.expense_type.label }}</label>
+              {{ form.expense_type }}
+              {{ form.expense_type.errors }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">{{ form.amount.label }}</label>
+              {{ form.amount }}
+              {{ form.amount.errors }}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">{{ form.expense_date.label }}</label>
+              {{ form.expense_date }}
+              {{ form.expense_date.errors }}
+            </div>
+            <div class="col-md-12">
+              <label class="form-label">{{ form.note.label }}</label>
+              {{ form.note }}
+              {{ form.note.errors }}
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Add</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{# Delete Confirm Modal #}
+<div class="modal fade" id="deleteExpenseConfirmModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Remove Expense</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" id="deleteExpenseForm">
+        {% csrf_token %}
+        <div class="modal-body">
+          Are you sure you want to remove <strong id="deleteExpenseTitle"></strong>?
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger">Remove</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{# Dynamic Edit Modal #}
+<div class="modal fade" id="dynamicExpenseEditModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content" id="dynamicExpenseEditModalContent">
+      <!-- Loaded via fetch -->
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const deleteModal = document.getElementById("deleteExpenseConfirmModal");
+  const deleteTitleEl = document.getElementById("deleteExpenseTitle");
+  const deleteForm = document.getElementById("deleteExpenseForm");
+
+  deleteModal.addEventListener("show.bs.modal", function (event) {
+    const button = event.relatedTarget;
+    const deleteUrl = button.getAttribute("data-delete-url");
+    const expenseTitle = button.getAttribute("data-expense-note");
+
+    deleteForm.action = deleteUrl;
+    deleteTitleEl.textContent = expenseTitle;
+  });
+
+  document.querySelectorAll(".edit-expense-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      const editUrl = btn.getAttribute("data-edit-url");
+      fetch(editUrl, { headers: { "X-Requested-With": "XMLHttpRequest" } })
+        .then((r) => r.text())
+        .then((html) => {
+          document.getElementById("dynamicExpenseEditModalContent").innerHTML = html;
+          const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById("dynamicExpenseEditModal"));
+          modal.show();
+        });
+    });
+  });
+});
+</script>
+{% endblock %}
+

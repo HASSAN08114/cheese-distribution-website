@@ -6,48 +6,92 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2>Clients</h2>
 
-    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#clientModal">
+    <button type="button" class="btn" data-bs-toggle="modal" data-bs-target="#clientModal">
         Add Client
     </button>
+    <!-- Client Modal -->
+    <div class="modal fade" id="clientModal" tabindex="-1" aria-labelledby="clientModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="clientModalLabel">Add Client</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="clientForm" method="post" action="{% url 'client_add' %}">
+                        {% csrf_token %}
+                        {{ client_form.as_p }}
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn" form="clientForm">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="card">
-    <div class="card-header bg-dark text-white">
-        <h5 class="mb-0"><i class="bi bi-list-ul"></i> All Clients</h5>
-    </div>
-    <div class="card-body" style="padding: 0 0.5rem 0 0.5rem">
+    <div class="card-body">
         <div class="table-responsive">
             <table class="table">
-                <thead class="table-light">
-                    <tr>
-                        <th>Name</th>
-                        <th>Phone</th>
-                        <th>Address</th>
-                        <th>Amount Owed</th>
-                        <th class="text-end">Actions</th>
-                    </tr>
-                </thead>
-            <tbody>
-                {% for client in clients %}
+            <thead>
                 <tr>
-                    <td>{{ client.name }}</td>
-                    <td>{{ client.phone }}</td>
-                    <td>{{ client.address|truncatewords:15 }}</td>
-                    <td>PKR {{ client.amount_owed|floatformat:2 }}</td>
-                    <td class="text-end">
-                        <button type="button" class="btn btn-xs btn-outline-warning edit-btn" data-edit-url="{% url 'client_edit' client.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal">
-                            <i class="bi bi-pencil"></i>
+                    <th>Name</th>
+                    <th>Phone</th>
+                    <th>Address</th>
+                    <th>Payment Status</th>
+                    <th>Outstanding</th>
+                    <th>Payment Methods</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for client_data in clients_with_dues %}
+                <tr>
+                    <td><strong>{{ client_data.client.name }}</strong></td>
+                    <td>{{ client_data.client.phone }}</td>
+                    <td>{{ client_data.client.address|truncatewords:15 }}</td>
+                    <td>
+                        {% if client_data.outstanding_dues > 0 %}
+                            <span class="badge bg-danger">Debited</span>
+                        {% elif client_data.total_sales > 0 %}
+                            <span class="badge bg-success">Credited</span>
+                        {% else %}
+                            <span class="badge bg-secondary">No Activity</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if client_data.outstanding_dues > 0 %}
+                            <span class="badge bg-danger fw-bold">PKR {{ client_data.outstanding_dues|floatformat:2 }}</span>
+                        {% else %}
+                            <span class="badge bg-success fw-bold">PKR 0.00</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if client_data.payment_methods %}
+                            {% for method in client_data.payment_methods %}
+                                <span class="badge bg-info me-1">{{ method|title }}</span>
+                            {% endfor %}
+                        {% else %}
+                            <small class="text-muted">-</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button type="button" class="btn btn-sm btn-outline-primary edit-btn" data-edit-url="{% url 'client_edit' client_data.client.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal">
+                            Edit
                         </button>
                         {% if user_is_owner %}
-                        <button type="button" class="btn btn-xs btn-outline-danger delete-btn" data-item-name="{{ client.name }}" data-delete-url="{% url 'client_delete' client.pk %}" data-bs-toggle="modal" data-bs-target="#deleteConfirmModal">
-                            <i class="bi bi-trash"></i>
+                        <button type="button" class="btn btn-sm btn-outline-danger" data-item-name="{{ client_data.client.name }}" data-delete-url="{% url 'client_delete' client_data.client.pk %}" data-bs-toggle="modal" data-bs-target="#deleteConfirmModal">
+                            Delete
                         </button>
                         {% endif %}
                     </td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="4" class="text-center text-muted py-4">
+                    <td colspan="7" class="text-center text-muted py-4">
                         No clients found. Add your first client above.
                     </td>
                 </tr>
@@ -60,27 +104,6 @@
 {% endblock %}
 
 {% block modals %}
-<!-- Client Modal -->
-<div class="modal fade" id="clientModal" tabindex="-1" aria-labelledby="clientModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="clientModalLabel">Add Client</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form id="clientForm" method="post" action="{% url 'client_add' %}">
-                    {% csrf_token %}
-                    {{ client_form.as_p }}
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" class="btn" form="clientForm">Save</button>
-            </div>
-        </div>
-    </div>
-</div>
 <!-- Delete Modals: Rendered outside main content for proper stacking -->
 <div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">

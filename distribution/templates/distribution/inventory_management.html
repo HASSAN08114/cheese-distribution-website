@@ -138,6 +138,7 @@
 {% endblock %}
 
 {% block modals %}
+
 <!-- Delete Modals: Rendered outside main content for proper stacking -->
 <div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -268,6 +269,7 @@
 <script>
 document.addEventListener("DOMContentLoaded", function () {
     const deleteModal = document.getElementById("deleteConfirmModal");
+
 
     // Live search for cheese products
     const searchInput = document.getElementById('cheeseProductSearch');

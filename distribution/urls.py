@@ -9,8 +9,13 @@ urlpatterns = [
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
     path('dashboard/', views.dashboard, name='dashboard'),
+    path('sales-stock-history/', views.sales_stock_history, name='sales_stock_history'),
+    path('add-stock/', views.add_stock_page, name='add_stock_page'),
     path('api/client-analytics/', views.get_client_analytics, name='get_client_analytics'),
     path('api/product-analytics/', views.get_product_analytics, name='get_product_analytics'),
+    path('api/sales-history/', views.get_sales_history, name='get_sales_history'),
+    path('api/stock-history/', views.get_stock_history, name='get_stock_history'),
+    path('api/product-stock/<int:product_id>/', views.get_product_stock, name='get_product_stock'),
     
     # Merged inventory management (manufacturers + cheese)
     path('inventory/', views.inventory_management, name='inventory_management'),
@@ -30,6 +35,7 @@ urlpatterns = [
     
     path('sales/create/', views.sale_create, name='sale_create'),
     path('sales/', views.sale_history, name='sale_history'),
+    path('sales/<int:pk>/', views.sale_detail, name='sale_detail'),
     path('sales/<int:pk>/modal/', views.sale_modal_details, name='sale_modal_details'),
     path('stock/history/', views.stock_history, name='stock_history'),
     path('stock/<int:pk>/modal/', views.stock_modal_details, name='stock_modal_details'),
@@ -42,6 +48,16 @@ urlpatterns = [
     #Payment Management
     path('payments/make/', views.make_payment, name='make_payment'),
     path('payments/history/', views.payment_history, name='payment_history'),
+
+    # Delivery employee management
+    path('employees/', views.employee_management, name='employee_management'),
+    path('employees/<int:pk>/edit/', views.employee_edit, name='employee_edit'),
+    path('employees/<int:pk>/delete/', views.employee_delete, name='employee_delete'),
+
+    # Delivery expense management
+    path('expenses/', views.expense_management, name='expense_management'),
+    path('expenses/<int:pk>/edit/', views.expense_edit, name='expense_edit'),
+    path('expenses/<int:pk>/delete/', views.expense_delete, name='expense_delete'),
     
     # User Management (Owner only)
     path('users/', views.user_list, name='user_list'),

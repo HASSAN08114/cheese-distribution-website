@@ -2,6 +2,7 @@ from django.db import models
 from django.core.validators import MinValueValidator
 from django.contrib.auth.models import User
 from decimal import Decimal
+from django.utils import timezone
 
 
 class UserProfile(models.Model):
@@ -112,6 +113,22 @@ class Payment(models.Model):
 
 
 class Sale(models.Model):
+    PAYMENT_STATUS_CHOICES = [
+        ('unpaid', 'Unpaid'),
+        ('partial', 'Partial'),
+        ('paid', 'Paid'),
+    ]
+
+    PAYMENT_METHOD_CHOICES = [
+        ('cash', 'Cash'),
+        ('bank_transfer', 'Bank Transfer'),
+        ('jazzcash', 'JazzCash'),
+        ('easypaisa', 'EasyPaisa'),
+        ('sadapay', 'SadaPay'),
+        ('online_banking', 'Online Banking'),
+        ('other', 'Other'),
+    ]
+
     client = models.ForeignKey(Client, on_delete=models.CASCADE)
     sale_date = models.DateTimeField(auto_now_add=True)
     total_amount = models.DecimalField(
@@ -119,12 +136,50 @@ class Sale(models.Model):
         decimal_places=2,
         default=Decimal('0.00')
     )
+    payment_status = models.CharField(
+        max_length=10,
+        choices=PAYMENT_STATUS_CHOICES,
+        default='unpaid'
+    )
+    payment_method = models.CharField(
+        max_length=20,
+        choices=PAYMENT_METHOD_CHOICES,
+        blank=True,
+        null=True
+    )
+    amount_paid = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00')
+    )
+    payment_date = models.DateTimeField(blank=True, null=True)
 
     def __str__(self):
-        return f"Sale #{self.id} - {self.client.name} - {self.sale_date.date()}"
+        return f"Sale #{self.id} - {self.client.name} - {self.sale_date.date()} - {self.get_payment_status_display()}"
 
     def calculate_total_profit(self):
         return sum(item.profit_per_packet * item.quantity_packets for item in self.saleitem_set.all())
+
+    def get_outstanding_amount(self):
+        """Calculate how much is still owed"""
+        return self.total_amount - self.amount_paid
+
+    def is_fully_paid(self):
+        """Check if the sale is fully paid"""
+        return self.amount_paid >= self.total_amount
+
+    def update_payment_status(self):
+        """Automatically update payment status based on amount paid"""
+        if self.amount_paid == 0:
+            self.payment_status = 'unpaid'
+        elif self.amount_paid >= self.total_amount:
+            self.payment_status = 'paid'
+            if not self.payment_date:
+                self.payment_date = timezone.now()
+        else:
+            self.payment_status = 'partial'
+
+        self.save()
 
     class Meta:
         ordering = ['-sale_date']
@@ -197,4 +252,56 @@ class Return(models.Model):
 
     class Meta:
         ordering = ['-date_returned']
+
+
+class DeliveryEmployee(models.Model):
+    """Delivery boy / employee who works with routes."""
+    name = models.CharField(max_length=200)
+    id_card_number = models.CharField(max_length=50)
+    joining_date = models.DateField()
+
+    # Split route into From/To so UI can ask "from where to where".
+    # Stored as optional at DB level to allow existing rows created earlier to migrate.
+    route_from = models.CharField(max_length=200, blank=True, default='')
+    route_to = models.CharField(max_length=200, blank=True, default='')
+
+    # Backwards-compatible single route string (used if route_from/to are empty).
+    route = models.CharField(max_length=200)
+
+    def __str__(self):
+        if self.route_from and self.route_to:
+            return f"{self.name} ({self.route_from} -> {self.route_to})"
+        return f"{self.name} ({self.route})"
+
+    class Meta:
+        ordering = ['name']
+
+
+class DeliveryExpense(models.Model):
+    EXPENSE_TYPES = [
+        ('bike_maintenance', 'Bike Maintenance'),
+        ('fuel', 'Fuel'),
+        ('food', 'Food'),
+        ('salary', 'Salary'),
+        ('note', 'Note'),
+    ]
+
+    employee = models.ForeignKey(DeliveryEmployee, on_delete=models.CASCADE)
+    expense_type = models.CharField(max_length=30, choices=EXPENSE_TYPES)
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+        help_text="Set 0 for note-only expenses."
+    )
+    note = models.TextField(blank=True)
+    expense_date = models.DateField(default=timezone.localdate)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.employee.name} - {self.get_expense_type_display()} - {self.amount}"
+
+    class Meta:
+        ordering = ['-expense_date', '-id']
 
