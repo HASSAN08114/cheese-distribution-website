@@ -401,7 +401,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function loadClientAnalytics(period) {
-        fetch(`/api/client-analytics/?period=${period}`)
+        fetch(`/api/client-analytics/?period=${period}`, {
+            credentials: 'include'
+        })
             .then(response => response.json())
             .then(data => {
                 allClientData = data.clients;
@@ -423,7 +425,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function loadProductAnalytics(period) {
-        fetch(`/api/product-analytics/?period=${period}`)
+        fetch(`/api/product-analytics/?period=${period}`, {
+            credentials: 'include'
+        })
             .then(response => response.json())
             .then(data => {
                 allProductData = data.products;

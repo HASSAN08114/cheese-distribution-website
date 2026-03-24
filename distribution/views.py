@@ -198,6 +198,7 @@ def dashboard(request):
 
     context = {
         'user_is_owner': user_is_owner,
+        'now': timezone.now(),
     }
     return render(request, 'distribution/dashboard.html', context)
 
@@ -349,21 +350,17 @@ def get_product_analytics(request):
             product_sales = SaleItem.objects.filter(cheese_product=product)
 
         if product_sales.exists():
-            # Total quantity sold
-            total_quantity = product_sales.aggregate(
-                total=Sum('quantity_packets')
-            )['total'] or Decimal('0.00')
-
-            # Total revenue
-            total_revenue = product_sales.aggregate(
-                total=Sum(models.F('quantity_packets') * models.F('selling_price_per_packet'))
-            )['total'] or Decimal('0.00')
-
-            # Total profit
-            total_profit = sum(
-                (item.selling_price_per_packet - item.cheese_product.purchase_price_per_packet) * item.quantity_packets
-                for item in product_sales
-            )
+            # Calculate totals by iterating through sales items
+            total_quantity = Decimal('0.00')
+            total_revenue = Decimal('0.00')
+            total_profit = Decimal('0.00')
+            
+            for item in product_sales:
+                total_quantity += item.quantity_packets
+                item_revenue = item.quantity_packets * item.selling_price_per_packet
+                total_revenue += item_revenue
+                item_profit = (item.selling_price_per_packet - product.purchase_price_per_packet) * item.quantity_packets
+                total_profit += item_profit
 
             # Transaction count
             transaction_count = product_sales.count()
@@ -375,8 +372,7 @@ def get_product_analytics(request):
             stock_turnover = float(total_quantity / current_stock) if current_stock > 0 else 0
 
             # Profit margin percentage
-            total_cost = total_quantity * product.purchase_price_per_packet
-            profit_margin = (total_profit / float(total_revenue) * 100) if total_revenue > 0 else 0
+            profit_margin = (float(total_profit) / float(total_revenue) * 100) if total_revenue > 0 else 0
 
             product_data.append({
                 'id': product.id,
