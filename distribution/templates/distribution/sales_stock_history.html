@@ -26,6 +26,9 @@
         <button type="button" class="btn btn-outline-primary btn-lg" id="toggle-stock" style="border-radius: 8px;">
             <i class="bi bi-box-seam"></i> Stock History
         </button>
+        <button type="button" class="btn btn-outline-primary btn-lg" id="toggle-debt" style="border-radius: 8px;">
+            <i class="bi bi-cash-coin"></i> Client Debt
+        </button>
     </div>
 </div>
 
@@ -193,6 +196,64 @@
             </div>
         </div>
     </div>
+
+    <!-- Client Debt Table -->
+    <div id="debt-content" style="display: none;">
+        <div class="card shadow-lg border-0">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-cash-coin"></i> Client Outstanding Debt</h5>
+            </div>
+            <div class="card-body">
+                <!-- Summary Stats -->
+                <div class="row mb-4" id="debt-summary">
+                    <div class="col-md-3">
+                        <div class="card bg-light border-0">
+                            <div class="card-body">
+                                <h6 class="text-muted mb-2">Total Outstanding Debt</h6>
+                                <h3 class="text-danger" id="total-debt">PKR 0.00</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-light border-0">
+                            <div class="card-body">
+                                <h6 class="text-muted mb-2">Clients With Debt</h6>
+                                <h3 class="text-primary" id="debt-client-count">0</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-light border-0">
+                            <div class="card-body">
+                                <h6 class="text-muted mb-2">Total Clients</h6>
+                                <h3 class="text-info" id="total-client-count">0</h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead style="background-color: #343a40; color: white;">
+                            <tr>
+                                <th><i class="bi bi-person"></i> Client Name</th>
+                                <th><i class="bi bi-telephone"></i> Phone</th>
+                                <th><i class="bi bi-currency-dollar"></i> Total Sales</th>
+                                <th><i class="bi bi-cash"></i> Total Paid</th>
+                                <th><i class="bi bi-exclamation-circle"></i> Outstanding Debt</th>
+                                <th class="text-end"><i class="bi bi-gear"></i> Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="debt-table-body">
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">Load debt information...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -205,8 +266,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Get DOM elements
     const toggleSales = document.getElementById('toggle-sales');
     const toggleStock = document.getElementById('toggle-stock');
+    const toggleDebt = document.getElementById('toggle-debt');
     const salesContent = document.getElementById('sales-content');
     const stockContent = document.getElementById('stock-content');
+    const debtContent = document.getElementById('debt-content');
 
     // Check if elements exist
     if (!toggleSales || !salesContent) {
@@ -220,10 +283,13 @@ document.addEventListener('DOMContentLoaded', function() {
         currentView = 'sales';
         salesContent.style.display = 'block';
         stockContent.style.display = 'none';
+        debtContent.style.display = 'none';
         toggleSales.classList.remove('btn-outline-primary');
         toggleSales.classList.add('btn-primary');
         toggleStock.classList.remove('btn-primary');
         toggleStock.classList.add('btn-outline-primary');
+        toggleDebt.classList.remove('btn-primary');
+        toggleDebt.classList.add('btn-outline-primary');
     });
 
     // Add event listener for Stock History button
@@ -233,10 +299,31 @@ document.addEventListener('DOMContentLoaded', function() {
             currentView = 'stock';
             salesContent.style.display = 'none';
             stockContent.style.display = 'block';
+            debtContent.style.display = 'none';
             toggleStock.classList.remove('btn-outline-primary');
             toggleStock.classList.add('btn-primary');
             toggleSales.classList.remove('btn-primary');
             toggleSales.classList.add('btn-outline-primary');
+            toggleDebt.classList.remove('btn-primary');
+            toggleDebt.classList.add('btn-outline-primary');
+        });
+    }
+
+    // Add event listener for Client Debt button
+    if (toggleDebt) {
+        toggleDebt.addEventListener('click', function(e) {
+            e.preventDefault();
+            currentView = 'debt';
+            salesContent.style.display = 'none';
+            stockContent.style.display = 'none';
+            debtContent.style.display = 'block';
+            toggleDebt.classList.remove('btn-outline-primary');
+            toggleDebt.classList.add('btn-primary');
+            toggleSales.classList.remove('btn-primary');
+            toggleSales.classList.add('btn-outline-primary');
+            toggleStock.classList.remove('btn-primary');
+            toggleStock.classList.add('btn-outline-primary');
+            loadClientDebt();
         });
     }
 
@@ -429,6 +516,64 @@ document.addEventListener('DOMContentLoaded', function() {
             const text = row.textContent.toLowerCase();
             row.style.display = text.includes(searchTerm) ? '' : 'none';
         });
+    }
+
+    function loadClientDebt() {
+        fetch('/api/client-debt/')
+            .then(response => response.json())
+            .then(data => {
+                updateDebtSummaryCards(data.summary);
+                renderDebtTable(data.client_debt);
+            })
+            .catch(error => {
+                console.error('Error loading client debt:', error);
+                document.getElementById('debt-table-body').innerHTML = `
+                    <tr>
+                        <td colspan="6" class="text-center text-danger py-4">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            Error loading debt data. Please try again.
+                        </td>
+                    </tr>
+                `;
+            });
+    }
+
+    function updateDebtSummaryCards(summary) {
+        document.getElementById('total-debt').textContent = `PKR ${summary.total_outstanding_debt.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('debt-client-count').textContent = summary.total_clients_with_debt;
+        document.getElementById('total-client-count').textContent = summary.total_clients;
+    }
+
+    function renderDebtTable(debts) {
+        const tbody = document.getElementById('debt-table-body');
+
+        if (debts.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-4">
+                        <i class="bi bi-check-circle"></i> All clients are up to date!
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        const rows = debts.map(debt => {
+            return `
+                <tr>
+                    <td><strong>${debt.client_name}</strong></td>
+                    <td>${debt.client_phone}</td>
+                    <td>PKR ${debt.total_sales.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    <td><span class="badge bg-success">PKR ${debt.total_paid.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
+                    <td><span class="badge bg-danger">PKR ${debt.outstanding_amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
+                    <td class="text-end">
+                        <a href="/clients/" class="btn btn-sm btn-info">View Client</a>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        tbody.innerHTML = rows;
     }
 
     // Quick Sale Form Submission Handler

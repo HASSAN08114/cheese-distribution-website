@@ -1,0 +1,51 @@
+{% extends 'distribution/base.html' %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="bg-info text-white py-4 mb-4 shadow-lg" style="margin: -1rem -1rem 0 -1rem; padding: 1.5rem!important;">
+    <div class="container-fluid">
+        <h2 class="mb-1"><i class="bi bi-person-badge"></i> {{ title }}</h2>
+        <p class="mb-0 opacity-85">Update user role and permissions</p>
+    </div>
+</div>
+
+<div class="card shadow-lg border-0">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0"><i class="bi bi-pencil-square"></i> Edit Role</h5>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            
+            <div class="mb-3">
+                <label class="form-label"><strong>User:</strong></label>
+                <p class="form-control-plaintext">{{ user.username }}</p>
+            </div>
+            
+            <div class="mb-3">
+                <label for="{{ form.role.id_for_label }}" class="form-label">User Role *</label>
+                {{ form.role }}
+                {% if form.role.errors %}
+                    <div class="text-danger small mt-1">{{ form.role.errors }}</div>
+                {% endif %}
+                <small class="text-muted d-block mt-2">
+                    <strong>Owner:</strong> Full access to all features including user management<br>
+                    <strong>Employee:</strong> Limited access (can add clients, create sales, manage inventory)
+                </small>
+            </div>
+            
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {{ form.non_field_errors }}
+                </div>
+            {% endif %}
+            
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Save Changes</button>
+                <a href="{% url 'user_list' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

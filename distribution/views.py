@@ -430,6 +430,7 @@ def get_product_analytics(request):
 
 
 @login_required
+@login_required
 def sales_stock_history(request):
     """Page for Sales and Stock History with toggle functionality"""
     user_is_owner = is_owner(request.user)
@@ -638,6 +639,51 @@ def get_stock_history(request):
         'stock_history': stock_data,
         'summary': summary,
         'period': period
+    })
+
+
+@login_required
+def get_client_debt(request):
+    """AJAX endpoint to get client outstanding debt information"""
+    # Get all clients with their outstanding debt
+    clients = Client.objects.all()
+    client_debt_data = []
+    total_outstanding = Decimal('0.00')
+    
+    for client in clients:
+        # Get all sales for this client
+        client_sales = Sale.objects.filter(client=client)
+        
+        if client_sales.exists():
+            # Calculate totals
+            total_sales_amount = client_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+            total_amount_paid = client_sales.aggregate(total=Sum('amount_paid'))['total'] or Decimal('0.00')
+            
+            outstanding_amount = total_sales_amount - total_amount_paid
+            
+            if outstanding_amount > 0:
+                client_debt_data.append({
+                    'client_id': client.id,
+                    'client_name': client.name,
+                    'client_phone': client.phone,
+                    'total_sales': float(total_sales_amount),
+                    'total_paid': float(total_amount_paid),
+                    'outstanding_amount': float(outstanding_amount),
+                })
+                total_outstanding += outstanding_amount
+    
+    # Sort by outstanding amount descending
+    client_debt_data.sort(key=lambda x: x['outstanding_amount'], reverse=True)
+    
+    summary = {
+        'total_clients_with_debt': len(client_debt_data),
+        'total_outstanding_debt': float(total_outstanding),
+        'total_clients': Client.objects.count(),
+    }
+    
+    return JsonResponse({
+        'client_debt': client_debt_data,
+        'summary': summary,
     })
 
 

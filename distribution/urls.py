@@ -15,6 +15,7 @@ urlpatterns = [
     path('api/product-analytics/', views.get_product_analytics, name='get_product_analytics'),
     path('api/sales-history/', views.get_sales_history, name='get_sales_history'),
     path('api/stock-history/', views.get_stock_history, name='get_stock_history'),
+    path('api/client-debt/', views.get_client_debt, name='get_client_debt'),
     path('api/product-stock/<int:product_id>/', views.get_product_stock, name='get_product_stock'),
     
     # Merged inventory management (manufacturers + cheese)
