@@ -3,7 +3,12 @@
 {% block title %}Sales & Stock History{% endblock %}
 
 {% block content %}
-<h2 class="mb-4"><i class="bi bi-clock-history"></i> Sales & Stock History</h2>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-clock-history"></i> Sales & Stock History</h2>
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#quickSaleModal">
+        <i class="bi bi-plus-circle"></i> Create Quick Sale
+    </button>
+</div>
 
 <!-- Toggle Buttons -->
 <div class="row mb-4">
@@ -15,6 +20,75 @@
             <button type="button" class="btn btn-outline-secondary" id="toggle-stock">
                 <i class="bi bi-box-seam"></i> Stock History
             </button>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Sale Modal -->
+<div class="modal fade" id="quickSaleModal" tabindex="-1" aria-labelledby="quickSaleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="quickSaleModalLabel">Create Quick Sale</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="quickSaleForm" method="post" action="{% url 'quick_sale_create' %}">
+                    {% csrf_token %}
+
+                    <div class="mb-3">
+                        <label class="form-label">Client</label>
+                        <select name="client" class="form-control" required>
+                            <option value="">Select client</option>
+                            {% for client in clients %}
+                                <option value="{{ client.pk }}">{{ client.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <h6 class="mt-4">Sale Items</h6>
+
+                    {{ formset.management_form }}
+
+                    <div id="formset-container">
+                        {% for form in formset %}
+                        <div class="row mb-3 formset-row border-bottom pb-3">
+                            {{ form.id }}
+
+                            <div class="col-md-4">
+                                {{ form.cheese_product.label_tag }}
+                                {{ form.cheese_product }}
+                            </div>
+
+                            <div class="col-md-3">
+                                {{ form.quantity_packets.label_tag }}
+                                {{ form.quantity_packets }}
+                            </div>
+
+                            <div class="col-md-3">
+                                {{ form.selling_price_per_packet.label_tag }}
+                                {{ form.selling_price_per_packet }}
+                            </div>
+
+                            <div class="col-md-2 d-flex align-items-end">
+                                <button type="button" class="btn btn-sm btn-danger remove-item">
+                                    Remove
+                                </button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mt-3">
+                        <button type="button" class="btn btn-success btn-sm" id="addItemBtn">
+                            Add Item
+                        </button>
+                        <button type="submit" class="btn btn-primary ms-2">
+                            Create Sale
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 </div>
@@ -40,7 +114,7 @@
                                 <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="sales-table-body">
                             {% for sale in sales %}
                             <tr>
                                 <td>{{ sale.id }}</td>
@@ -88,9 +162,10 @@
                                 <th>Quantity Added</th>
                                 <th>Date Added</th>
                                 <th>Added By</th>
+                                <th class="text-end">Actions</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="stock-table-body">
                             {% for stock in stock_history %}
                             <tr>
                                 <td>{{ stock.id }}</td>
@@ -98,10 +173,13 @@
                                 <td>{{ stock.quantity_packets }} packets</td>
                                 <td>{{ stock.date_added|date:"M d, Y H:i" }}</td>
                                 <td>{{ stock.added_by }}</td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-info view-stock-modal" data-id="{{ stock.id }}">View</button>
+                                </td>
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="5" class="text-center">No stock additions found.</td>
+                                <td colspan="6" class="text-center">No stock additions found.</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -115,68 +193,47 @@
 
 {% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+let currentView = 'sales';
+let currentPeriod = 'all';
 
-    // Get DOM elements first
-    const toggleStock = document.getElementById('toggle-stock');
+document.addEventListener('DOMContentLoaded', function() {
+    // Get DOM elements
     const toggleSales = document.getElementById('toggle-sales');
+    const toggleStock = document.getElementById('toggle-stock');
     const salesContent = document.getElementById('sales-content');
     const stockContent = document.getElementById('stock-content');
 
-    // Check if all elements exist
-    if (!toggleStock || !toggleSales || !salesContent || !stockContent) {
+    // Check if elements exist
+    if (!toggleSales || !salesContent) {
         console.error('Required elements not found');
         return;
     }
 
-    // Add event listeners
-    toggleSales.addEventListener('click', function() {
-
-        // Reset all buttons
-        toggleStock.classList.remove('btn-primary');
-        toggleStock.classList.add('btn-outline-secondary');
+    // Add event listener for Sales History button
+    toggleSales.addEventListener('click', function(e) {
+        e.preventDefault();
+        currentView = 'sales';
+        salesContent.style.display = 'block';
+        stockContent.style.display = 'none';
         toggleSales.classList.remove('btn-outline-secondary');
         toggleSales.classList.add('btn-primary');
-
-        // Show sales content, hide stock content
-        stockContent.style.display = 'none';
-        salesContent.style.display = 'block';
-
+        toggleStock.classList.remove('btn-primary');
+        toggleStock.classList.add('btn-outline-secondary');
     });
 
-    toggleStock.addEventListener('click', function() {
-
-        // Reset all buttons
-        toggleSales.classList.remove('btn-primary');
-        toggleSales.classList.add('btn-outline-secondary');
-        toggleStock.classList.remove('btn-outline-secondary');
-        toggleStock.classList.add('btn-primary');
-
-        // Show stock content, hide sales content
-        salesContent.style.display = 'none';
-        stockContent.style.display = 'block';
-
-    });
-});
-
-    // Toggle buttons for sales/stock view
-    document.getElementById('toggle-sales').addEventListener('click', function() {
-        document.querySelectorAll('#toggle-sales, #toggle-stock').forEach(btn => btn.classList.remove('active'));
-        this.classList.add('active');
-        currentView = 'sales';
-        document.getElementById('sales-content').style.display = 'block';
-        document.getElementById('stock-content').style.display = 'none';
-        loadSalesHistory(currentPeriod);
-    });
-
-    document.getElementById('toggle-stock').addEventListener('click', function() {
-        document.querySelectorAll('#toggle-sales, #toggle-stock').forEach(btn => btn.classList.remove('active'));
-        this.classList.add('active');
-        currentView = 'stock';
-        document.getElementById('sales-content').style.display = 'none';
-        document.getElementById('stock-content').style.display = 'block';
-        loadStockHistory(currentPeriod);
-    });
+    // Add event listener for Stock History button
+    if (toggleStock) {
+        toggleStock.addEventListener('click', function(e) {
+            e.preventDefault();
+            currentView = 'stock';
+            salesContent.style.display = 'none';
+            stockContent.style.display = 'block';
+            toggleStock.classList.remove('btn-outline-secondary');
+            toggleStock.classList.add('btn-primary');
+            toggleSales.classList.remove('btn-primary');
+            toggleSales.classList.add('btn-outline-secondary');
+        });
+    }
 
     // Time period filter buttons
     document.querySelectorAll('[data-period]').forEach(button => {
@@ -200,15 +257,22 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Search functionality
-    document.getElementById('sales-search').addEventListener('input', function() {
-        const searchTerm = this.value.toLowerCase();
-        filterSales(searchTerm);
-    });
+    const salesSearchEl = document.getElementById('sales-search');
+    const stockSearchEl = document.getElementById('stock-search');
+    
+    if (salesSearchEl) {
+        salesSearchEl.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            filterSales(searchTerm);
+        });
+    }
 
-    document.getElementById('stock-search').addEventListener('input', function() {
-        const searchTerm = this.value.toLowerCase();
-        filterStock(searchTerm);
-    });
+    if (stockSearchEl) {
+        stockSearchEl.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            filterStock(searchTerm);
+        });
+    }
 
     function loadSalesHistory(period) {
         fetch(`/api/sales-history/?period=${period}`)
@@ -310,6 +374,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <td>${statusBadge}</td>
                     <td>${sale.payment_method || 'N/A'}</td>
                     <td><span class="badge bg-success">PKR ${sale.total_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
+                    <td><a href="/sales/${sale.id}/" class="btn btn-sm btn-info">View</a></td>
                 </tr>
             `;
         }).join('');
@@ -361,15 +426,197 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Export functionality
-    document.getElementById('sales-export-btn').addEventListener('click', function() {
-        // This would need to be implemented with the sales data
-        alert('Sales export functionality would be implemented here');
-    });
+    // Quick Sale Form Submission Handler
+    const quickSaleForm = document.getElementById('quickSaleForm');
+    
+    if (quickSaleForm) {
+        quickSaleForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            
+            fetch(this.action, {
+                method: 'POST',
+                body: formData,
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Show success message
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-success alert-dismissible fade show';
+                    alertDiv.role = 'alert';
+                    alertDiv.innerHTML = `
+                        <strong>✓ Success!</strong> Sale has been created successfully.
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    
+                    // Close the modal first
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('quickSaleModal'));
+                    if (modal) modal.hide();
+                    
+                    // Insert alert at the top
+                    const heading = document.querySelector('h2');
+                    if (heading) {
+                        heading.parentNode.insertBefore(alertDiv, heading.nextSibling);
+                    }
+                    
+                    // Clear the form
+                    quickSaleForm.reset();
+                    
+                    // Reset the formset
+                    const container = document.getElementById('formset-container');
+                    const totalForms = document.getElementById('id_form-TOTAL_FORMS');
+                    const minForms = parseInt(document.getElementById('id_form-MIN_NUM_FORMS').value);
+                    
+                    // Keep at least minimum forms
+                    let rowsToKeep = minForms || 1;
+                    const rows = container.querySelectorAll('.formset-row');
+                    
+                    // Remove extra rows
+                    for (let i = rows.length - 1; i >= rowsToKeep; i--) {
+                        rows[i].remove();
+                    }
+                    
+                    totalForms.value = rowsToKeep;
+                    
+                    // Clear inputs in remaining rows
+                    container.querySelectorAll('input, select').forEach(input => {
+                        if (input.type !== 'hidden') {
+                            input.value = '';
+                        }
+                    });
+                    
+                    // Auto-dismiss alert after 5 seconds
+                    setTimeout(() => alertDiv.remove(), 5000);
+                } else {
+                    // Show error message
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-danger alert-dismissible fade show';
+                    alertDiv.role = 'alert';
+                    alertDiv.innerHTML = `
+                        <strong>Error!</strong> ${data.error || 'An error occurred while creating the sale.'}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    
+                    const heading = document.querySelector('h2');
+                    if (heading) {
+                        heading.parentNode.insertBefore(alertDiv, heading.nextSibling);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert alert-danger alert-dismissible fade show';
+                alertDiv.role = 'alert';
+                alertDiv.innerHTML = `
+                    <strong>Error!</strong> An error occurred while creating the sale.
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                
+                const heading = document.querySelector('h2');
+                if (heading) {
+                    heading.parentNode.insertBefore(alertDiv, heading.nextSibling);
+                }
+            });
+        });
+    }
 
-    document.getElementById('stock-export-btn').addEventListener('click', function() {
-        // This would need to be implemented with the stock data
-        alert('Stock export functionality would be implemented here');
+    // Quick Sale: Add/Remove Item logic
+    const addButton = document.getElementById('addItemBtn');
+    const container = document.getElementById('formset-container');
+    const totalForms = document.getElementById('id_form-TOTAL_FORMS');
+    let formCount = parseInt(totalForms.value);
+
+    function updateRemoveButtons() {
+        container.querySelectorAll('.remove-item').forEach(function(btn) {
+            btn.onclick = function() {
+                const row = btn.closest('.formset-row');
+                if (container.querySelectorAll('.formset-row').length > 1) {
+                    row.remove();
+                    formCount--;
+                    totalForms.value = formCount;
+                }
+            };
+        });
+    }
+
+    if (addButton) {
+        addButton.addEventListener('click', function() {
+            const rows = container.querySelectorAll('.formset-row');
+            const lastRow = rows[rows.length - 1];
+            const newForm = lastRow.cloneNode(true);
+
+            const formRegex = RegExp(`form-(\\d+)-`, 'g');
+            newForm.innerHTML = newForm.innerHTML.replace(formRegex, function(match) {
+                return match.replace(/\\d+/, formCount);
+            });
+
+            const inputs = newForm.querySelectorAll('input, select');
+            inputs.forEach(function(input) {
+                if (input.name) {
+                    input.name = input.name.replace(/\\d+/, formCount);
+                }
+                if (input.id) {
+                    input.id = input.id.replace(/\\d+/, formCount);
+                }
+                if (input.type !== 'hidden' && input.type !== 'checkbox') {
+                    input.value = '';
+                }
+                if (input.type === 'checkbox') {
+                    input.checked = false;
+                }
+            });
+
+            container.appendChild(newForm);
+            formCount++;
+            totalForms.value = formCount;
+            updateRemoveButtons();
+        });
+    }
+
+    updateRemoveButtons();
+
+    // Export functionality (if buttons exist)
+    const salesExportBtn = document.getElementById('sales-export-btn');
+    const stockExportBtn = document.getElementById('stock-export-btn');
+    
+    if (salesExportBtn) {
+        salesExportBtn.addEventListener('click', function() {
+            // This would need to be implemented with the sales data
+            alert('Sales export functionality would be implemented here');
+        });
+    }
+
+    if (stockExportBtn) {
+        stockExportBtn.addEventListener('click', function() {
+            // This would need to be implemented with the stock data
+            alert('Stock export functionality would be implemented here');
+        });
+    }
+
+    // Stock Modal Handler
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('view-stock-modal')) {
+            const stockId = e.target.getAttribute('data-id');
+            fetch(`/stock/modal/${stockId}/`)
+                .then(response => response.text())
+                .then(html => {
+                    const modalDiv = document.createElement('div');
+                    modalDiv.className = 'modal fade';
+                    modalDiv.tabIndex = -1;
+                    modalDiv.innerHTML = html;
+                    document.body.appendChild(modalDiv);
+                    const modal = new bootstrap.Modal(modalDiv);
+                    modal.show();
+                    // Clean up after modal closes
+                    modalDiv.addEventListener('hidden.bs.modal', function() {
+                        modalDiv.remove();
+                    });
+                })
+                .catch(error => console.error('Error loading stock modal:', error));
+        }
     });
 });
 </script>

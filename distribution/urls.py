@@ -34,7 +34,8 @@ urlpatterns = [
     path('clients/<int:pk>/delete/', views.client_delete, name='client_delete'),
     
     path('sales/create/', views.sale_create, name='sale_create'),
-    path('sales/', views.sale_history, name='sale_history'),
+    path('sales/quick-create/', views.quick_sale_create, name='quick_sale_create'),
+    path('sales/', views.sales_stock_history, name='sale_history'),  # Redirects to consolidated page
     path('sales/<int:pk>/', views.sale_detail, name='sale_detail'),
     path('sales/<int:pk>/modal/', views.sale_modal_details, name='sale_modal_details'),
     path('stock/history/', views.stock_history, name='stock_history'),

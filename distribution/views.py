@@ -128,12 +128,24 @@ def cheese_type_add(request):
         form = CheeseTypeForm(request.POST)
         if form.is_valid():
             form.save()
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': True})
             messages.success(request, 'Cheese type added successfully.')
             return redirect('inventory_management')
+        else:
+            # Extract error message
+            error_msg = ''
+            if 'name' in form.errors:
+                error_msg = form.errors['name'][0]
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                html = render_to_string('distribution/partials/edit_cheese_type_form.html', {'form': form}, request=request)
+                return JsonResponse({'success': False, 'html': html, 'error': error_msg})
     else:
         form = CheeseTypeForm()
-    html = render_to_string('distribution/partials/edit_cheese_type_form.html', {'form': form}, request=request)
-    return JsonResponse({'html': html})
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        html = render_to_string('distribution/partials/edit_cheese_type_form.html', {'form': form}, request=request)
+        return JsonResponse({'success': False, 'html': html})
+    return render(request, 'distribution/cheese_type_form.html', {'form': form})
 
 @login_required
 def cheese_type_edit(request, pk):
@@ -450,6 +462,8 @@ def sales_stock_history(request):
         'user_is_owner': user_is_owner,
         'sales': sales,
         'stock_history': formatted_stock_history,
+        'clients': Client.objects.all(),
+        'formset': SaleItemFormSet(),
     })
 
 
@@ -683,10 +697,23 @@ def manufacturer_add(request):
         form = ManufacturerForm(request.POST)
         if form.is_valid():
             form.save()
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': True})
             messages.success(request, 'Manufacturer added successfully.')
             return redirect('inventory_management')
+        else:
+            # Extract error message
+            error_msg = ''
+            if 'name' in form.errors:
+                error_msg = form.errors['name'][0]
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                html = render_to_string('distribution/partials/edit_manufacturer_form.html', {'form': form}, request=request)
+                return JsonResponse({'success': False, 'html': html, 'error': error_msg})
     else:
         form = ManufacturerForm()
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        html = render_to_string('distribution/partials/edit_manufacturer_form.html', {'form': form}, request=request)
+        return JsonResponse({'success': False, 'html': html})
     return render(request, 'distribution/manufacturer_form.html', {'form': form, 'title': 'Add Manufacturer'})
 
 
@@ -733,10 +760,23 @@ def cheese_add(request):
                     added_by=request.user.userprofile,
                     quantity_packets=initial_quantity
                 )
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': True})
             messages.success(request, 'Cheese product added successfully.')
             return redirect('inventory_management')
+        else:
+            # Extract error messages
+            error_msg = ''
+            if form.errors:
+                error_msg = list(form.errors.values())[0][0]
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                html = render_to_string('distribution/partials/edit_cheese_form.html', {'form': form}, request=request)
+                return JsonResponse({'success': False, 'html': html, 'error': error_msg})
     else:
         form = CheeseProductForm()
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        html = render_to_string('distribution/partials/edit_cheese_form.html', {'form': form}, request=request)
+        return JsonResponse({'success': False, 'html': html})
     return render(request, 'distribution/cheese_form.html', {'form': form, 'title': 'Add Cheese Product'})
 
 
@@ -782,19 +822,19 @@ def add_stock(request):
             stock_added = []
             for form in valid_forms:
                 cheese_product = form.cleaned_data['cheese_product']
-                additional_quantity = form.cleaned_data['additional_quantity']
+                quantity_packets = form.cleaned_data['quantity_packets']
 
-                cheese_product.available_quantity_packets += additional_quantity
+                cheese_product.available_quantity_packets += quantity_packets
                 cheese_product.save()
 
                 # Create stock addition history
                 StockAdditionHistory.objects.create(
                     cheese_product=cheese_product,
                     added_by=request.user.userprofile,
-                    quantity_packets=additional_quantity
+                    quantity_packets=quantity_packets
                 )
 
-                stock_added.append(f"{additional_quantity} packets to {cheese_product}")
+                stock_added.append(f"{quantity_packets} packets to {cheese_product}")
 
             messages.success(request, f'Successfully added stock: {", ".join(stock_added)}.')
             return JsonResponse({'success': True})
@@ -1027,7 +1067,7 @@ def sale_create(request):
                 sale.save()
 
                 messages.success(request, 'Sale created successfully.')
-                return redirect('sale_history')
+                return redirect('sales_stock_history')
         else:
             messages.error(request, 'Please correct the errors below.')
             return render(request, 'distribution/sale_create.html', {

@@ -37,20 +37,24 @@
                             <label class="form-label fw-bold">Quantity to Add (Packets)</label>
                             <div class="input-group">
                                 <span class="input-group-text"><i class="bi bi-plus"></i></span>
-                                {{ form.additional_quantity }}
+                                {{ form.quantity_packets }}
                             </div>
-                            {% if form.additional_quantity.errors %}
-                                <div class="text-danger mt-1">{{ form.additional_quantity.errors }}</div>
+                            {% if form.quantity_packets.errors %}
+                                <div class="text-danger mt-1">{{ form.quantity_packets.errors }}</div>
                             {% endif %}
                             <small class="text-muted">Enter the number of packets to add to stock</small>
                         </div>
-                        <div class="col-md-2">
-                            <label class="form-label fw-bold">Current Stock</label>
-                            <div class="form-control bg-light" id="current-stock-{{ forloop.counter0 }}" style="cursor: not-allowed;">
-                                <small class="text-muted">Select product to see current stock</small>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Purchase Price (PKR/Packet)</label>
+                            <div class="input-group">
+                                <span class="input-group-text">PKR</span>
+                                {{ form.purchase_price_per_packet }}
                             </div>
+                            {% if form.purchase_price_per_packet.errors %}
+                                <div class="text-danger mt-1">{{ form.purchase_price_per_packet.errors }}</div>
+                            {% endif %}
                         </div>
-                        <div class="col-md-1 d-flex align-items-end">
+                        <div class="col-md-1 d-flex align-items-end justify-content-center">
                             {% if forloop.first %}
                                 <button type="button" class="btn btn-success btn-sm w-100" id="add-stock-item" title="Add Another Product">
                                     <i class="bi bi-plus-lg"></i>
@@ -254,6 +258,67 @@ document.addEventListener('DOMContentLoaded', function() {
         `;
         container.innerHTML = firstRow;
     };
+
+    // Form submission handler
+    const addStockForm = document.getElementById('addStockForm');
+    if (addStockForm) {
+        addStockForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            
+            fetch(this.action, {
+                method: 'POST',
+                body: formData,
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Show success message
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-success alert-dismissible fade show';
+                    alertDiv.innerHTML = `
+                        <strong>✓ Success!</strong> Stock has been added successfully.
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    
+                    // Insert alert at the top of the form
+                    addStockForm.parentElement.insertBefore(alertDiv, addStockForm);
+                    
+                    // Scroll to the alert
+                    alertDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    
+                    // Clear the form after 2 seconds
+                    setTimeout(() => {
+                        clearForm();
+                        // Remove the alert after 5 seconds
+                        setTimeout(() => alertDiv.remove(), 5000);
+                    }, 2000);
+                } else {
+                    // Show error message
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-danger alert-dismissible fade show';
+                    alertDiv.innerHTML = `
+                        <strong>Error!</strong> ${data.error || 'An error occurred while adding stock.'}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    addStockForm.parentElement.insertBefore(alertDiv, addStockForm);
+                    alertDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert alert-danger alert-dismissible fade show';
+                alertDiv.innerHTML = `
+                    <strong>Error!</strong> An error occurred while adding stock.
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                addStockForm.parentElement.insertBefore(alertDiv, addStockForm);
+                alertDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+    }
 
 });
 </script>

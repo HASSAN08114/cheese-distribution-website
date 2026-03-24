@@ -24,7 +24,7 @@ class UserProfile(models.Model):
 
 
 class Manufacturer(models.Model):
-    name = models.CharField(max_length=200)
+    name = models.CharField(max_length=200, unique=True)
     contact_info = models.CharField(max_length=200)
     address = models.TextField()
 

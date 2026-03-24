@@ -285,33 +285,188 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
-    // Handle Cheese Type Modal (AJAX add)
-    const cheeseTypeForm = document.getElementById('cheeseTypeForm');
-    if (cheeseTypeForm) {
-        cheeseTypeForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const form = e.target;
-            const formData = new FormData(form);
-            fetch('{% url "cheese_type_add" %}', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    location.reload();
-                } else {
-                    document.getElementById('cheeseTypeModal').querySelector('.modal-body').innerHTML = data.html;
-                }
-            })
-            .catch(error => {
-                alert('Error adding type.');
+    // Handle Manufacturer Modal (AJAX add)
+    function attachManufacturerHandler() {
+        const manufacturerForm = document.getElementById('manufacturerForm');
+        if (manufacturerForm) {
+            manufacturerForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const form = e.target;
+                const formData = new FormData(form);
+                fetch('{% url "manufacturer_add" %}', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        const modalBody = document.getElementById('manufacturerModal').querySelector('.modal-body');
+                        
+                        // Show error message if present
+                        if (data.error) {
+                            const errorAlert = document.createElement('div');
+                            errorAlert.className = 'alert alert-warning alert-dismissible fade show mb-3';
+                            errorAlert.role = 'alert';
+                            errorAlert.innerHTML = `
+                                <strong>⚠️ Failed!</strong> Manufacturer already exists
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            `;
+                            modalBody.insertBefore(errorAlert, modalBody.firstChild);
+                        }
+                        
+                        // Update form if needed
+                        const existingForm = modalBody.querySelector('form');
+                        if (!existingForm) {
+                            modalBody.innerHTML = data.html + modalBody.innerHTML;
+                        }
+                        
+                        // Re-attach handler to the form
+                        attachManufacturerHandler();
+                    }
+                })
+                .catch(error => {
+                    const modalBody = document.getElementById('manufacturerModal').querySelector('.modal-body');
+                    const errorAlert = document.createElement('div');
+                    errorAlert.className = 'alert alert-danger alert-dismissible fade show';
+                    errorAlert.role = 'alert';
+                    errorAlert.innerHTML = `
+                        <strong>Error:</strong> Failed! Manufacturer already exists.
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    modalBody.insertBefore(errorAlert, modalBody.firstChild);
+                });
             });
-        });
+        }
     }
+    attachManufacturerHandler();
+
+    // Handle Cheese Type Modal (AJAX add)
+    function attachCheeseTypeHandler() {
+        const cheeseTypeForm = document.getElementById('cheeseTypeForm');
+        if (cheeseTypeForm) {
+            cheeseTypeForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const form = e.target;
+                const formData = new FormData(form);
+                fetch('{% url "cheese_type_add" %}', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        const modalBody = document.getElementById('cheeseTypeModal').querySelector('.modal-body');
+                        
+                        // Show error message if present
+                        if (data.error) {
+                            const errorAlert = document.createElement('div');
+                            errorAlert.className = 'alert alert-warning alert-dismissible fade show mb-3';
+                            errorAlert.role = 'alert';
+                            errorAlert.innerHTML = `
+                                <strong>⚠️ Failed!</strong> Cheese type already exists
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            `;
+                            modalBody.insertBefore(errorAlert, modalBody.firstChild);
+                        }
+                        
+                        // Update form if needed
+                        const existingForm = modalBody.querySelector('form');
+                        if (!existingForm) {
+                            modalBody.innerHTML = data.html + modalBody.innerHTML;
+                        }
+                        
+                        // Re-attach handler to the form
+                        attachCheeseTypeHandler();
+                    }
+                })
+                .catch(error => {
+                    const modalBody = document.getElementById('cheeseTypeModal').querySelector('.modal-body');
+                    const errorAlert = document.createElement('div');
+                    errorAlert.className = 'alert alert-danger alert-dismissible fade show';
+                    errorAlert.role = 'alert';
+                    errorAlert.innerHTML = `
+                        <strong>Error:</strong> Failed to add cheese type.
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    modalBody.insertBefore(errorAlert, modalBody.firstChild);
+                });
+            });
+        }
+    }
+    attachCheeseTypeHandler();
+
+    // Handle Cheese Product Modal (AJAX add)
+    function attachCheeseProductHandler() {
+        const cheeseProductForm = document.getElementById('cheeseProductForm');
+        if (cheeseProductForm) {
+            cheeseProductForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const form = e.target;
+                const formData = new FormData(form);
+                fetch('{% url "cheese_add" %}', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        const modalBody = document.getElementById('cheeseProductModal').querySelector('.modal-body');
+                        
+                        // Show error message if present
+                        if (data.error) {
+                            const errorAlert = document.createElement('div');
+                            errorAlert.className = 'alert alert-warning alert-dismissible fade show mb-3';
+                            errorAlert.role = 'alert';
+                            errorAlert.innerHTML = `
+                                <strong>⚠️ Error:</strong> ${data.error}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            `;
+                            modalBody.insertBefore(errorAlert, modalBody.firstChild);
+                        }
+                        
+                        // Update form if needed
+                        const existingForm = modalBody.querySelector('form');
+                        if (!existingForm) {
+                            modalBody.innerHTML = data.html + modalBody.innerHTML;
+                        }
+                        
+                        // Re-attach handler to the form
+                        attachCheeseProductHandler();
+                    }
+                })
+                .catch(error => {
+                    const modalBody = document.getElementById('cheeseProductModal').querySelector('.modal-body');
+                    const errorAlert = document.createElement('div');
+                    errorAlert.className = 'alert alert-danger alert-dismissible fade show';
+                    errorAlert.role = 'alert';
+                    errorAlert.innerHTML = `
+                        <strong>Error:</strong> Failed to add cheese product.
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    modalBody.insertBefore(errorAlert, modalBody.firstChild);
+                });
+            });
+        }
+    }
+    attachCheeseProductHandler();
 
     // Dynamic Edit Modal (AJAX load for edit forms)
     document.querySelectorAll('.edit-btn, .edit-cheese-type-btn').forEach(btn => {

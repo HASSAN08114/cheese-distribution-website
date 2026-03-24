@@ -1,0 +1,149 @@
+{% extends 'distribution/base.html' %}
+
+{% block title %}Sale #{{ sale.id }} Details{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-receipt-cutoff"></i> Sale #{{ sale.id }} Details</h2>
+    <a href="{% url 'sales_stock_history' %}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Sales History
+    </a>
+</div>
+
+<!-- Sale Details Card -->
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">Sale Information</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <p class="mb-2">
+                    <strong>Client:</strong> 
+                    <a href="{% url 'client_list' %}">{{ sale.client.name }}</a>
+                </p>
+                <p class="mb-2">
+                    <strong>Phone:</strong> {{ sale.client.phone }}
+                </p>
+                <p class="mb-2">
+                    <strong>Address:</strong> {{ sale.client.address }}
+                </p>
+            </div>
+            <div class="col-md-6">
+                <p class="mb-2">
+                    <strong>Date:</strong> {{ sale.sale_date|date:"M d, Y H:i" }}
+                </p>
+                <p class="mb-2">
+                    <strong>Payment Status:</strong>
+                    {% if sale.payment_status == 'paid' %}
+                        <span class="badge bg-success">Paid</span>
+                    {% elif sale.payment_status == 'partial' %}
+                        <span class="badge bg-warning text-dark">Partial</span>
+                    {% else %}
+                        <span class="badge bg-danger">Unpaid</span>
+                    {% endif %}
+                </p>
+                <p class="mb-2">
+                    <strong>Payment Method:</strong> {{ sale.get_payment_method_display|default:"N/A" }}
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sale Items Table -->
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0">Products in Sale</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Product</th>
+                        <th>Quantity</th>
+                        <th>Purchase Price</th>
+                        <th>Selling Price</th>
+                        <th>Profit/Packet</th>
+                        <th>Total Profit</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in sale_items %}
+                    <tr class="{% if item.modified %}table-warning{% endif %}">
+                        <td><strong>{{ item.cheese_product }}</strong></td>
+                        <td>{{ item.quantity_packets }} packets</td>
+                        <td>PKR {{ item.cheese_product.purchase_price_per_packet|floatformat:2 }}</td>
+                        <td>PKR {{ item.selling_price_per_packet|floatformat:2 }}</td>
+                        <td>
+                            {% if item.profit_per_packet > 0 %}
+                                <span class="text-success"><strong>PKR {{ item.profit_per_packet|floatformat:2 }}</strong></span>
+                            {% else %}
+                                <span class="text-danger"><strong>PKR {{ item.profit_per_packet|floatformat:2 }}</strong></span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <strong class="text-success">PKR {{ item.get_total_profit|floatformat:2 }}</strong>
+                        </td>
+                        <td>
+                            {% if item.modified %}
+                                <span class="badge bg-warning text-dark">Modified</span>
+                            {% else %}
+                                <span class="badge bg-success">Active</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">
+                            No items in this sale.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Summary Card -->
+<div class="card shadow-sm">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0">Sale Summary</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-3 text-center border-right">
+                <p class="text-muted mb-2">Total Amount</p>
+                <h4 class="text-primary"><strong>PKR {{ sale.total_amount|floatformat:2 }}</strong></h4>
+            </div>
+            <div class="col-md-3 text-center border-right">
+                <p class="text-muted mb-2">Amount Paid</p>
+                <h4 class="text-success"><strong>PKR {{ sale.amount_paid|floatformat:2 }}</strong></h4>
+            </div>
+            <div class="col-md-3 text-center border-right">
+                <p class="text-muted mb-2">Outstanding</p>
+                <h4 class="{% if sale.get_outstanding_amount > 0 %}text-danger{% else %}text-success{% endif %}">
+                    <strong>PKR {{ sale.get_outstanding_amount|floatformat:2 }}</strong>
+                </h4>
+            </div>
+            <div class="col-md-3 text-center">
+                <p class="text-muted mb-2">Total Profit</p>
+                <h4 class="text-success"><strong>PKR {{ total_profit|floatformat:2 }}</strong></h4>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Action Buttons -->
+<div class="row mt-4 mb-4">
+    <div class="col-md-12">
+        <a href="{% url 'make_payment' %}?sale_id={{ sale.id }}" class="btn btn-warning">
+            <i class="bi bi-credit-card"></i> Make Payment
+        </a>
+    </div>
+</div>
+
+{% endblock %}
