@@ -3,9 +3,17 @@
 {% block title %}Create Sale{% endblock %}
 
 {% block content %}
-<h2 class="mb-4">Create New Sale</h2>
+<div class="bg-primary text-white py-4 mb-4 shadow-lg" style="margin: -1rem -1rem 0 -1rem; padding: 1.5rem!important;">
+    <div class="container-fluid">
+    <h2 class="mb-1"><i class="bi bi-receipt"></i> Create New Sale</h2>
+    <p class="mb-0 opacity-85">Record a new cheese sale transaction</p>
+    </div>
+</div>
 
-<div class="card">
+<div class="card shadow-lg border-0">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-pencil-square"></i> Sale Details</h5>
+    </div>
     <div class="card-body">
         <form method="post" id="saleForm">
             {% csrf_token %}
@@ -41,7 +49,8 @@
                 </div>
             </div>
 
-            <h5 class="mt-4 mb-3">Sale Items</h5>
+            <div class="border-top pt-4 mt-4">
+            <h5 class="mb-3"><i class="bi bi-boxes"></i> Sale Items</h5>
             {{ formset.management_form }}
             <div id="formset-container">
                 {% for form in formset %}
@@ -62,7 +71,7 @@
                         {% endif %}
                     </div>
                     <div class="col-md-2">
-                        <label class="form-label">Selling Price (PKR/Packet)</label>
+                        <label class="form-label">Selling Price (PKR/Packet) <span class="purchase-price-label" style="color: #6c757d; font-size: 0.875rem; font-weight: normal;"></span></label>
                         {{ form.selling_price_per_packet }}
                         {% if form.selling_price_per_packet.errors %}
                             <div class="text-danger">{{ form.selling_price_per_packet.errors }}</div>
@@ -75,10 +84,12 @@
                 {% endfor %}
             </div>
 
-            <button type="button" class="btn btn-secondary mb-3" id="add-item">Add Item</button>
-            <br>
-            <button type="submit" class="btn btn-primary">Create Sale</button>
-            <a href="{% url 'sale_history' %}" class="btn btn-secondary">Cancel</a>
+            <button type="button" class="btn btn-secondary mb-3" id="add-item"><i class="bi bi-plus-lg"></i> Add Item</button>
+            </div>
+            <div class="d-flex gap-2 mt-4">
+                <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-check-lg"></i> Create Sale</button>
+                <a href="{% url 'sale_history' %}" class="btn btn-outline-secondary btn-lg"><i class="bi bi-arrow-left"></i> Cancel</a>
+            </div>
         </form>
     </div>
 </div>
@@ -93,6 +104,41 @@ document.addEventListener('DOMContentLoaded', function() {
     const totalForms = document.getElementById('id_form-TOTAL_FORMS');
     let formCount = parseInt(totalForms.value);
 
+    function attachProductChangeListener(row) {
+        const productSelect = row.querySelector('select[name*="cheese_product"]');
+        if (productSelect) {
+            productSelect.addEventListener('change', function() {
+                const productId = this.value;
+                const priceLabel = row.querySelector('.purchase-price-label');
+                
+                if (productId) {
+                    // Fetch product price
+                    fetch(`/api/product-stock/${productId}/`, {credentials: 'include'})
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error(`HTTP error! status: ${response.status}`);
+                            }
+                            return response.json();
+                        })
+                        .then(data => {
+                            console.log('API Response:', data);
+                            if (data.purchase_price !== null && data.purchase_price !== undefined) {
+                                priceLabel.textContent = `(Purchase: PKR ${parseFloat(data.purchase_price).toFixed(2)})`;
+                            } else {
+                                priceLabel.textContent = '(No price set)';
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error fetching product price:', error);
+                            priceLabel.textContent = '(Error loading price)';
+                        });
+                } else {
+                    priceLabel.textContent = '';
+                }
+            });
+        }
+    }
+
     function updateRemoveButtons() {
         container.querySelectorAll('.remove-item').forEach(function(btn) {
             btn.onclick = function() {
@@ -105,6 +151,11 @@ document.addEventListener('DOMContentLoaded', function() {
             };
         });
     }
+
+    // Attach listeners to existing rows
+    container.querySelectorAll('.formset-row').forEach(function(row) {
+        attachProductChangeListener(row);
+    });
 
     addButton.addEventListener('click', function() {
         const rows = container.querySelectorAll('.formset-row');
@@ -132,9 +183,18 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
+        // Clear price label for new row
+        const newPriceLabel = newForm.querySelector('.purchase-price-label');
+        if (newPriceLabel) {
+            newPriceLabel.textContent = '';
+        }
+
         container.appendChild(newForm);
         formCount++;
         totalForms.value = formCount;
+        
+        // Attach listener to new row
+        attachProductChangeListener(newForm);
         updateRemoveButtons();
     });
 

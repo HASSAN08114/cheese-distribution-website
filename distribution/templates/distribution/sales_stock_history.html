@@ -3,24 +3,29 @@
 {% block title %}Sales & Stock History{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="mb-0"><i class="bi bi-clock-history"></i> Sales & Stock History</h2>
-    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#quickSaleModal">
-        <i class="bi bi-plus-circle"></i> Create Quick Sale
-    </button>
+<div class="bg-primary text-white py-4 mb-4 shadow-lg" style="margin: -1rem -1rem 0 -1rem; padding: 1.5rem!important;">
+    <div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-clock-history"></i> Sales & Stock History</h2>
+            <p class="mb-0 opacity-85">View transaction and inventory management records</p>
+        </div>
+        <button type="button" class="btn btn-light" data-bs-toggle="modal" data-bs-target="#quickSaleModal">
+            <i class="bi bi-plus-circle"></i> Create Quick Sale
+        </button>
+    </div>
+    </div>
 </div>
 
 <!-- Toggle Buttons -->
-<div class="row mb-4">
-    <div class="col-md-12">
-        <div class="d-flex gap-2">
-            <button type="button" class="btn btn-primary" id="toggle-sales">
-                <i class="bi bi-receipt-cutoff"></i> Sales History
-            </button>
-            <button type="button" class="btn btn-outline-secondary" id="toggle-stock">
-                <i class="bi bi-box-seam"></i> Stock History
-            </button>
-        </div>
+<div class="mb-4">
+    <div class="d-flex gap-2">
+        <button type="button" class="btn btn-primary btn-lg" id="toggle-sales" style="border-radius: 8px;">
+            <i class="bi bi-receipt-cutoff"></i> Sales History
+        </button>
+        <button type="button" class="btn btn-outline-primary btn-lg" id="toggle-stock" style="border-radius: 8px;">
+            <i class="bi bi-box-seam"></i> Stock History
+        </button>
     </div>
 </div>
 
@@ -97,21 +102,21 @@
 <div id="history-content">
     <!-- Sales History Table -->
     <div id="sales-content">
-        <div class="card">
-            <div class="card-header">
-                <h5>Sales History</h5>
+        <div class="card shadow-lg border-0">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-receipt-cutoff"></i> Sales History</h5>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
-                    <table class="table table-striped">
-                        <thead>
+                    <table class="table table-hover">
+                        <thead style=\"background-color: #343a40; color: white;\">
                             <tr>
-                                <th>ID</th>
-                                <th>Client</th>
-                                <th>Date</th>
-                                <th>Total Amount</th>
-                                <th>Status</th>
-                                <th>Actions</th>
+                                <th><i class="bi bi-hash"></i> ID</th>
+                                <th><i class="bi bi-person"></i> Client</th>
+                                <th><i class="bi bi-calendar"></i> Date</th>
+                                <th><i class="bi bi-currency-dollar"></i> Total Amount</th>
+                                <th><i class="bi bi-info-circle"></i> Status</th>
+                                <th class="text-end"><i class="bi bi-gear"></i> Actions</th>
                             </tr>
                         </thead>
                         <tbody id="sales-table-body">
@@ -130,7 +135,7 @@
                                         <span class="badge bg-danger">Unpaid</span>
                                     {% endif %}
                                 </td>
-                                <td>
+                                <td class="text-end">
                                     <a href="{% url 'sale_detail' sale.id %}" class="btn btn-sm btn-info">View</a>
                                 </td>
                             </tr>
@@ -148,21 +153,21 @@
 
     <!-- Stock History Table -->
     <div id="stock-content" style="display: none;">
-        <div class="card">
-            <div class="card-header">
-                <h5>Stock History</h5>
+        <div class="card shadow-lg border-0">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-box-seam"></i> Stock History</h5>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
-                    <table class="table table-striped">
-                        <thead>
+                    <table class="table table-hover">
+                        <thead style=\"background-color: #343a40; color: white;\">
                             <tr>
-                                <th>ID</th>
-                                <th>Product</th>
-                                <th>Quantity Added</th>
-                                <th>Date Added</th>
-                                <th>Added By</th>
-                                <th class="text-end">Actions</th>
+                                <th><i class="bi bi-hash"></i> ID</th>
+                                <th><i class="bi bi-box"></i> Product</th>
+                                <th><i class="bi bi-stack"></i> Quantity Added</th>
+                                <th><i class="bi bi-calendar"></i> Date Added</th>
+                                <th><i class="bi bi-person-check"></i> Added By</th>
+                                <th class="text-end"><i class="bi bi-gear"></i> Actions</th>
                             </tr>
                         </thead>
                         <tbody id="stock-table-body">
@@ -215,10 +220,10 @@ document.addEventListener('DOMContentLoaded', function() {
         currentView = 'sales';
         salesContent.style.display = 'block';
         stockContent.style.display = 'none';
-        toggleSales.classList.remove('btn-outline-secondary');
+        toggleSales.classList.remove('btn-outline-primary');
         toggleSales.classList.add('btn-primary');
         toggleStock.classList.remove('btn-primary');
-        toggleStock.classList.add('btn-outline-secondary');
+        toggleStock.classList.add('btn-outline-primary');
     });
 
     // Add event listener for Stock History button
@@ -228,10 +233,10 @@ document.addEventListener('DOMContentLoaded', function() {
             currentView = 'stock';
             salesContent.style.display = 'none';
             stockContent.style.display = 'block';
-            toggleStock.classList.remove('btn-outline-secondary');
+            toggleStock.classList.remove('btn-outline-primary');
             toggleStock.classList.add('btn-primary');
             toggleSales.classList.remove('btn-primary');
-            toggleSales.classList.add('btn-outline-secondary');
+            toggleSales.classList.add('btn-outline-primary');
         });
     }
 

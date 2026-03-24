@@ -649,8 +649,8 @@ def get_product_stock(request, product_id):
         return JsonResponse({
             'id': product.id,
             'name': f"{product.manufacturer.name} {product.type.name} {product.packet_size}kg",
-            'available_quantity_packets': float(product.available_quantity_packets),
-            'purchase_price_per_packet': float(product.purchase_price_per_packet),
+            'available_quantity': float(product.available_quantity_packets),
+            'purchase_price': float(product.purchase_price_per_packet),
         })
     except CheeseProduct.DoesNotExist:
         return JsonResponse({'error': 'Product not found'}, status=404)
@@ -819,8 +819,11 @@ def add_stock(request):
             for form in valid_forms:
                 cheese_product = form.cleaned_data['cheese_product']
                 quantity_packets = form.cleaned_data['quantity_packets']
+                purchase_price_per_packet = form.cleaned_data['purchase_price_per_packet']
 
                 cheese_product.available_quantity_packets += quantity_packets
+                # Update the product's purchase price to the newly added price
+                cheese_product.purchase_price_per_packet = purchase_price_per_packet
                 cheese_product.save()
 
                 # Create stock addition history
@@ -999,7 +1002,16 @@ def sale_create(request):
     if request.method == 'POST':
         client_id = request.POST.get('client')
         payment_method = request.POST.get('payment_method')
-        amount_paid = request.POST.get('amount_paid', 0)
+        amount_paid_str = request.POST.get('amount_paid', '0').strip()
+        
+        # Convert amount_paid to Decimal with proper quantization
+        try:
+            if amount_paid_str:
+                amount_paid = Decimal(amount_paid_str).quantize(Decimal('0.01'))
+            else:
+                amount_paid = Decimal('0.00')
+        except:
+            amount_paid = Decimal('0.00')
 
         if not client_id:
             messages.error(request, 'Please select a client.')
@@ -1056,7 +1068,7 @@ def sale_create(request):
 
                 # Update sale with payment information
                 sale.total_amount = total_amount
-                sale.amount_paid = Decimal(amount_paid)
+                sale.amount_paid = amount_paid
                 if payment_method:
                     sale.payment_method = payment_method
                 sale.update_payment_status()

@@ -3,15 +3,22 @@
 {% block title %}Expense Management{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h2><i class="bi bi-cash-coin"></i> Expense Management</h2>
-  <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addExpenseModal">
-    <i class="bi bi-plus-circle"></i> Add Expense
-  </button>
+<div class="bg-danger text-white py-4 mb-4 shadow-lg" style="margin: -1rem -1rem 0 -1rem; padding: 1.5rem!important;">
+    <div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-cash-coin"></i> Expense Management</h2>
+            <p class="mb-0 opacity-85">Track delivery and operational expenses</p>
+        </div>
+        <button type="button" class="btn btn-light" data-bs-toggle="modal" data-bs-target="#addExpenseModal">
+            <i class="bi bi-plus-circle"></i> Add Expense
+        </button>
+    </div>
+    </div>
 </div>
 
-<div class="card shadow-sm">
-  <div class="card-header bg-dark text-white">
+<div class="card shadow-lg border-0">
+  <div class="card-header bg-danger text-white">
     <h5 class="mb-0"><i class="bi bi-list-ul"></i> Bike / Delivery Expenses</h5>
   </div>
   <div class="card-body" style="padding: 0 0.5rem 0 0.5rem;">
@@ -30,10 +37,22 @@
         <tbody>
           {% for exp in expenses %}
           <tr>
-            <td>{{ exp.expense_date|date:"M d, Y" }}</td>
+            <td>
+              <span class="badge bg-light text-dark">{{ exp.expense_date|date:"M d, Y" }}</span>
+            </td>
             <td>{{ exp.employee.name }}</td>
-            <td>{{ exp.get_expense_type_display }}</td>
-            <td>PKR {{ exp.amount|floatformat:2 }}</td>
+            <td>
+              {% if exp.expense_type == 'fuel' %}
+                <span class="badge bg-info"><i class="bi bi-fuel-pump"></i> Fuel</span>
+              {% elif exp.expense_type == 'maintenance' %}
+                <span class="badge bg-primary"><i class="bi bi-tools"></i> Maintenance</span>
+              {% elif exp.expense_type == 'food' %}
+                <span class="badge bg-success"><i class="bi bi-cup-hot"></i> Food</span>
+              {% else %}
+                <span class="badge bg-secondary"><i class="bi bi-tag"></i> {{ exp.get_expense_type_display }}</span>
+              {% endif %}
+            </td>
+            <td><span class="badge bg-dark">PKR {{ exp.amount|floatformat:2 }}</span></td>
             <td>{{ exp.note|default:"-"|truncatewords:12 }}</td>
             <td class="text-end">
               <button
