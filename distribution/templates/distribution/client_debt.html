@@ -122,12 +122,19 @@
                     <div class="row g-3">
                         <div class="col-md-12">
                             <label class="form-label">Client</label>
-                            <select name="client" id="paymentClientSelect" class="form-control" required>
-                                <option value="">Select a client</option>
-                                {% for debt in client_debt_data %}
-                                    <option value="{{ debt.client_id }}">{{ debt.client_name }}</option>
-                                {% endfor %}
-                            </select>
+                            <input 
+                                type="text" 
+                                id="paymentClientName"
+                                class="form-control" 
+                                readonly
+                                style="background-color: #f8f9fa; cursor: not-allowed;"
+                            >
+                            <input 
+                                type="hidden" 
+                                name="client" 
+                                id="paymentClientHidden"
+                            >
+                            <small class="text-muted d-block mt-1">Client is locked to the one selected</small>
                         </div>
 
                         <div class="col-md-8">
@@ -219,8 +226,9 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('clientName').textContent = clientName;
             document.getElementById('outstandingAmount').textContent = `PKR ${parseFloat(outstanding).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
             
-            // Set the client select
-            document.getElementById('paymentClientSelect').value = clientId;
+            // Set the client (readonly and hidden field)
+            document.getElementById('paymentClientName').value = clientName;
+            document.getElementById('paymentClientHidden').value = clientId;
 
             // Reset form fields
             document.getElementById('paymentAmount').value = '';
