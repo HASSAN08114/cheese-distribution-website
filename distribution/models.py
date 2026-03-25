@@ -305,3 +305,22 @@ class DeliveryExpense(models.Model):
     class Meta:
         ordering = ['-expense_date', '-id']
 
+
+class SiteActivity(models.Model):
+    """Track the last activity/action on the site for display purposes"""
+    last_activity_time = models.DateTimeField(auto_now=True)
+    last_activity_description = models.CharField(max_length=255, default='')
+    
+    class Meta:
+        verbose_name_plural = "Site Activity"
+    
+    def __str__(self):
+        return f"Last activity: {self.last_activity_time}"
+    
+    @classmethod
+    def update_activity(cls, description):
+        """Update the last activity timestamp and description"""
+        activity, created = cls.objects.get_or_create(pk=1)
+        activity.last_activity_description = description
+        activity.save(update_fields=['last_activity_description', 'last_activity_time'])
+

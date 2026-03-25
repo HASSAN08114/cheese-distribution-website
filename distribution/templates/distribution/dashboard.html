@@ -12,7 +12,13 @@
             </div>
             <div class="col-md-4 text-end">
                 <div class="text-white-50">
-                    <small>Last updated: {{ now|date:"M d, Y H:i" }}</small>
+                    {% if last_activity %}
+                        <small>Last activity: {{ last_activity.last_activity_time|date:"M d, Y H:i" }}</small>
+                        <br>
+                        <small style="font-size: 0.85rem;">{{ last_activity.last_activity_description }}</small>
+                    {% else %}
+                        <small>No activity recorded yet</small>
+                    {% endif %}
                 </div>
             </div>
         </div>

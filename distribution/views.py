@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from .models import (
     Manufacturer, CheeseProduct, Client, Sale, SaleItem, UserProfile, Payment,
-    DeliveryEmployee, DeliveryExpense,
+    DeliveryEmployee, DeliveryExpense, SiteActivity,
 )
 from .forms import (
     ManufacturerForm, CheeseProductForm, ClientForm,
@@ -195,10 +195,13 @@ def logout_view(request):
 @login_required
 def dashboard(request):
     user_is_owner = is_owner(request.user)
+    
+    # Get last activity
+    last_activity = SiteActivity.objects.filter(pk=1).first()
 
     context = {
         'user_is_owner': user_is_owner,
-        'now': timezone.now(),
+        'last_activity': last_activity,
     }
     return render(request, 'distribution/dashboard.html', context)
 
@@ -826,6 +829,7 @@ def manufacturer_edit(request, pk):
         form = ManufacturerForm(request.POST, instance=manufacturer)
         if form.is_valid():
             form.save()
+            SiteActivity.update_activity(f'Manufacturer updated: {manufacturer.name}')
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return render(request, 'distribution/partials/edit_success.html', {'object': manufacturer, 'type': 'manufacturer'})
             messages.success(request, 'Manufacturer updated successfully.')
@@ -842,7 +846,9 @@ def manufacturer_edit(request, pk):
 def manufacturer_delete(request, pk):
     manufacturer = get_object_or_404(Manufacturer, pk=pk)
     if request.method == 'POST':
+        manufacturer_name = manufacturer.name
         manufacturer.delete()
+        SiteActivity.update_activity(f'Manufacturer deleted: {manufacturer_name}')
         messages.success(request, 'Manufacturer deleted successfully.')
         return redirect('inventory_management')
     return render(request, 'distribution/manufacturer_delete.html', {'manufacturer': manufacturer})
@@ -941,6 +947,7 @@ def add_stock(request):
 
                 stock_added.append(f"{quantity_packets} packets to {cheese_product}")
 
+            SiteActivity.update_activity(f'Stock added: {len(stock_added)} product(s)')
             messages.success(request, f'Successfully added stock: {", ".join(stock_added)}.')
             return JsonResponse({'success': True})
         else:
@@ -996,6 +1003,7 @@ def quick_sale_create(request):
 
                 sale.total_amount = total_amount
                 sale.save()
+                SiteActivity.update_activity(f'Sale created for {client.name}')
 
                 return JsonResponse({'success': True, 'message': 'Sale created successfully.'})
         else:
@@ -1067,7 +1075,8 @@ def client_add(request):
     if request.method == 'POST':
         form = ClientForm(request.POST)
         if form.is_valid():
-            form.save()
+            client = form.save()
+            SiteActivity.update_activity(f'Client added: {client.name}')
             messages.success(request, 'Client added successfully.')
             return redirect('client_list')
     else:
@@ -1082,6 +1091,7 @@ def client_edit(request, pk):
         form = ClientForm(request.POST, instance=client)
         if form.is_valid():
             form.save()
+            SiteActivity.update_activity(f'Client updated: {client.name}')
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return render(request, 'distribution/partials/edit_success.html', {'object': client, 'type': 'client'})
             messages.success(request, 'Client updated successfully.')
@@ -1097,7 +1107,9 @@ def client_edit(request, pk):
 def client_delete(request, pk):
     client = get_object_or_404(Client, pk=pk)
     if request.method == 'POST':
+        client_name = client.name
         client.delete()
+        SiteActivity.update_activity(f'Client deleted: {client_name}')
         messages.success(request, 'Client deleted successfully.')
         return redirect('client_list')
     return render(request, 'distribution/client_delete.html', {'client': client})
@@ -1179,6 +1191,7 @@ def sale_create(request):
                     sale.payment_method = payment_method
                 sale.update_payment_status()
                 sale.save()
+                SiteActivity.update_activity(f'Sale created for {client.name}')
 
                 messages.success(request, 'Sale created successfully.')
                 return redirect('sales_stock_history')
@@ -1265,6 +1278,7 @@ def make_payment(request):
                     break
 
             Payment.objects.create(client=client, amount=amount, mode=mode, bank=bank)
+            SiteActivity.update_activity(f'Payment of {amount} recorded for {client.name}')
             messages.success(request, 'Payment recorded successfully.')
             return redirect('payment_history')
     else:
@@ -1323,7 +1337,8 @@ def employee_management(request):
     if request.method == 'POST':
         form = DeliveryEmployeeForm(request.POST)
         if form.is_valid():
-            form.save()
+            employee = form.save()
+            SiteActivity.update_activity(f'Employee added: {employee.name}')
             messages.success(request, 'Employee added successfully.')
             return redirect('employee_management')
         else:
@@ -1346,6 +1361,7 @@ def employee_edit(request, pk):
         form = DeliveryEmployeeForm(request.POST, instance=employee)
         if form.is_valid():
             form.save()
+            SiteActivity.update_activity(f'Employee updated: {employee.name}')
             messages.success(request, 'Employee updated successfully.')
             return redirect('employee_management')
         # Keep errors only inline with form fields.
@@ -1364,7 +1380,9 @@ def employee_edit(request, pk):
 @require_POST
 def employee_delete(request, pk):
     employee = get_object_or_404(DeliveryEmployee, pk=pk)
+    employee_name = employee.name
     employee.delete()
+    SiteActivity.update_activity(f'Employee deleted: {employee_name}')
     messages.success(request, 'Employee removed successfully.')
     return redirect('employee_management')
 
@@ -1384,6 +1402,7 @@ def expense_management(request):
             expense = form.save(commit=False)
             expense.created_by = request.user
             expense.save()
+            SiteActivity.update_activity(f'Expense added: {expense.get_expense_type_display()}')
             messages.success(request, 'Expense added successfully.')
             return redirect('expense_management')
         # Keep errors only inline with form fields.
@@ -1405,6 +1424,7 @@ def expense_edit(request, pk):
             exp = form.save(commit=False)
             exp.created_by = expense.created_by or request.user
             exp.save()
+            SiteActivity.update_activity(f'Expense updated: {exp.get_expense_type_display()}')
             messages.success(request, 'Expense updated successfully.')
             return redirect('expense_management')
         # Keep errors only inline with form fields.
@@ -1422,7 +1442,9 @@ def expense_edit(request, pk):
 @require_POST
 def expense_delete(request, pk):
     expense = get_object_or_404(DeliveryExpense, pk=pk)
+    expense_type = expense.get_expense_type_display()
     expense.delete()
+    SiteActivity.update_activity(f'Expense deleted: {expense_type}')
     messages.success(request, 'Expense deleted successfully.')
     return redirect('expense_management')
 
