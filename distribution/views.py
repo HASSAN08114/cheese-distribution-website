@@ -284,8 +284,9 @@ def get_client_analytics(request):
 
     # Calculate total outstanding debt from ALL sales (not just the period filter)
     # This matches the client debt page calculation
+    # Only count positive outstanding amounts (exclude overpaid sales)
     all_sales = Sale.objects.all()
-    total_outstanding = sum(sale.get_outstanding_amount() for sale in all_sales)
+    total_outstanding = sum(sale.get_outstanding_amount() for sale in all_sales if sale.get_outstanding_amount() > 0)
     
     payment_status_counts = {
         'paid': sales_queryset.filter(payment_status='paid').count(),
