@@ -282,7 +282,11 @@ def get_client_analytics(request):
     else:
         sales_queryset = Sale.objects.all()
 
-    total_outstanding = sum(sale.get_outstanding_amount() for sale in sales_queryset)
+    # Calculate total outstanding debt from ALL sales (not just the period filter)
+    # This matches the client debt page calculation
+    all_sales = Sale.objects.all()
+    total_outstanding = sum(sale.get_outstanding_amount() for sale in all_sales)
+    
     payment_status_counts = {
         'paid': sales_queryset.filter(payment_status='paid').count(),
         'partial': sales_queryset.filter(payment_status='partial').count(),
