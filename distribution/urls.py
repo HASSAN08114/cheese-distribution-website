@@ -10,6 +10,7 @@ urlpatterns = [
     path('logout/', views.logout_view, name='logout'),
     path('dashboard/', views.dashboard, name='dashboard'),
     path('sales-stock-history/', views.sales_stock_history, name='sales_stock_history'),
+    path('client-debt/', views.client_debt_page, name='client_debt_page'),
     path('add-stock/', views.add_stock_page, name='add_stock_page'),
     path('api/client-analytics/', views.get_client_analytics, name='get_client_analytics'),
     path('api/product-analytics/', views.get_product_analytics, name='get_product_analytics'),

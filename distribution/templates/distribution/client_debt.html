@@ -1,0 +1,234 @@
+{% extends 'distribution/base.html' %}
+
+{% block title %}Client Debt Management{% endblock %}
+
+{% block content %}
+<div class="bg-success text-white py-4 mb-4 shadow-lg" style="margin: -1rem -1rem 0 -1rem; padding: 1.5rem!important;">
+    <div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-cash-coin"></i> Client Debt Management</h2>
+            <p class="mb-0 opacity-85">Track and manage outstanding client payments</p>
+        </div>
+    </div>
+    </div>
+</div>
+
+<!-- Summary Stats -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card shadow-lg border-0">
+            <div class="card-body">
+                <h6 class="text-muted mb-2"><i class="bi bi-currency-dollar"></i> Total Outstanding Debt</h6>
+                <h3 class="text-danger">PKR {{ summary.total_outstanding_debt|floatformat:2 }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-lg border-0">
+            <div class="card-body">
+                <h6 class="text-muted mb-2"><i class="bi bi-exclamation-circle"></i> Clients With Debt</h6>
+                <h3 class="text-warning">{{ summary.total_clients_with_debt }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-lg border-0">
+            <div class="card-body">
+                <h6 class="text-muted mb-2"><i class="bi bi-people"></i> Total Clients</h6>
+                <h3 class="text-info">{{ summary.total_clients }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-lg border-0">
+            <div class="card-body">
+                <h6 class="text-muted mb-2"><i class="bi bi-percent"></i> Debt Percentage</h6>
+                <h3 class="text-primary">
+                    {% if summary.total_clients > 0 %}
+                        {{ summary.total_clients_with_debt|multiply:100|divide:summary.total_clients|floatformat:1 }}%
+                    {% else %}
+                        0%
+                    {% endif %}
+                </h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Client Debt Table -->
+<div class="card shadow-lg border-0">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0"><i class="bi bi-table"></i> Outstanding Client Debt</h5>
+    </div>
+    <div class="card-body" style="padding: 0 0.5rem 0 0.5rem;">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead style="background-color: #343a40; color: white;">
+                    <tr>
+                        <th><i class="bi bi-person"></i> Client Name</th>
+                        <th><i class="bi bi-telephone"></i> Phone</th>
+                        <th><i class="bi bi-receipt"></i> Total Sales</th>
+                        <th><i class="bi bi-check-circle"></i> Amount Paid</th>
+                        <th><i class="bi bi-exclamation-diamond"></i> Outstanding Debt</th>
+                        <th class="text-end"><i class="bi bi-gear"></i> Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for debt in client_debt_data %}
+                    <tr>
+                        <td><strong>{{ debt.client_name }}</strong></td>
+                        <td>{{ debt.client_phone }}</td>
+                        <td><span class="badge bg-primary">PKR {{ debt.total_sales|floatformat:2 }}</span></td>
+                        <td><span class="badge bg-success">PKR {{ debt.total_paid|floatformat:2 }}</span></td>
+                        <td><span class="badge bg-danger">PKR {{ debt.outstanding_amount|floatformat:2 }}</span></td>
+                        <td class="text-end">
+                            <button 
+                                type="button" 
+                                class="btn btn-sm btn-success"
+                                data-bs-toggle="modal"
+                                data-bs-target="#paymentModal"
+                                data-client-id="{{ debt.client_id }}"
+                                data-client-name="{{ debt.client_name }}"
+                                data-outstanding="{{ debt.outstanding_amount }}"
+                            >
+                                <i class="bi bi-cash-coin"></i> Make Payment
+                            </button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            <i class="bi bi-check-circle"></i> All clients are up to date!
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Payment Modal -->
+<div class="modal fade" id="paymentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-cash-coin"></i> Record Payment</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'make_payment' %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="alert alert-info mb-3">
+                        <strong id="clientName"></strong><br>
+                        <small>Outstanding Amount: <span id="outstandingAmount" class="text-danger fw-bold"></span></small>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-12">
+                            <label class="form-label">Client</label>
+                            <select name="client" id="paymentClientSelect" class="form-control" required>
+                                <option value="">Select a client</option>
+                                {% for debt in client_debt_data %}
+                                    <option value="{{ debt.client_id }}">{{ debt.client_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-md-8">
+                            <label class="form-label">Payment Amount <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text">PKR</span>
+                                <input 
+                                    type="number" 
+                                    name="amount" 
+                                    id="paymentAmount"
+                                    class="form-control" 
+                                    placeholder="Enter amount"
+                                    step="0.01"
+                                    min="0"
+                                    required
+                                >
+                            </div>
+                            <small class="text-muted d-block mt-1">Enter the amount to be paid (can be partial)</small>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Payment Mode <span class="text-danger">*</span></label>
+                            <select name="mode" id="paymentMode" class="form-control" required>
+                                <option value="">Select mode</option>
+                                <option value="cash">Cash</option>
+                                <option value="online">Online Banking</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-12" id="bankField" style="display: none;">
+                            <label class="form-label">Bank / Wallet <span class="text-danger">*</span></label>
+                            <input 
+                                type="text" 
+                                name="bank" 
+                                id="bankInput"
+                                class="form-control" 
+                                placeholder="e.g., Jazz Cash, HBL, etc."
+                            >
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success"><i class="bi bi-check-circle"></i> Record Payment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Payment mode changes
+    const paymentMode = document.getElementById('paymentMode');
+    const bankField = document.getElementById('bankField');
+    const bankInput = document.getElementById('bankInput');
+
+    if (paymentMode) {
+        paymentMode.addEventListener('change', function() {
+            if (this.value === 'online') {
+                bankField.style.display = 'block';
+                bankInput.required = true;
+            } else {
+                bankField.style.display = 'none';
+                bankInput.required = false;
+                bankInput.value = '';
+            }
+        });
+    }
+
+    // Payment modal setup
+    const paymentModal = document.getElementById('paymentModal');
+    if (paymentModal) {
+        paymentModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            const clientId = button.getAttribute('data-client-id');
+            const clientName = button.getAttribute('data-client-name');
+            const outstanding = button.getAttribute('data-outstanding');
+
+            // Update modal content
+            document.getElementById('clientName').textContent = clientName;
+            document.getElementById('outstandingAmount').textContent = `PKR ${parseFloat(outstanding).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            
+            // Set the client select
+            document.getElementById('paymentClientSelect').value = clientId;
+
+            // Reset form fields
+            document.getElementById('paymentAmount').value = '';
+            document.getElementById('paymentMode').value = '';
+            document.getElementById('bankInput').value = '';
+            bankField.style.display = 'none';
+        });
+    }
+});
+</script>
+{% endblock %}

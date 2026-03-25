@@ -688,6 +688,54 @@ def get_client_debt(request):
 
 
 @login_required
+def client_debt_page(request):
+    """Dedicated page for viewing and managing client debt"""
+    clients = Client.objects.all()
+    user_is_owner = is_owner(request.user)
+    
+    # Get client debt data
+    client_debt_data = []
+    total_outstanding = Decimal('0.00')
+    
+    for client in clients:
+        # Get all sales for this client
+        client_sales = Sale.objects.filter(client=client)
+        
+        if client_sales.exists():
+            # Calculate totals
+            total_sales_amount = client_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+            total_amount_paid = client_sales.aggregate(total=Sum('amount_paid'))['total'] or Decimal('0.00')
+            
+            outstanding_amount = total_sales_amount - total_amount_paid
+            
+            if outstanding_amount > 0:
+                client_debt_data.append({
+                    'client_id': client.id,
+                    'client_name': client.name,
+                    'client_phone': client.phone,
+                    'total_sales': total_sales_amount,
+                    'total_paid': total_amount_paid,
+                    'outstanding_amount': outstanding_amount,
+                })
+                total_outstanding += outstanding_amount
+    
+    # Sort by outstanding amount descending
+    client_debt_data.sort(key=lambda x: x['outstanding_amount'], reverse=True)
+    
+    summary = {
+        'total_clients_with_debt': len(client_debt_data),
+        'total_outstanding_debt': total_outstanding,
+        'total_clients': Client.objects.count(),
+    }
+    
+    return render(request, 'distribution/client_debt.html', {
+        'client_debt_data': client_debt_data,
+        'summary': summary,
+        'user_is_owner': user_is_owner,
+    })
+
+
+@login_required
 def get_product_stock(request, product_id):
     """API endpoint to get stock information for a specific product"""
     try:
