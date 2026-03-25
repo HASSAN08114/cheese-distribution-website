@@ -181,11 +181,17 @@ class DeliveryEmployeeForm(forms.ModelForm):
 
 
 class DeliveryExpenseForm(forms.ModelForm):
+    employee = forms.ModelChoiceField(
+        queryset=DeliveryEmployee.objects.all(),
+        required=False,
+        empty_label="No employee (for general expenses)",
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
     class Meta:
         model = DeliveryExpense
         fields = ['employee', 'expense_type', 'amount', 'note', 'expense_date']
         widgets = {
-            'employee': forms.Select(attrs={'class': 'form-control'}),
             'expense_type': forms.Select(attrs={'class': 'form-control'}),
             'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'note': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
@@ -194,18 +200,16 @@ class DeliveryExpenseForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
+        employee = cleaned_data.get('employee')
         expense_type = cleaned_data.get('expense_type')
         amount = cleaned_data.get('amount')
-        note = (cleaned_data.get('note') or '').strip()
 
-        # For note-only entries, allow amount=0 and rely on note.
-        if expense_type == 'note' and amount is not None and amount > 0:
-            # Keep it allowed, but nudge user to use notes.
-            pass
+        # If selecting a specific expense type (not general), require an employee
+        if expense_type != 'general' and not employee:
+            self.add_error('employee', 'Please select an employee for this expense type.')
 
-        if expense_type == 'note' and not note:
-            self.add_error('note', 'Please enter a note for note-only expense.')
-
+        # If selecting general expense, employee is optional
+        
         return cleaned_data
 
 

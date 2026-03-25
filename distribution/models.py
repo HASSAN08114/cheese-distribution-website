@@ -283,24 +283,24 @@ class DeliveryExpense(models.Model):
         ('fuel', 'Fuel'),
         ('food', 'Food'),
         ('salary', 'Salary'),
-        ('note', 'Note'),
+        ('general', 'General'),
     ]
 
-    employee = models.ForeignKey(DeliveryEmployee, on_delete=models.CASCADE)
+    employee = models.ForeignKey(DeliveryEmployee, on_delete=models.CASCADE, null=True, blank=True)
     expense_type = models.CharField(max_length=30, choices=EXPENSE_TYPES)
     amount = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))],
-        help_text="Set 0 for note-only expenses."
+        validators=[MinValueValidator(Decimal('0.00'))]
     )
     note = models.TextField(blank=True)
     expense_date = models.DateField(default=timezone.localdate)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
 
     def __str__(self):
-        return f"{self.employee.name} - {self.get_expense_type_display()} - {self.amount}"
+        employee_name = self.employee.name if self.employee else 'N/A'
+        return f"{employee_name} - {self.get_expense_type_display()} - {self.amount}"
 
     class Meta:
         ordering = ['-expense_date', '-id']

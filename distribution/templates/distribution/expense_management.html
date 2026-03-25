@@ -40,14 +40,18 @@
             <td>
               <span class="badge bg-light text-dark">{{ exp.expense_date|date:"M d, Y" }}</span>
             </td>
-            <td>{{ exp.employee.name }}</td>
+            <td>{{ exp.employee.name|default:"N/A" }}</td>
             <td>
               {% if exp.expense_type == 'fuel' %}
                 <span class="badge bg-info"><i class="bi bi-fuel-pump"></i> Fuel</span>
-              {% elif exp.expense_type == 'maintenance' %}
+              {% elif exp.expense_type == 'bike_maintenance' %}
                 <span class="badge bg-primary"><i class="bi bi-tools"></i> Maintenance</span>
               {% elif exp.expense_type == 'food' %}
                 <span class="badge bg-success"><i class="bi bi-cup-hot"></i> Food</span>
+              {% elif exp.expense_type == 'salary' %}
+                <span class="badge bg-warning text-dark"><i class="bi bi-cash-coin"></i> Salary</span>
+              {% elif exp.expense_type == 'general' %}
+                <span class="badge bg-secondary"><i class="bi bi-tag"></i> General</span>
               {% else %}
                 <span class="badge bg-secondary"><i class="bi bi-tag"></i> {{ exp.get_expense_type_display }}</span>
               {% endif %}
@@ -106,6 +110,7 @@
               <label class="form-label">{{ form.employee.label }}</label>
               {{ form.employee }}
               {{ form.employee.errors }}
+              <small class="text-muted d-block mt-1">Leave empty for general expenses (not tied to an employee)</small>
             </div>
             <div class="col-md-6">
               <label class="form-label">{{ form.expense_type.label }}</label>
