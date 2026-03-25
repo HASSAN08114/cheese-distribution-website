@@ -212,16 +212,7 @@ class DeliveryExpenseForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
-        employee = cleaned_data.get('employee')
-        expense_type = cleaned_data.get('expense_type')
-
-        # If selecting a specific expense type (not general), require an employee
-        if expense_type and expense_type != 'general':
-            if not employee:
-                self.add_error('employee', 'Please select an employee for this expense type.')
-        
-        # If selecting general expense, employee is optional (no validation needed)
-        
+        # Employee is optional for all expense types
         return cleaned_data
 
 
