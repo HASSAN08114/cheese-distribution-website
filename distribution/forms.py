@@ -148,6 +148,18 @@ class DeliveryEmployeeForm(forms.ModelForm):
                 self.initial.setdefault("route_from", parts[0].strip())
                 self.initial.setdefault("route_to", parts[1].strip())
 
+    def clean(self):
+        cleaned_data = super().clean()
+        id_card_number = cleaned_data.get('id_card_number', '').strip()
+        
+        # Check if ID card number has at least 13 digits
+        if id_card_number:
+            digits_only = ''.join(c for c in id_card_number if c.isdigit())
+            if len(digits_only) < 13:
+                self.add_error('id_card_number', 'ID card number must contain at least 13 digits.')
+        
+        return cleaned_data
+
     def clean_id_card_number(self):
         # Allow user to type "1234-56789012-3" etc; validate using digits only.
         raw = (self.cleaned_data.get('id_card_number') or '')
@@ -184,7 +196,7 @@ class DeliveryExpenseForm(forms.ModelForm):
     employee = forms.ModelChoiceField(
         queryset=DeliveryEmployee.objects.all(),
         required=False,
-        empty_label="No employee (for general expenses)",
+        empty_label="Select an employee",
         widget=forms.Select(attrs={'class': 'form-control'})
     )
     
@@ -202,13 +214,13 @@ class DeliveryExpenseForm(forms.ModelForm):
         cleaned_data = super().clean()
         employee = cleaned_data.get('employee')
         expense_type = cleaned_data.get('expense_type')
-        amount = cleaned_data.get('amount')
 
         # If selecting a specific expense type (not general), require an employee
-        if expense_type != 'general' and not employee:
-            self.add_error('employee', 'Please select an employee for this expense type.')
-
-        # If selecting general expense, employee is optional
+        if expense_type and expense_type != 'general':
+            if not employee:
+                self.add_error('employee', 'Please select an employee for this expense type.')
+        
+        # If selecting general expense, employee is optional (no validation needed)
         
         return cleaned_data
 
