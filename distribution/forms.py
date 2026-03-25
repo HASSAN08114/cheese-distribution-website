@@ -151,12 +151,12 @@ class DeliveryEmployeeForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         
-        # Validate ID card number: must have at least 13 digits
+        # Validate ID card number: must have exactly 13 digits
         id_card_number = cleaned_data.get('id_card_number', '').strip()
         if id_card_number:
             digits_only = ''.join(c for c in id_card_number if c.isdigit())
-            if len(digits_only) < 13:
-                self.add_error('id_card_number', 'ID card number must contain at least 13 digits.')
+            if len(digits_only) != 13:
+                self.add_error('id_card_number', 'ID card number must be exactly 13 digits.')
         
         # Validate route fields
         rf = (cleaned_data.get('route_from') or '').strip()

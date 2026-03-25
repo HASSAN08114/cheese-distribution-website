@@ -17,7 +17,7 @@
         <label class="form-label">{{ form.id_card_number.label }}</label>
         {{ form.id_card_number }}
         {% if form.id_card_number.errors %}<div class="alert alert-danger py-2 px-3 mt-2 mb-0">{{ form.id_card_number.errors }}</div>{% endif %}
-        <small class="text-muted d-block mt-1">Must contain at least 13 digits (e.g., CNIC number)</small>
+        <small class="text-muted d-block mt-1">Must be exactly 13 digits (e.g., CNIC number)</small>
       </div>
       <div class="col-md-6">
         <label class="form-label">{{ form.joining_date.label }}</label>
