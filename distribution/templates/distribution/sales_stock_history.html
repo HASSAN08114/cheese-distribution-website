@@ -26,6 +26,9 @@
         <button type="button" class="btn btn-outline-primary btn-lg" id="toggle-stock" style="border-radius: 8px;">
             <i class="bi bi-box-seam"></i> Stock History
         </button>
+        <button type="button" class="btn btn-outline-primary btn-lg" id="toggle-payments" style="border-radius: 8px;">
+            <i class="bi bi-credit-card"></i> Payment History
+        </button>
     </div>
 </div>
 
@@ -194,6 +197,65 @@
         </div>
     </div>
 
+    <!-- Payment History Table -->
+    <div id="payment-content" style="display: none;">
+        <div class="card shadow-lg border-0">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-credit-card"></i> Payment History</h5>
+            </div>
+            <div class="card-body">
+                <!-- Summary Stats -->
+                <div class="row mb-4" id="payment-summary">
+                    <div class="col-md-3">
+                        <div class="card bg-light border-0">
+                            <div class="card-body">
+                                <h6 class="text-muted mb-2">Total Payments</h6>
+                                <h3 class="text-primary" id="payment-count">0</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-light border-0">
+                            <div class="card-body">
+                                <h6 class="text-muted mb-2">Total Amount</h6>
+                                <h3 class="text-success" id="payment-total">PKR 0.00</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-light border-0">
+                            <div class="card-body">
+                                <h6 class="text-muted mb-2">Average Payment</h6>
+                                <h3 class="text-info" id="payment-avg">PKR 0.00</h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead style="background-color: #343a40; color: white;">
+                            <tr>
+                                <th><i class="bi bi-hash"></i> ID</th>
+                                <th><i class="bi bi-person"></i> Client Name</th>
+                                <th><i class="bi bi-telephone"></i> Phone</th>
+                                <th><i class="bi bi-currency-dollar"></i> Amount</th>
+                                <th><i class="bi bi-credit-card"></i> Mode</th>
+                                <th><i class="bi bi-bank"></i> Bank/Wallet</th>
+                                <th><i class="bi bi-calendar"></i> Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="payment-table-body">
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-4">Load payment information...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Client Debt Table moved to dedicated page -->
 </div>
 {% endblock %}
@@ -207,8 +269,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Get DOM elements
     const toggleSales = document.getElementById('toggle-sales');
     const toggleStock = document.getElementById('toggle-stock');
+    const togglePayments = document.getElementById('toggle-payments');
     const salesContent = document.getElementById('sales-content');
     const stockContent = document.getElementById('stock-content');
+    const paymentContent = document.getElementById('payment-content');
 
     // Check if elements exist
     if (!toggleSales || !salesContent) {
@@ -222,10 +286,13 @@ document.addEventListener('DOMContentLoaded', function() {
         currentView = 'sales';
         salesContent.style.display = 'block';
         stockContent.style.display = 'none';
+        paymentContent.style.display = 'none';
         toggleSales.classList.remove('btn-outline-primary');
         toggleSales.classList.add('btn-primary');
         toggleStock.classList.remove('btn-primary');
         toggleStock.classList.add('btn-outline-primary');
+        togglePayments.classList.remove('btn-primary');
+        togglePayments.classList.add('btn-outline-primary');
     });
 
     // Add event listener for Stock History button
@@ -235,6 +302,33 @@ document.addEventListener('DOMContentLoaded', function() {
             currentView = 'stock';
             salesContent.style.display = 'none';
             stockContent.style.display = 'block';
+            paymentContent.style.display = 'none';
+            toggleStock.classList.remove('btn-outline-primary');
+            toggleStock.classList.add('btn-primary');
+            toggleSales.classList.remove('btn-primary');
+            toggleSales.classList.add('btn-outline-primary');
+            togglePayments.classList.remove('btn-primary');
+            togglePayments.classList.add('btn-outline-primary');
+        });
+    }
+
+    // Add event listener for Payment History button
+    if (togglePayments) {
+        togglePayments.addEventListener('click', function(e) {
+            e.preventDefault();
+            currentView = 'payments';
+            salesContent.style.display = 'none';
+            stockContent.style.display = 'none';
+            paymentContent.style.display = 'block';
+            togglePayments.classList.remove('btn-outline-primary');
+            togglePayments.classList.add('btn-primary');
+            toggleSales.classList.remove('btn-primary');
+            toggleSales.classList.add('btn-outline-primary');
+            toggleStock.classList.remove('btn-primary');
+            toggleStock.classList.add('btn-outline-primary');
+            loadPaymentHistory();
+        });
+    }
             toggleStock.classList.remove('btn-outline-primary');
             toggleStock.classList.add('btn-primary');
             toggleSales.classList.remove('btn-primary');
@@ -431,6 +525,63 @@ document.addEventListener('DOMContentLoaded', function() {
             const text = row.textContent.toLowerCase();
             row.style.display = text.includes(searchTerm) ? '' : 'none';
         });
+    }
+
+    function loadPaymentHistory() {
+        fetch('/api/payment-history/')
+            .then(response => response.json())
+            .then(data => {
+                updatePaymentSummaryCards(data.summary);
+                renderPaymentTable(data.payments);
+            })
+            .catch(error => {
+                console.error('Error loading payment history:', error);
+                document.getElementById('payment-table-body').innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center text-danger py-4">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            Error loading payment data. Please try again.
+                        </td>
+                    </tr>
+                `;
+            });
+    }
+
+    function updatePaymentSummaryCards(summary) {
+        document.getElementById('payment-count').textContent = summary.total_payments;
+        document.getElementById('payment-total').textContent = `PKR ${summary.total_amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('payment-avg').textContent = `PKR ${summary.average_payment.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    }
+
+    function renderPaymentTable(payments) {
+        const tbody = document.getElementById('payment-table-body');
+
+        if (payments.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center text-muted py-4">
+                        <i class="bi bi-inbox"></i> No payments recorded yet.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        const rows = payments.map(payment => `
+            <tr>
+                <td><strong>#${payment.id}</strong></td>
+                <td><strong>${payment.client_name}</strong></td>
+                <td>${payment.client_phone}</td>
+                <td><span class="badge bg-success">PKR ${payment.amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
+                <td>
+                    ${payment.mode === 'Cash' ? '<span class="badge bg-secondary">Cash</span>' : '<span class="badge bg-info">Online</span>'}
+                </td>
+                <td>${payment.bank}</td>
+                <td>${payment.date}</td>
+            </tr>
+        `).join('');
+
+        tbody.innerHTML = rows;
     }
 
     // Quick Sale Form Submission Handler

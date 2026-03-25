@@ -1262,9 +1262,42 @@ def make_payment(request):
 
 
 @login_required
+@login_required
 def payment_history(request):
     payments = Payment.objects.select_related('client').all().order_by('-date')
     return render(request, 'distribution/payment_history.html', {'payments': payments})
+
+
+@login_required
+def get_payment_history(request):
+    """AJAX endpoint to get payment history data"""
+    payments = Payment.objects.select_related('client').all().order_by('-date')[:100]
+    
+    payment_data = []
+    total_amount = Decimal('0.00')
+    
+    for payment in payments:
+        payment_data.append({
+            'id': payment.id,
+            'client_name': payment.client.name,
+            'client_phone': payment.client.phone,
+            'amount': float(payment.amount),
+            'mode': payment.get_mode_display(),
+            'bank': payment.bank or 'N/A',
+            'date': payment.date.strftime('%Y-%m-%d %H:%M'),
+        })
+        total_amount += payment.amount
+    
+    summary = {
+        'total_payments': len(payment_data),
+        'total_amount': float(total_amount),
+        'average_payment': float(total_amount / len(payment_data)) if payment_data else 0,
+    }
+    
+    return JsonResponse({
+        'payments': payment_data,
+        'summary': summary,
+    })
 
 
 # =========================
