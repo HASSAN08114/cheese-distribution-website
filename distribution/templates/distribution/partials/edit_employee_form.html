@@ -11,18 +11,18 @@
       <div class="col-md-6">
         <label class="form-label">{{ form.name.label }}</label>
         {{ form.name }}
-        {{ form.name.errors }}
+        {% if form.name.errors %}<div class="alert alert-danger py-2 px-3 mt-2 mb-0">{{ form.name.errors }}</div>{% endif %}
       </div>
       <div class="col-md-6">
         <label class="form-label">{{ form.id_card_number.label }}</label>
         {{ form.id_card_number }}
-        {{ form.id_card_number.errors }}
+        {% if form.id_card_number.errors %}<div class="alert alert-danger py-2 px-3 mt-2 mb-0">{{ form.id_card_number.errors }}</div>{% endif %}
         <small class="text-muted d-block mt-1">Must contain at least 13 digits (e.g., CNIC number)</small>
       </div>
       <div class="col-md-6">
         <label class="form-label">{{ form.joining_date.label }}</label>
         {{ form.joining_date }}
-        {{ form.joining_date.errors }}
+        {% if form.joining_date.errors %}<div class="alert alert-danger py-2 px-3 mt-2 mb-0">{{ form.joining_date.errors }}</div>{% endif %}
       </div>
       <div class="col-md-6">
         <label class="form-label">Route (From / To)</label>
@@ -30,12 +30,12 @@
           <div class="col-6">
             <label class="form-label mb-1">{{ form.route_from.label }}</label>
             {{ form.route_from }}
-            {{ form.route_from.errors }}
+            {% if form.route_from.errors %}<div class="alert alert-danger py-2 px-3 mt-2 mb-0">{{ form.route_from.errors }}</div>{% endif %}
           </div>
           <div class="col-6">
             <label class="form-label mb-1">{{ form.route_to.label }}</label>
             {{ form.route_to }}
-            {{ form.route_to.errors }}
+            {% if form.route_to.errors %}<div class="alert alert-danger py-2 px-3 mt-2 mb-0">{{ form.route_to.errors }}</div>{% endif %}
           </div>
         </div>
       </div>
