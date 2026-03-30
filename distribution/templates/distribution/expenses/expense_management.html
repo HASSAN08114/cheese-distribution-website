@@ -60,6 +60,7 @@
               >
                 <i class="bi bi-pencil"></i>
               </button>
+              {% if user_is_owner %}
               <button
                 type="button"
                 class="btn btn-sm btn-outline-danger delete-expense-btn"
@@ -70,6 +71,7 @@
               >
                 <i class="bi bi-trash"></i>
               </button>
+              {% endif %}
             </td>
           </tr>
           {% empty %}
@@ -195,6 +197,54 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
   });
+
+  // Auto-open Add Expense modal if form has errors
+  const addFormErrors = document.querySelectorAll("#addExpenseModal .alert-danger");
+  if (addFormErrors.length > 0) {
+    const addModal = bootstrap.Modal.getOrCreateInstance(document.getElementById("addExpenseModal"));
+    addModal.show();
+    // Find and focus on the first field with an error
+    for (let errorDiv of addFormErrors) {
+      const input = errorDiv.previousElementSibling;
+      if (input && (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA' || input.tagName === 'SELECT')) {
+        setTimeout(() => input.focus(), 500);
+        break;
+      }
+    }
+  }
+  
+  // Handle Expense Form Submission (Add Expense)
+  const expenseForm = document.querySelector('#addExpenseModal form');
+  if (expenseForm) {
+    expenseForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      const formData = new FormData(this);
+      fetch(this.action, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-CSRFToken': this.querySelector('[name=csrfmiddlewaretoken]').value,
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          showToast(data.message || 'Expense added successfully!', 'success');
+          const modal = bootstrap.Modal.getInstance(document.getElementById('addExpenseModal'));
+          if (modal) modal.hide();
+          expenseForm.reset();
+          setTimeout(() => location.reload(), 1500);
+        } else {
+          showToast(data.error || 'An error occurred while adding the expense.', 'danger');
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        showToast('An error occurred while adding the expense.', 'danger');
+      });
+    });
+  }
 });
 </script>
 {% endblock %}

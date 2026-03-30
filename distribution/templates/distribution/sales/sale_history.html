@@ -91,7 +91,7 @@
                     <th>Client</th>
                     <th>Date</th>
                     <th>Total</th>
-                    <th>Profit</th>
+                    {% if user_is_owner %}<th>Profit</th>{% endif %}
                     <th class="text-end">Actions</th>
                 </tr>
             </thead>
@@ -102,7 +102,7 @@
                     <td>{{ item.sale.client.name }}</td>
                     <td>{{ item.sale.sale_date|date:"M d, Y H:i" }}</td>
                     <td>PKR {{ item.sale.total_amount|floatformat:2 }}</td>
-                    <td>PKR {{ item.total_profit|floatformat:2 }}</td>
+                    {% if user_is_owner %}<td>PKR {{ item.total_profit|floatformat:2 }}</td>{% endif %}
                     <td class="text-end">
                         <button class="btn btn-sm btn-outline-secondary view-sale-modal"
                                 data-id="{{ item.sale.id }}">
@@ -112,7 +112,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="6" class="text-center text-muted">
+                    <td colspan="{% if user_is_owner %}6{% else %}5{% endif %}" class="text-center text-muted">
                         No sales yet
                     </td>
                 </tr>
@@ -196,30 +196,17 @@ document.addEventListener('DOMContentLoaded', function() {
             fetch(this.action, {
                 method: 'POST',
                 body: formData,
+                headers: {
+                    'X-CSRFToken': this.querySelector('[name=csrfmiddlewaretoken]').value,
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Show success message
-                    const alertDiv = document.createElement('div');
-                    alertDiv.className = 'alert alert-success alert-dismissible fade show';
-                    alertDiv.role = 'alert';
-                    alertDiv.innerHTML = `
-                        <strong>✓ Success!</strong> Sale has been created successfully.
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    `;
-                    
-                    // Close the modal first
+                    showToast(data.message || 'Sale has been created successfully.', 'success');
                     const modal = bootstrap.Modal.getInstance(document.getElementById('quickSaleModal'));
                     if (modal) modal.hide();
-                    
-                    // Insert alert
-                    const main = document.querySelector('main') || document.querySelector('.container');
-                    if (main) {
-                        main.insertBefore(alertDiv, main.firstChild);
-                    }
-                    
-                    // Clear the form
                     quickSaleForm.reset();
                     
                     // Reset the formset
@@ -245,46 +232,20 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     });
                     
-                    // Auto-dismiss alert after 5 seconds
-                    setTimeout(() => alertDiv.remove(), 5000);
+                    setTimeout(() => location.reload(), 1500);
                 } else {
-                    // Show error message
-                    const alertDiv = document.createElement('div');
-                    alertDiv.className = 'alert alert-danger alert-dismissible fade show';
-                    alertDiv.role = 'alert';
-                    alertDiv.innerHTML = `
-                        <strong>Error!</strong> ${data.error || 'An error occurred while creating the sale.'}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    `;
-                    
-                    const main = document.querySelector('main') || document.querySelector('.container');
-                    if (main) {
-                        main.insertBefore(alertDiv, main.firstChild);
-                    }
+                    showToast(data.error || 'An error occurred while creating the sale.', 'danger');
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                const alertDiv = document.createElement('div');
-                alertDiv.className = 'alert alert-danger alert-dismissible fade show';
-                alertDiv.role = 'alert';
-                alertDiv.innerHTML = `
-                    <strong>Error!</strong> An error occurred while creating the sale.
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                `;
-                
-                const main = document.querySelector('main') || document.querySelector('.container');
-                if (main) {
-                    main.insertBefore(alertDiv, main.firstChild);
-                }
+                showToast('An error occurred while creating the sale.', 'danger');
             });
         });
     }
 
     // Sale History: View Sale Modal Handler
-    console.log('Setting up view-sale-modal click handler');
     document.addEventListener('click', function(e) {
-        console.log('Document click detected on:', e.target);
         const button = e.target.closest('.view-sale-modal');
         if (button) {
             console.log('View button clicked, Sale ID:', button.getAttribute('data-id'));

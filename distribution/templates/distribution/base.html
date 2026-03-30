@@ -98,10 +98,11 @@
     <div class="container mt-4">
         {% if messages %}
             {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
+                <script>
+                    document.addEventListener('DOMContentLoaded', function() {
+                        showToast('{{ message }}', '{{ message.tags }}');
+                    });
+                </script>
             {% endfor %}
         {% endif %}
 
@@ -109,8 +110,53 @@
         {% endblock %}
     </div>
      {% block modals %}{% endblock %}
+
+    <!-- Toast Container -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer"></div>
+
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Toast Notification Script -->
+    <script>
+        function showToast(message, type = 'success') {
+            const toastContainer = document.getElementById('toastContainer');
+            const toastId = 'toast-' + Date.now();
+            
+            // Map Django message tags to toast types
+            let toastType = type;
+            if (type === 'error') toastType = 'danger';
+            if (!['success', 'danger', 'warning', 'info'].includes(toastType)) {
+                toastType = 'info';
+            }
+            
+            const isSuccess = toastType === 'success';
+            
+            const toastHTML = `
+                <div id="${toastId}" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="toast-header bg-${toastType} text-white border-0">
+                        <i class="bi bi-${isSuccess ? 'check-circle' : 'exclamation-circle'} me-2"></i>
+                        <strong class="me-auto">${isSuccess ? 'Success' : 'Notice'}</strong>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                    <div class="toast-body">
+                        ${message}
+                    </div>
+                </div>
+            `;
+            
+            toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+            const toastElement = document.getElementById(toastId);
+            const toast = new bootstrap.Toast(toastElement);
+            toast.show();
+            
+            // Remove from DOM after hiding
+            toastElement.addEventListener('hidden.bs.toast', () => {
+                toastElement.remove();
+            });
+        }
+    </script>
+    
     {% block extra_js %}
     {% endblock %}
 </body>

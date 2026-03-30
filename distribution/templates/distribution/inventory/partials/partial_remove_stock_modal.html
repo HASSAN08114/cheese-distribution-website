@@ -1,0 +1,14 @@
+<form method="post" action="{% url 'remove_stock_quantity' %}" id="removeStockForm">
+    {% csrf_token %}
+    <input type="hidden" name="product_id" id="removeStockProductId" required>
+    <div class="mb-3">
+        <label class="form-label">Product</label>
+        <div style="padding: 0.5rem; background-color: #f8f9fa; border-radius: 0.25rem; border-left: 3px solid #dc3545;">
+            <div id="removeStockProductName">-</div>
+        </div>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Quantity to Remove (Packets)</label>
+        <input type="number" name="quantity" class="form-control" min="1" step="1" required>
+    </div>
+</form>

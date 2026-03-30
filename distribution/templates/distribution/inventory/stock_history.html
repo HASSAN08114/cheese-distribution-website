@@ -4,25 +4,13 @@
 
 {% block content %}
 
-<!-- Quick Stock Modal -->
-<div class="modal fade" id="quickStockModal" tabindex="-1" aria-labelledby="quickStockModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            {% include 'distribution/inventory/partials/partial_quick_stock_form.html' %}
-        </div>
-    </div>
-</div>
-
 <!-- Stock Additions Table -->
 <div class="card">
-    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+    <div class="card-header">
         <div>
             <h5 style="margin-bottom: 0.25rem;">Stock Addition History</h5>
             <p style="color: var(--text-secondary)">View all stock additions and modifications</p>
         </div>
-        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#quickStockModal">
-            <i class="bi bi-plus-lg"></i> Add Stock
-        </button>
     </div>
     <div class="card-body card-body-compact">
         <div class="table-responsive">
@@ -31,9 +19,10 @@
                     <tr>
                         <th>Products</th>
                         <th>Operation Type</th>
+                        <th>Price/Unit (PKR)</th>
+                        <th>Total Value (PKR)</th>
                         <th>Added By</th>
                         <th>Date</th>
-                        <th class="text-end">Actions</th>   
                     </tr>
                 </thead>
                 <tbody>
@@ -41,34 +30,61 @@
                     {% for addition in stock_additions %}
                     <tr>
                         <td>
-                            {{ addition.stockadditionitem_set.count }} item(s)
+                            {% with first_item=addition.stockadditionitem_set.first %}
+                                {% if first_item %}
+                                    <strong>
+                                        {% if addition.operation_type == 'add' %}
+                                            <span class="text-success">+{{ first_item.quantity_packets|floatformat:0 }}</span>
+                                        {% elif addition.operation_type == 'remove' %}
+                                            <span class="text-danger">{{ first_item.quantity_packets|floatformat:0 }}</span>
+                                        {% else %}
+                                            {{ first_item.quantity_packets|floatformat:0 }}
+                                        {% endif %}
+                                    </strong>
+                                {% endif %}
+                            {% endwith %}
                             <br>
                             <small class="text-muted">
                                 {% for item in addition.stockadditionitem_set.all %}
-                                    {{ item.cheese_product.type.name }}
-                                    {% if not forloop.last %}, {% endif %}
+                                    {{ item.cheese_product.manufacturer.name }} - {{ item.cheese_product.type.name }} {{ item.cheese_product.packet_size }}kg
+                                    {% if not forloop.last %}<br>{% endif %}
                                 {% endfor %}
                             </small>
                         </td>
                         <td>
                             {% if addition.operation_type == 'add' %}
-                                <span class="badge bg-success">Add Stock</span>
+                                <span class="badge bg-success">Add</span>
                             {% elif addition.operation_type == 'remove' %}
-                                <span class="badge bg-danger">Remove Stock</span>
+                                <span class="badge bg-danger">Remove</span>
                             {% elif addition.operation_type == 'price_change' %}
                                 <span class="badge bg-info">Price Change</span>
                             {% endif %}
                         </td>
+                        <td>
+                            {% with first_item=addition.stockadditionitem_set.first %}
+                                {% if first_item %}
+                                    PKR {{ first_item.cheese_product.purchase_price_per_packet|floatformat:2 }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            {% endwith %}
+                        </td>
+                        <td>
+                            {% with first_item=addition.stockadditionitem_set.first %}
+                                {% if first_item %}
+                                    PKR {{ addition.total_value|floatformat:2 }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            {% endwith %}
+                        </td>
                         <td>{% if addition.added_by %}{{ addition.added_by.user.username }}{% else %}N/A{% endif %}</td>
                         <td>{{ addition.date_last_updated|date:"M d, Y H:i" }}</td>
-                        <td class="text-end">
-                            <button class="btn btn-sm btn-outline-secondary view-stock-modal" data-id="{{ addition.id }}">View</button>
-                        </td>
                     </tr>
                     {% endfor %}
                     {% else %}
                     <tr>
-                        <td colspan="5" class="text-center text-muted py-4">
+                        <td colspan="6" class="text-center text-muted py-4">
                             <p class="mb-0">No stock additions found.</p>
                         </td>
                     </tr>
@@ -78,40 +94,4 @@
         </div>
     </div>
 </div>
-<div id="stock-modal" class="modal" tabindex="-1"></div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    document.addEventListener('click', function(e) {
-        const button = e.target.closest('.view-stock-modal');
-        if (button) {
-            const stockId = button.getAttribute('data-id');
-            const url = `/inventory/stock/${stockId}/modal/`;
-            fetch(url)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.text();
-                })
-                .then(html => {
-                    const modalDiv = document.getElementById('stock-modal');
-                    modalDiv.innerHTML = html;
-                    const modal = new bootstrap.Modal(modalDiv);
-                    modal.show();
-                    // Clean up after modal closes
-                    modalDiv.addEventListener('hidden.bs.modal', function() {
-                        modalDiv.innerHTML = '';
-                    }, { once: true });
-                })
-                .catch(error => {
-                    console.error('Error loading stock details:', error);
-                    alert('Failed to load stock details: ' + error.message);
-                });
-        }
-    });
-});
-</script>
 {% endblock %}

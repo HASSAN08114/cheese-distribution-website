@@ -153,6 +153,57 @@ document.addEventListener("DOMContentLoaded", function () {
     dynamicModal.addEventListener('hidden.bs.modal', function () {
         modalContent.innerHTML = '';
     });
+    
+    // Handle Client Form Submission (Add Client Modal)
+    const clientForm = document.getElementById('clientForm');
+    if (clientForm) {
+        clientForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            fetch(this.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': this.querySelector('[name=csrfmiddlewaretoken]').value,
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message || 'Client added successfully!', 'success');
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('clientModal'));
+                    if (modal) modal.hide();
+                    clientForm.reset();
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showToast(data.error || 'An error occurred while adding the client.', 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('An error occurred while adding the client.', 'danger');
+            });
+        });
+    }
+
+    // Phone number formatting for client phone field
+    function formatPhoneNumber(phone) {
+        const cleaned = phone.replace(/\D/g, '');
+        if (cleaned.length <= 4) return cleaned;
+        if (cleaned.length <= 11) return cleaned.slice(0, 4) + '-' + cleaned.slice(4);
+        return cleaned.slice(0, 4) + '-' + cleaned.slice(4, 11);
+    }
+
+    const phoneField = document.querySelector('#clientModal input[name="phone"]') || 
+                      document.querySelector('form input[name="phone"]');
+    if (phoneField) {
+        phoneField.addEventListener('input', function() {
+            this.value = formatPhoneNumber(this.value);
+        });
+        phoneField.setAttribute('maxlength', '12');
+        phoneField.setAttribute('placeholder', '0304-1234567');
+    }
 });
 </script>
 {% endblock %}

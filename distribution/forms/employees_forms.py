@@ -17,9 +17,17 @@ class DeliveryEmployeeForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        # Format CNIC with dashes when editing existing employee
+        instance = kwargs.get("instance")
+        if instance and instance.pk:
+            # Get the id_card_number and format it with dashes (XXX-XXXXX-X)
+            cnic = instance.id_card_number
+            if cnic and len(cnic) == 13:
+                formatted_cnic = f"{cnic[:5]}-{cnic[5:12]}-{cnic[12]}"
+                self.fields['id_card_number'].initial = formatted_cnic
+
         # Backfill new From/To fields from the legacy `route` field when editing
         # employees that were created before this change.
-        instance = kwargs.get("instance")
         if instance and not (getattr(instance, "route_from", "") and getattr(instance, "route_to", "")):
             legacy = (getattr(instance, "route", "") or "").strip()
             if "->" in legacy:

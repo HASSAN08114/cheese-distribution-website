@@ -30,7 +30,6 @@ urlpatterns = [
     path('inventory/cheese-type/<int:pk>/delete/', views.cheese_type_delete, name='cheese_type_delete'),
 
     path('inventory/stock/history/', views.stock_history, name='stock_history'),
-    path('inventory/stock/<int:pk>/modal/', views.stock_modal_details, name='stock_modal_details_alt'),
     path('inventory/stock/add/', views.add_stock, name='add_stock'),
 
     path('clients/', views.client_list, name='client_list'),

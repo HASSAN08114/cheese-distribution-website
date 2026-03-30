@@ -11,15 +11,14 @@ def owner_required(view_func):
         if not request.user.is_authenticated:
             messages.error(request, 'Please login to access this page.')
             return redirect('login')
-        
         try:
             profile = UserProfile.objects.get(user=request.user)
             if not profile.is_owner():
                 messages.error(request, 'You do not have permission to access this page.')
-                return redirect('dashboard')
+                return redirect('inventory_management')
         except UserProfile.DoesNotExist:
             messages.error(request, 'Your account is not properly configured. Please contact administrator.')
-            return redirect('dashboard')
+            return redirect('inventory_management')
         
         return view_func(request, *args, **kwargs)
     return _wrapped_view

@@ -5,19 +5,9 @@
 {% block content %}
 <div style="padding: 1.5rem 0;">
     <div class="row align-items-center mb-4">
-        <div class="col-md-8">
+        <div class="col-md-12">
             <h1 style="font-size: 2rem; font-weight: 700; color: var(--text-primary); margin: 0;">Business Analytics</h1>
             <p style="color: var(--text-secondary); font-size: 0.95rem; margin: 0.5rem 0 0 0;">Monitor your cheese distribution business</p>
-        </div>
-        <div class="col-md-4 text-end">
-            <small style="color: var(--text-secondary);">
-                {% if last_activity %}
-                    <strong>Last Activity:</strong> {{ last_activity.last_activity_time|date:"M d, Y H:i" }}<br>
-                    {{ last_activity.last_activity_description }}
-                {% else %}
-                    <span>No activity recorded yet</span>
-                {% endif %}
-            </small>
         </div>
     </div>
 
@@ -201,12 +191,13 @@
                                 <th>Transactions</th>
                                 <th>Avg Sale</th>
                                 <th>Last Sale</th>
+                                <th>Debt (All-time)</th>
                             </tr>
                         </thead>
                         <tbody id="client-table-body">
                             <!-- Data will be loaded via AJAX -->
                             <tr>
-                                <td colspan="7" class="text-center py-4">
+                                <td colspan="8" class="text-center py-4">
                                     <div class="spinner-border text-primary" role="status">
                                         <span class="visually-hidden">Loading...</span>
                                     </div>
@@ -281,13 +272,12 @@
                                 <th>Margin</th>
                                 <th>Current Stock</th>
                                 <th>Turnover</th>
-                                <th>Transactions</th>
                             </tr>
                         </thead>
                         <tbody id="product-table-body">
                             <!-- Data will be loaded via AJAX -->
                             <tr>
-                                <td colspan="8" class="text-center py-4">
+                                <td colspan="7" class="text-center py-4">
                                     <div class="spinner-border text-primary" role="status">
                                         <span class="visually-hidden">Loading...</span>
                                     </div>
@@ -488,7 +478,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (clients.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="7" class="text-center text-muted py-4">
+                    <td colspan="8" class="text-center text-muted py-4">
                         No client data available for this period
                     </td>
                 </tr>
@@ -505,6 +495,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td><span class="badge bg-secondary">${client.total_transactions}</span></td>
                 <td>PKR ${client.avg_sale.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                 <td>${client.last_sale_date ? new Date(client.last_sale_date).toLocaleDateString('en-US') : 'Never'}</td>
+                <td><span class="badge bg-danger">PKR ${client.debt.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
             </tr>
         `).join('');
 
@@ -517,7 +508,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (products.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="8" class="text-center text-muted py-4">
+                    <td colspan="7" class="text-center text-muted py-4">
                         No product data available for this period
                     </td>
                 </tr>
@@ -535,7 +526,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     <td><span class="badge bg-secondary">${product.profit_margin.toFixed(1)}%</span></td>
                     <td><span class="text-${ product.current_stock < 10 ? 'danger' : product.current_stock < 50 ? 'warning' : 'success'}">${product.current_stock.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
                     <td><span class="badge bg-light text-dark">${product.stock_turnover.toFixed(2)}x</span></td>
-                    <td><span class="badge bg-dark">${product.transaction_count}</span></td>
                 </tr>
             `;
         }).join('');
@@ -620,7 +610,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function generateClientCSV(clients) {
-        const headers = ['Client Name', 'Phone', 'Total Sales', 'Total Profit', 'Transactions', 'Avg Sale', 'Last Sale'];
+        const headers = ['Client Name', 'Phone', 'Total Sales', 'Total Profit', 'Transactions', 'Avg Sale', 'Last Sale', 'Debt (All-time)'];
         const rows = clients.map(client => [
             client.name,
             client.phone,
@@ -628,7 +618,8 @@ document.addEventListener('DOMContentLoaded', function() {
             client.total_profit,
             client.total_transactions,
             client.avg_sale,
-            client.last_sale_date || 'Never'
+            client.last_sale_date || 'Never',
+            client.debt
         ]);
 
         const csvContent = [headers, ...rows]
@@ -639,7 +630,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function generateProductCSV(products) {
-        const headers = ['Product Name', 'Manufacturer', 'Type', 'Quantity Sold', 'Revenue', 'Profit', 'Profit Margin', 'Current Stock', 'Stock Turnover', 'Transactions'];
+        const headers = ['Product Name', 'Manufacturer', 'Type', 'Quantity Sold', 'Revenue', 'Profit', 'Profit Margin', 'Current Stock', 'Stock Turnover'];
         const rows = products.map(product => [
             product.name,
             product.manufacturer,
@@ -649,8 +640,7 @@ document.addEventListener('DOMContentLoaded', function() {
             product.total_profit,
             product.profit_margin,
             product.current_stock,
-            product.stock_turnover,
-            product.transaction_count
+            product.stock_turnover
         ]);
 
         const csvContent = [headers, ...rows]

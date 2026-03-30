@@ -4,40 +4,42 @@
             <h5 class="modal-title">Sale #{{ sale.id }}</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
-        <div class="modal-body">
+        <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
             <p><strong>Client:</strong> {{ sale.client.name }}</p>
             <p><strong>Date:</strong> {{ sale.sale_date|date:"M d, Y H:i" }}</p>
             <p><strong>Total Amount:</strong> PKR {{ sale.total_amount|floatformat:2 }}</p>
             <p><strong>Total Profit:</strong> PKR {{ total_profit|floatformat:2 }}</p>
             <hr>
             <h6>Products in Sale</h6>
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Product</th>
-                        <th>Quantity</th>
-                        <th>Price/Packet</th>
-                        <th>Profit</th>
-                        <th>Return</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in sale_items %}
-                    <tr class="{% if item.modified %}table-warning{% endif %}">
-                        <td>{{ item.cheese_product }}</td>
-                        <td>{{ item.quantity_packets }}</td>
-                        <td>{{ item.selling_price_per_packet }}</td>
-                        <td>{{ item.get_total_profit|floatformat:2 }}</td>
-                        <td>
-                            <button class="btn btn-sm btn-outline-danger return-item" data-id="{{ item.id }}">Return</button>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            <div class="row justify-content-end">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Product</th>
+                            <th>Qty</th>
+                            <th>Price</th>
+                            <th>Profit</th>
+                            <th class="text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in sale_items %}
+                        <tr class="{% if item.modified %}table-warning{% endif %}">
+                            <td><small>{{ item.cheese_product }}</small></td>
+                            <td><small>{{ item.quantity_packets }}</small></td>
+                            <td><small>{{ item.selling_price_per_packet }}</small></td>
+                            <td><small>{{ item.get_total_profit|floatformat:2 }}</small></td>
+                            <td class="text-center">
+                                <button class="btn btn-sm btn-outline-danger return-item" data-id="{{ item.id }}">Return</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="row justify-content-end mt-2">
                 <div class="col-auto">
-                    <button class="btn btn-outline-danger return-all" data-id="{{ sale.id }}">Return All</button>
+                    <button class="btn btn-sm btn-outline-danger return-all" data-id="{{ sale.id }}">Return All</button>
                 </div>
             </div>
         </div>

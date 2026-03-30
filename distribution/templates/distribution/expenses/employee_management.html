@@ -48,6 +48,7 @@
               >
                 <i class="bi bi-pencil"></i>
               </button>
+              {% if user_is_owner %}
               <button
                 type="button"
                 class="btn btn-sm btn-outline-danger delete-employee-btn"
@@ -58,6 +59,7 @@
               >
                 <i class="bi bi-trash"></i>
               </button>
+              {% endif %}
             </td>
           </tr>
           {% empty %}
@@ -103,7 +105,6 @@
               {% if form.joining_date.errors %}<div class="alert alert-danger py-2 px-3 mt-2 mb-0">{{ form.joining_date.errors }}</div>{% endif %}
             </div>
             <div class="col-md-6">
-              <label class="form-label">Route (From / To)</label>
               {# route is still used internally, but user enters From/To #}
               <div class="row g-2">
                 <div class="col-6">
@@ -205,6 +206,70 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     }
   }
+  
+  // Handle Employee Form Submission (Add/Edit Employee)
+  const employeeForm = document.querySelector('#addEmployeeModal form');
+  if (employeeForm) {
+    employeeForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      const formData = new FormData(this);
+      fetch(this.action, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-CSRFToken': this.querySelector('[name=csrfmiddlewaretoken]').value,
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          showToast(data.message || 'Employee added successfully!', 'success');
+          const modal = bootstrap.Modal.getInstance(document.getElementById('addEmployeeModal'));
+          if (modal) modal.hide();
+          employeeForm.reset();
+          setTimeout(() => location.reload(), 1500);
+        } else {
+          showToast(data.error || 'An error occurred while adding the employee.', 'danger');
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        showToast('An error occurred while adding the employee.', 'danger');
+      });
+    });
+  }
+
+  // CNIC number formatting (35261-68794587-3 format): XXXXX-XXXXXXXX-X
+  function formatCNIC(cnic) {
+    const cleaned = cnic.replace(/\D/g, '');
+    if (cleaned.length <= 5) return cleaned;
+    if (cleaned.length <= 12) return cleaned.slice(0, 5) + '-' + cleaned.slice(5);
+    return cleaned.slice(0, 5) + '-' + cleaned.slice(5, 12) + '-' + cleaned.slice(12, 13);
+  }
+
+  function attachCNICFormatting() {
+    // Attach to all CNIC fields (both add and edit modals)
+    document.querySelectorAll('input[name="id_card_number"]').forEach(cnicField => {
+      // Remove old listener to avoid duplicates
+      const newField = cnicField.cloneNode(true);
+      cnicField.parentNode.replaceChild(newField, cnicField);
+      
+      newField.addEventListener('input', function() {
+        this.value = formatCNIC(this.value);
+      });
+      newField.setAttribute('maxlength', '15');
+      newField.setAttribute('placeholder', '35201-1234567-8');
+    });
+  }
+
+  // Initial attachment
+  attachCNICFormatting();
+
+  // Re-attach when edit modal is loaded
+  document.getElementById('dynamicEmployeeEditModal').addEventListener('shown.bs.modal', function() {
+    attachCNICFormatting();
+  });
 });
 </script>
 {% endblock %}

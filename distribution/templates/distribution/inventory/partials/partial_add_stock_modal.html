@@ -1,12 +1,14 @@
-<form method="post" action="{% url 'add_stock' %}" id="addStockForm">
+<form method="post" action="{% url 'add_stock_quantity' %}" id="addStockForm">
     {% csrf_token %}
-    <input type="hidden" name="cheese_product" id="addStockProductId" required>
+    <input type="hidden" name="product_id" id="addStockProductId" required>
     <div class="mb-3">
-        <label class="form-label">Quantity to Add (Packets)</label>
-        <input type="number" name="quantity_packets" class="form-control" step="0.01" min="0.01" required>
+        <label class="form-label">Product</label>
+        <div style="padding: 0.5rem; background-color: #f8f9fa; border-radius: 0.25rem; border-left: 3px solid #0d6efd;">
+            <div id="addStockProductName">-</div>
+        </div>
     </div>
     <div class="mb-3">
-        <label class="form-label">Purchase Price (PKR/Packet)</label>
-        <input type="number" name="purchase_price_per_packet" class="form-control" step="0.01" min="0.01" required>
+        <label class="form-label">Quantity to Add (Packets)</label>
+        <input type="number" name="quantity" class="form-control" step="1" min="1" required>
     </div>
 </form>

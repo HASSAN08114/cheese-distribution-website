@@ -58,68 +58,39 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             
             const formData = new FormData(this);
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
             
             fetch(this.action, {
                 method: 'POST',
                 body: formData,
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Show success message
-                    const alertDiv = document.createElement('div');
-                    alertDiv.className = 'alert alert-success alert-dismissible fade show';
-                    alertDiv.role = 'alert';
-                    alertDiv.innerHTML = `
-                        <strong>✓ Success!</strong> Payment has been recorded successfully.
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    `;
+                    // Show success toast
+                    showToast(data.message || 'Payment has been recorded successfully.', 'success');
                     
-                    // Close the modal first
+                    // Close the modal
                     const modal = bootstrap.Modal.getInstance(document.getElementById('quickPaymentModal'));
                     if (modal) modal.hide();
-                    
-                    // Insert alert
-                    const main = document.querySelector('main') || document.querySelector('.container');
-                    if (main) {
-                        main.insertBefore(alertDiv, main.firstChild);
-                    }
                     
                     // Clear the form
                     quickPaymentForm.reset();
                     
-                    // Auto-dismiss alert after 5 seconds
-                    setTimeout(() => alertDiv.remove(), 5000);
+                    // Reload the page after 2 seconds
+                    setTimeout(() => location.reload(), 2000);
                 } else {
-                    // Show error message
-                    const alertDiv = document.createElement('div');
-                    alertDiv.className = 'alert alert-danger alert-dismissible fade show';
-                    alertDiv.role = 'alert';
-                    alertDiv.innerHTML = `
-                        <strong>Error!</strong> ${data.error || 'An error occurred while recording the payment.'}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    `;
-                    
-                    const main = document.querySelector('main') || document.querySelector('.container');
-                    if (main) {
-                        main.insertBefore(alertDiv, main.firstChild);
-                    }
+                    // Show error toast
+                    showToast(data.error || 'An error occurred while recording the payment.', 'danger');
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                const alertDiv = document.createElement('div');
-                alertDiv.className = 'alert alert-danger alert-dismissible fade show';
-                alertDiv.role = 'alert';
-                alertDiv.innerHTML = `
-                    <strong>Error!</strong> An error occurred while recording the payment.
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                `;
-                
-                const main = document.querySelector('main') || document.querySelector('.container');
-                if (main) {
-                    main.insertBefore(alertDiv, main.firstChild);
-                }
+                showToast('An error occurred while recording the payment.', 'danger');
             });
         });
     }

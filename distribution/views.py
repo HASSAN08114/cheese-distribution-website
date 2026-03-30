@@ -185,27 +185,23 @@ def sale_modal_details(request, pk):
         'total_profit': total_profit
     })
 
-# AJAX endpoint for stock modal details
-@login_required
-@require_GET
-def stock_modal_details(request, pk):
-    addition = get_object_or_404(StockAdditionHistory, pk=pk)
-    items = addition.stockadditionitem_set.select_related('cheese_product').all()
-    total_value = addition.calculate_total_value()
-    
-    return render(request, 'distribution/inventory/partials/partial_stock_modal_details.html', {
-        'addition': addition,
-        'items': items,
-        'total_value': total_value,
-    })
-
 from .models import StockAdditionHistory, Return
 
 
 @login_required
 def stock_history(request):
     from .models import StockAdditionItem
+    from decimal import Decimal
+    
     stock_additions = StockAdditionHistory.objects.prefetch_related('stockadditionitem_set__cheese_product', 'added_by').all()
+    
+    # Calculate total value for each stock addition
+    for addition in stock_additions:
+        first_item = addition.stockadditionitem_set.first()
+        if first_item:
+            addition.total_value = first_item.quantity_packets * first_item.cheese_product.purchase_price_per_packet
+        else:
+            addition.total_value = Decimal('0.00')
     
     # Get products for quick stock form
     products = CheeseProduct.objects.select_related('manufacturer', 'type').all()
@@ -273,18 +269,17 @@ def cheese_type_delete(request, pk):
     return JsonResponse({'html': html})
 
 def login_view(request):
-    if request.user.is_authenticated:
-        if request.user.userprofile.role == 'owner':
-            return redirect('dashboard')
-        return redirect('inventory_management')
-    
     if request.method == 'POST':
         username = request.POST.get('username')
         password = request.POST.get('password')
         user = authenticate(request, username=username, password=password)
         if user is not None:
             login(request, user)
-            return redirect('dashboard')
+            # Redirect based on user role
+            if user.userprofile.role == 'owner':
+                return redirect('dashboard')
+            else:
+                return redirect('inventory_management')
         else:
             messages.error(request, 'Invalid username or password.')
     return render(request, 'distribution/login.html')
@@ -296,11 +291,9 @@ def logout_view(request):
 
 
 @login_required
+@owner_required
 def dashboard(request):
     user_is_owner = is_owner(request.user)
-    
-    # Get last activity
-    last_activity = SiteActivity.objects.filter(pk=1).first()
 
     # Calculate today's expenses
     today = timezone.localdate()
@@ -309,7 +302,6 @@ def dashboard(request):
 
     context = {
         'user_is_owner': user_is_owner,
-        'last_activity': last_activity,
         'daily_expenses': daily_expenses,
     }
     return render(request, 'distribution/dashboard.html', context)
@@ -349,7 +341,7 @@ def get_client_analytics(request):
     client_data = []
 
     for client in clients:
-        # Filter sales by date range
+        # Filter sales by date range for period-based metrics
         if start_date and end_date:
             client_sales = Sale.objects.filter(client=client, sale_date__date__range=[start_date, end_date])
         else:
@@ -368,6 +360,12 @@ def get_client_analytics(request):
             # Get last sale date
             last_sale_date = client_sales.order_by('-sale_date').first().sale_date.date() if client_sales.exists() else None
 
+            # DEBT IS CALCULATED FROM ALL TIME (not filtered by period)
+            all_client_sales = Sale.objects.filter(client=client)
+            total_sales_amount = all_client_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+            total_amount_paid = Payment.objects.filter(client=client).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            client_debt = total_sales_amount - total_amount_paid
+
             client_data.append({
                 'id': client.id,
                 'name': client.name,
@@ -377,6 +375,7 @@ def get_client_analytics(request):
                 'total_transactions': total_transactions,
                 'last_sale_date': last_sale_date.strftime('%Y-%m-%d') if last_sale_date else None,
                 'avg_sale': float(total_sales / total_transactions) if total_transactions > 0 else 0,
+                'debt': float(client_debt),
             })
 
     # Sort by profit descending
@@ -854,8 +853,7 @@ def get_product_stock(request, product_id):
     except CheeseProduct.DoesNotExist:
         return JsonResponse({'error': 'Product not found'}, status=404)
 
-
-@owner_required
+@login_required
 def inventory_management(request):
     """Merged page for manufacturers and cheese inventory"""
     manufacturers = Manufacturer.objects.all()
@@ -983,10 +981,15 @@ def cheese_add(request):
             # Create stock addition history if initial quantity was added
             initial_quantity = form.cleaned_data['available_quantity_packets']
             if initial_quantity > 0:
-                StockAdditionHistory.objects.create(
+                from .models import StockAdditionItem
+                stock_addition = StockAdditionHistory.objects.create(
+                    operation_type='add',
+                    added_by=request.user.userprofile
+                )
+                StockAdditionItem.objects.create(
+                    stock_addition=stock_addition,
                     cheese_product=cheese_product,
-                    added_by=request.user.userprofile,
-                    quantity_packets=initial_quantity
+                    quantity_packets=int(initial_quantity)
                 )
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return JsonResponse({'success': True})
@@ -998,8 +1001,7 @@ def cheese_add(request):
             if form.errors:
                 error_msg = list(form.errors.values())[0][0]
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                html = render_to_string('distribution/inventory/partials/partial_edit_cheese_form.html', {'form': form}, request=request)
-                return JsonResponse({'success': False, 'html': html, 'error': error_msg})
+                return JsonResponse({'success': False, 'error': error_msg})
     else:
         form = CheeseProductForm()
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -1050,6 +1052,7 @@ def add_stock(request):
 
             # Create a single stock addition event
             stock_addition = StockAdditionHistory.objects.create(
+                operation_type='add',
                 added_by=request.user.userprofile
             )
             
@@ -1057,11 +1060,8 @@ def add_stock(request):
             for form in valid_forms:
                 cheese_product = form.cleaned_data['cheese_product']
                 quantity_packets = form.cleaned_data['quantity_packets']
-                purchase_price_per_packet = form.cleaned_data['purchase_price_per_packet']
 
                 cheese_product.available_quantity_packets += quantity_packets
-                # Update the product's purchase price to the newly added price
-                cheese_product.purchase_price_per_packet = purchase_price_per_packet
                 cheese_product.save()
 
                 # Create stock addition item
@@ -1091,7 +1091,14 @@ def quick_sale_create(request):
     if request.method == 'POST':
         client_id = request.POST.get('client')
         if not client_id:
-            return JsonResponse({'success': False, 'error': 'Please select a client.'})
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': 'Please select a client.'})
+            messages.error(request, 'Please select a client.')
+            formset = SaleItemFormSet()
+            return render(request, 'distribution/sales/partials/partial_quick_sale_form.html', {
+                'formset': formset,
+                'clients': Client.objects.all()
+            })
 
         client = get_object_or_404(Client, pk=client_id)
         formset = SaleItemFormSet(request.POST)
@@ -1100,7 +1107,13 @@ def quick_sale_create(request):
             valid_forms = [f for f in formset if f.cleaned_data and not f.cleaned_data.get('DELETE', False)]
 
             if not valid_forms:
-                return JsonResponse({'success': False, 'error': 'Please add at least one item to the sale.'})
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({'success': False, 'error': 'Please add at least one item to the sale.'})
+                messages.error(request, 'Please add at least one item to the sale.')
+                return render(request, 'distribution/sales/partials/partial_quick_sale_form.html', {
+                    'formset': formset,
+                    'clients': Client.objects.all()
+                })
 
             with transaction.atomic():
                 sale = Sale.objects.create(client=client, total_amount=Decimal('0.00'))
@@ -1113,7 +1126,13 @@ def quick_sale_create(request):
 
                     if quantity_packets > cheese_product.available_quantity_packets:
                         sale.delete()
-                        return JsonResponse({'success': False, 'error': f'Insufficient stock for {cheese_product.name}.'})
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({'success': False, 'error': f'Insufficient stock for {cheese_product.name}.'})
+                        messages.error(request, f'Insufficient stock for {cheese_product.name}.')
+                        return render(request, 'distribution/sales/partials/partial_quick_sale_form.html', {
+                            'formset': formset,
+                            'clients': Client.objects.all()
+                        })
 
                     sale_item = SaleItem.objects.create(
                         sale=sale,
@@ -1131,9 +1150,29 @@ def quick_sale_create(request):
                 sale.save()
                 SiteActivity.update_activity(f'Sale created for {client.name}')
 
-                return JsonResponse({'success': True, 'message': 'Sale created successfully.'})
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({'success': True, 'message': 'Sale created successfully.'})
+                
+                messages.success(request, 'Sale created successfully.')
+                return redirect('sale_history')
         else:
-            return JsonResponse({'success': False, 'error': 'Please correct the errors below.'})
+            # Get detailed error message
+            error_msg = 'Please correct the errors below.'
+            for form in formset:
+                if form.errors:
+                    first_error = list(form.errors.values())[0][0] if form.errors else None
+                    if first_error:
+                        error_msg = str(first_error)
+                        break
+            
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': error_msg})
+            
+            messages.error(request, error_msg)
+            return render(request, 'distribution/sales/partials/partial_quick_sale_form.html', {
+                'formset': formset,
+                'clients': Client.objects.all()
+            })
     else:
         formset = SaleItemFormSet()
 
@@ -1166,8 +1205,22 @@ def client_add(request):
         if form.is_valid():
             client = form.save()
             SiteActivity.update_activity(f'Client added: {client.name}')
+            
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': True, 'message': 'Client added successfully.'})
+            
             messages.success(request, 'Client added successfully.')
             return redirect('client_list')
+        else:
+            error_msg = ''
+            if form.errors:
+                error_msg = list(form.errors.values())[0][0]
+            
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': error_msg or 'Invalid form data'})
+            
+            messages.error(request, error_msg or 'Invalid form data')
+            return render(request, 'distribution/client_form.html', {'form': form, 'title': 'Add Client'})
     else:
         form = ClientForm()
     return render(request, 'distribution/client_form.html', {'form': form, 'title': 'Add Client'})
@@ -1210,6 +1263,8 @@ def sale_create(request):
         client_id = request.POST.get('client')
 
         if not client_id:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': 'Please select a client.'})
             messages.error(request, 'Please select a client.')
             formset = SaleItemFormSet(request.POST)
             return render(request, 'distribution/sales/sale_create.html', {
@@ -1225,6 +1280,8 @@ def sale_create(request):
             valid_forms = [f for f in formset if f.cleaned_data and not f.cleaned_data.get('DELETE', False)]
 
             if not valid_forms:
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({'success': False, 'error': 'Please add at least one item to the sale.'})
                 messages.error(request, 'Please add at least one item to the sale.')
                 return render(request, 'distribution/sales/sale_create.html', {
                     'formset': formset,
@@ -1242,8 +1299,10 @@ def sale_create(request):
                     selling_price_per_packet = form.cleaned_data['selling_price_per_packet']
 
                     if quantity_packets > cheese_product.available_quantity_packets:
-                        messages.error(request, f'Insufficient stock for {cheese_product.name}.')
                         sale.delete()
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({'success': False, 'error': f'Insufficient stock for {cheese_product.name}.'})
+                        messages.error(request, f'Insufficient stock for {cheese_product.name}.')
                         return render(request, 'distribution/sales/sale_create.html', {
                             'formset': formset,
                             'clients': Client.objects.all(),
@@ -1267,9 +1326,21 @@ def sale_create(request):
                 sale.save()
                 SiteActivity.update_activity(f'Sale created for {client.name}')
 
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({'success': True, 'message': 'Sale created successfully.'})
+                
                 messages.success(request, 'Sale created successfully.')
                 return redirect('sale_history')
         else:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                # Get first error from formset
+                error_msg = 'Please correct the errors below.'
+                for form in formset:
+                    if form.errors:
+                        error_msg = str(list(form.errors.values())[0][0])
+                        break
+                return JsonResponse({'success': False, 'error': error_msg})
+            
             messages.error(request, 'Please correct the errors below.')
             return render(request, 'distribution/sales/sale_create.html', {
                 'formset': formset,
@@ -1324,8 +1395,20 @@ def add_payment(request):
             # Record payment - debt is calculated at query time
             Payment.objects.create(client=client, amount=amount, mode=mode, bank=bank)
             SiteActivity.update_activity(f'Payment of PKR {amount} recorded for {client.name}')
+            
+            # Handle AJAX requests
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': True, 'message': 'Payment recorded successfully.'})
+            
             messages.success(request, 'Payment recorded successfully.')
             return redirect('payment_history')
+        else:
+            # Handle form errors
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                error_msg = ''
+                if form.errors:
+                    error_msg = list(form.errors.values())[0][0]
+                return JsonResponse({'success': False, 'error': error_msg or 'Invalid form data'})
     else:
         form = PaymentForm()
 
@@ -1384,9 +1467,28 @@ def employee_management(request):
         if form.is_valid():
             employee = form.save()
             SiteActivity.update_activity(f'Employee added: {employee.name}')
-            messages.success(request, 'Employee added successfully.')
+            message = 'Employee added successfully.'
+            
+            # Check if AJAX request
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': True, 'message': message})
+            
+            messages.success(request, message)
             return redirect('employee_management')
         else:
+            # Extract error messages
+            error_messages = []
+            for field, errors in form.errors.items():
+                if field != '__all__':
+                    error_messages.extend(errors)
+                else:
+                    error_messages.extend(errors)
+            error_text = ', '.join(error_messages) if error_messages else 'Please correct the errors below.'
+            
+            # Check if AJAX request
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': error_text})
+            
             # Keep errors only inline with form fields.
             pass
     else:
@@ -1447,11 +1549,31 @@ def expense_management(request):
             expense = form.save(commit=False)
             expense.created_by = request.user
             expense.save()
+            message = 'Expense added successfully.'
             SiteActivity.update_activity(f'Expense added: {expense.get_expense_type_display()}')
-            messages.success(request, 'Expense added successfully.')
+            
+            # Check if AJAX request
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': True, 'message': message})
+            
+            messages.success(request, message)
             return redirect('expense_management')
-        # Keep errors only inline with form fields.
-        pass
+        else:
+            # Extract error messages
+            error_messages = []
+            for field, errors in form.errors.items():
+                if field != '__all__':
+                    error_messages.extend(errors)
+                else:
+                    error_messages.extend(errors)
+            error_text = ', '.join(error_messages) if error_messages else 'Please correct the errors below.'
+            
+            # Check if AJAX request
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': error_text})
+            
+            # Keep errors only inline with form fields.
+            pass
 
     return render(request, 'distribution/expenses/expense_management.html', {
         'expenses': expenses,

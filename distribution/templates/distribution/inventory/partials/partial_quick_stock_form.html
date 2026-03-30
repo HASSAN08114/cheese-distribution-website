@@ -38,66 +38,36 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             
             const formData = new FormData(this);
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
             
             fetch(this.action, {
                 method: 'POST',
                 body: formData,
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Show success message
-                    const alertDiv = document.createElement('div');
-                    alertDiv.className = 'alert alert-success alert-dismissible fade show';
-                    alertDiv.role = 'alert';
-                    alertDiv.innerHTML = `
-                        <strong>✓ Success!</strong> Stock has been added successfully.
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    `;
-                    
-                    // Close the modal first
+                    showToast(data.message || 'Stock has been added successfully.', 'success');
                     const modal = bootstrap.Modal.getInstance(document.getElementById('quickStockModal'));
                     if (modal) modal.hide();
-                    
-                    // Insert alert
-                    const main = document.querySelector('main') || document.querySelector('.container');
-                    if (main) {
-                        main.insertBefore(alertDiv, main.firstChild);
-                    }
-                    
-                    // Clear the form
                     quickStockForm.reset();
-                    
-                    // Auto-dismiss alert after 5 seconds
-                    setTimeout(() => alertDiv.remove(), 5000);
+                    setTimeout(() => location.reload(), 1500);
                 } else {
-                    // Show error message
-                    const alertDiv = document.createElement('div');
-                    alertDiv.className = 'alert alert-danger alert-dismissible fade show';
-                    alertDiv.role = 'alert';
-                    alertDiv.innerHTML = `
-                        <strong>Error!</strong> ${data.error || 'An error occurred while adding stock.'}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    `;
-                    
-                    const main = document.querySelector('main') || document.querySelector('.container');
-                    if (main) {
-                        main.insertBefore(alertDiv, main.firstChild);
-                    }
+                    showToast(data.error || 'An error occurred while adding stock.', 'danger');
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                const alertDiv = document.createElement('div');
-                alertDiv.className = 'alert alert-danger alert-dismissible fade show';
-                alertDiv.role = 'alert';
-                alertDiv.innerHTML = `
-                    <strong>Error!</strong> An error occurred while adding stock.
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                `;
-                
-                const main = document.querySelector('main') || document.querySelector('.container');
-                if (main) {
+                showToast('An error occurred while adding stock.', 'danger');
+            });
+        });
+    }
+});
+</script>
                     main.insertBefore(alertDiv, main.firstChild);
                 }
             });
