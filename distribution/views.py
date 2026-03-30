@@ -199,9 +199,15 @@ def dashboard(request):
     # Get last activity
     last_activity = SiteActivity.objects.filter(pk=1).first()
 
+    # Calculate today's expenses
+    today = timezone.localdate()
+    from django.db.models import Sum
+    daily_expenses = DeliveryExpense.objects.filter(expense_date=today).aggregate(total=Sum('amount'))['total'] or 0
+
     context = {
         'user_is_owner': user_is_owner,
         'last_activity': last_activity,
+        'daily_expenses': daily_expenses,
     }
     return render(request, 'distribution/dashboard.html', context)
 

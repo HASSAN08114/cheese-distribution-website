@@ -18,11 +18,6 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'dashboard' %}">
-                            <i class="bi bi-speedometer2"></i> Dashboard
-                        </a>
-                    </li>
                     {% if user_is_owner %}
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'inventory_management' %}">
@@ -60,15 +55,25 @@
                             <i class="bi bi-cash-coin"></i> Expenses
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'sale_create' %}">
-                            <i class="bi bi-cart-plus"></i> New Sale
+                    <!-- Sales Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="salesDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-cart"></i> Sales
                         </a>
+                        <ul class="dropdown-menu" aria-labelledby="salesDropdown">
+                            <li><a class="dropdown-item" href="{% url 'sale_create' %}"><i class="bi bi-cart-plus"></i> New Sale</a></li>
+                            <li><a class="dropdown-item" href="{% url 'sales_stock_history' %}"><i class="bi bi-clock-history"></i> Sale History</a></li>
+                        </ul>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'sales_stock_history' %}">
-                            <i class="bi bi-clock-history"></i> History
+                    <!-- Payments Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="paymentsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-credit-card"></i> Payments
                         </a>
+                        <ul class="dropdown-menu" aria-labelledby="paymentsDropdown">
+                            <li><a class="dropdown-item" href="{% url 'make_payment' %}"><i class="bi bi-cash-stack"></i> Make Payment</a></li>
+                            <li><a class="dropdown-item" href="{% url 'payment_history' %}"><i class="bi bi-clock-history"></i> Payment History</a></li>
+                        </ul>
                     </li>
                 </ul>
                 <ul class="navbar-nav">

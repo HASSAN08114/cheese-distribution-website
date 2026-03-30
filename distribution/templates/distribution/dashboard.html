@@ -63,7 +63,7 @@
 
 <!-- Payment Status Overview -->
 <div class="row mb-4">
-    <div class="col-md-12">
+    <div class="col-md-9">
         <div class="card shadow-lg border-0">
             <div class="card-header bg-secondary text-white">
                 <h6 class="mb-0"><i class="bi bi-credit-card-fill"></i> Payment Status Overview</h6>
@@ -107,6 +107,17 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-lg border-0 bg-light h-100">
+            <div class="card-body text-center d-flex flex-column justify-content-center align-items-center">
+                <div class="text-danger mb-2">
+                    <i class="bi bi-cash-coin fs-1"></i>
+                </div>
+                <h6 class="card-subtitle mb-2 text-muted fw-semibold">Today's Expenses</h6>
+                <h3 class="card-text mb-0 text-dark fw-bold">PKR {{ daily_expenses|floatformat:2 }}</h3>
             </div>
         </div>
     </div>

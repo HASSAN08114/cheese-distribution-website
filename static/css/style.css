@@ -1,3 +1,29 @@
+/* Navbar Dropdown Hover */
+.navbar-nav .dropdown:hover > .dropdown-menu {
+    display: block;
+    margin-top: 0;
+}
+
+.dropdown-menu {
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    min-width: 200px;
+    background: #23272b;
+}
+
+.dropdown-item {
+    color: #fff;
+    transition: background 0.2s;
+}
+
+.dropdown-item:hover, .dropdown-item:focus {
+    background: #343a40;
+    color: #ffc107;
+}
+
+.navbar-nav .dropdown-toggle::after {
+    margin-left: 0.3em;
+}
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
