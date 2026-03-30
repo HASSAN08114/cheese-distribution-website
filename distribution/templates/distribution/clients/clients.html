@@ -2,13 +2,14 @@
 
 {% block title %}Clients{% endblock %}
 
+
 {% block content %}
 <div class="bg-info text-white py-4 mb-4 shadow-lg" style="margin: -1rem -1rem 0 -1rem; padding: 1.5rem!important;">
     <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center">
         <div>
-            <h2 class="mb-1"><i class="bi bi-people"></i> Clients</h2>
-            <p class="mb-0 opacity-85">Manage your client relationships and payments</p>
+            <h2 class="mb-1"><i class="bi bi-people"></i> Clients & Debt</h2>
+            <p class="mb-0 opacity-85">Manage your client relationships, payments, and outstanding debts</p>
         </div>
         <button type="button" class="btn btn-light" data-bs-toggle="modal" data-bs-target="#clientModal">
             <i class="bi bi-person-plus"></i> Add Client
@@ -17,32 +18,73 @@
     </div>
 </div>
 
-    <!-- Client Modal -->
-    <div class="modal fade" id="clientModal" tabindex="-1" aria-labelledby="clientModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="clientModalLabel">Add Client</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="clientForm" method="post" action="{% url 'client_add' %}">
-                        {% csrf_token %}
-                        {{ client_form.as_p }}
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn" form="clientForm">Save</button>
-                </div>
+<!-- Client Modal -->
+<div class="modal fade" id="clientModal" tabindex="-1" aria-labelledby="clientModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="clientModalLabel">Add Client</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="clientForm" method="post" action="{% url 'client_add' %}">
+                    {% csrf_token %}
+                    {{ client_form.as_p }}
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn" form="clientForm">Save</button>
             </div>
         </div>
     </div>
 </div>
 
+<!-- Debt Summary Stats -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card shadow-lg border-0">
+            <div class="card-body">
+                <h6 class="text-muted mb-2"><i class="bi bi-currency-dollar"></i> Total Outstanding Debt</h6>
+                <h3 class="text-danger">PKR {{ summary.total_outstanding_debt|floatformat:2 }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-lg border-0">
+            <div class="card-body">
+                <h6 class="text-muted mb-2"><i class="bi bi-exclamation-circle"></i> Clients With Debt</h6>
+                <h3 class="text-warning">{{ summary.total_clients_with_debt }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-lg border-0">
+            <div class="card-body">
+                <h6 class="text-muted mb-2"><i class="bi bi-people"></i> Total Clients</h6>
+                <h3 class="text-info">{{ summary.total_clients }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card shadow-lg border-0">
+            <div class="card-body">
+                <h6 class="text-muted mb-2"><i class="bi bi-percent"></i> Debt Percentage</h6>
+                <h3 class="text-primary" id="debtPercentage">
+                    {% if summary.total_clients > 0 %}
+                        {{ summary.total_clients_with_debt|floatformat:2 }} / {{ summary.total_clients }}
+                        ({{ summary.total_clients_with_debt|divisibleby:summary.total_clients|yesno:"100,0" }}%)
+                    {% else %}0%{% endif %}
+                </h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- All Clients Table (with debt info) -->
 <div class="card shadow-lg border-0">
     <div class="card-header bg-info text-white">
-        <h5 class="mb-0"><i class="bi bi-table"></i> All Clients</h5>
+        <h5 class="mb-0"><i class="bi bi-table"></i> All Clients & Debt</h5>
     </div>
     <div class="card-body">
         <div class="table-responsive">
@@ -55,6 +97,8 @@
                     <th>Payment Status</th>
                     <th>Outstanding</th>
                     <th>Payment Methods</th>
+                    <th>Total Sales</th>
+                    <th>Total Paid</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -89,6 +133,8 @@
                             <small class="text-muted">-</small>
                         {% endif %}
                     </td>
+                    <td>PKR {{ client_data.total_sales|floatformat:2 }}</td>
+                    <td>PKR {{ client_data.total_paid|floatformat:2 }}</td>
                     <td>
                         <button type="button" class="btn btn-sm btn-outline-primary edit-btn" data-edit-url="{% url 'client_edit' client_data.client.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal">
                             Edit
@@ -102,7 +148,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="7" class="text-center text-muted py-4">
+                    <td colspan="9" class="text-center text-muted py-4">
                         No clients found. Add your first client above.
                     </td>
                 </tr>

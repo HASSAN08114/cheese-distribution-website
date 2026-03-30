@@ -113,7 +113,7 @@ from .models import StockAdditionHistory, Return
 @login_required
 def stock_history(request):
     stock_additions = StockAdditionHistory.objects.select_related('cheese_product', 'added_by').all()
-    return render(request, 'distribution/stock_history.html', {
+    return render(request, 'distribution/inventory/stock_history.html', {
         'stock_additions': stock_additions,
         'add_stock_formset': AddStockFormSet(),
     })
@@ -451,56 +451,6 @@ def get_product_analytics(request):
 
 
 @login_required
-@login_required
-def sales_stock_history(request):
-    """Page for Sales and Stock History with toggle functionality"""
-    user_is_owner = is_owner(request.user)
-
-    # Get sales data
-    sales = Sale.objects.select_related('client').order_by('-sale_date')[:50]  # Last 50 sales
-
-    # Get stock history data
-    from .models import StockAdditionHistory
-    stock_history = StockAdditionHistory.objects.select_related(
-        'cheese_product__manufacturer', 'cheese_product__type', 'added_by__user'
-    ).order_by('-date_added')[:50]  # Last 50 stock additions
-
-    # Format stock history for template
-    formatted_stock_history = []
-    for stock in stock_history:
-        formatted_stock_history.append({
-            'id': stock.id,
-            'product_name': f"{stock.cheese_product.manufacturer.name} {stock.cheese_product.type.name} {stock.cheese_product.packet_size}kg",
-            'quantity_packets': stock.quantity_packets,
-            'date_added': stock.date_added,
-            'added_by': stock.added_by.user.username if stock.added_by else 'Unknown',
-        })
-
-    return render(request, 'distribution/sales_stock_history.html', {
-        'user_is_owner': user_is_owner,
-        'sales': sales,
-        'stock_history': formatted_stock_history,
-        'clients': Client.objects.all(),
-        'formset': SaleItemFormSet(),
-    })
-
-
-@login_required
-def add_stock_page(request):
-    """Dedicated page for adding stock to products"""
-    user_is_owner = is_owner(request.user)
-    if not user_is_owner:
-        messages.error(request, 'Only owners can add stock.')
-        return redirect('dashboard')
-
-    add_stock_formset = AddStockFormSet()
-    return render(request, 'distribution/add_stock.html', {
-        'user_is_owner': user_is_owner,
-        'add_stock_formset': add_stock_formset,
-    })
-
-
-@login_required
 def get_sales_history(request):
     """AJAX endpoint to get sales history with payment status"""
     period = request.GET.get('period', 'all')
@@ -791,7 +741,7 @@ def inventory_management(request):
     cheese_product_form = CheeseProductForm()
     cheese_type_form = CheeseTypeForm()
     add_stock_formset = AddStockFormSet()
-    return render(request, 'distribution/inventory_management.html', {
+    return render(request, 'distribution/inventory/management.html', {
         'manufacturers': manufacturers,
         'products_with_value': products_with_value,
         'manufacturer_form': manufacturer_form,
@@ -1069,10 +1019,20 @@ def client_list(request):
 
     from .forms import ClientForm
     client_form = ClientForm()
-    return render(request, 'distribution/clients.html', {
+    # Calculate debt summary for merged view
+    total_outstanding = sum([c['outstanding_dues'] for c in clients_with_dues if c['outstanding_dues'] > 0])
+    total_clients_with_debt = sum([1 for c in clients_with_dues if c['outstanding_dues'] > 0])
+    total_clients = len(clients_with_dues)
+    summary = {
+        'total_clients_with_debt': total_clients_with_debt,
+        'total_outstanding_debt': total_outstanding,
+        'total_clients': total_clients,
+    }
+    return render(request, 'distribution/clients/clients.html', {
         'clients_with_dues': clients_with_dues,
         'user_is_owner': user_is_owner,
         'client_form': client_form,
+        'summary': summary,
     })
 
 
@@ -1140,7 +1100,7 @@ def sale_create(request):
         if not client_id:
             messages.error(request, 'Please select a client.')
             formset = SaleItemFormSet(request.POST)
-            return render(request, 'distribution/sale_create.html', {
+            return render(request, 'distribution/sales/sale_create.html', {
                 'formset': formset,
                 'clients': Client.objects.all(),
                 'selected_client_id': None
@@ -1154,7 +1114,7 @@ def sale_create(request):
 
             if not valid_forms:
                 messages.error(request, 'Please add at least one item to the sale.')
-                return render(request, 'distribution/sale_create.html', {
+                return render(request, 'distribution/sales/sale_create.html', {
                     'formset': formset,
                     'clients': Client.objects.all(),
                     'selected_client_id': int(client_id)
@@ -1172,7 +1132,7 @@ def sale_create(request):
                     if quantity_packets > cheese_product.available_quantity_packets:
                         messages.error(request, f'Insufficient stock for {cheese_product.name}.')
                         sale.delete()
-                        return render(request, 'distribution/sale_create.html', {
+                        return render(request, 'distribution/sales/sale_create.html', {
                             'formset': formset,
                             'clients': Client.objects.all(),
                             'selected_client_id': int(client_id)
@@ -1200,10 +1160,10 @@ def sale_create(request):
                 SiteActivity.update_activity(f'Sale created for {client.name}')
 
                 messages.success(request, 'Sale created successfully.')
-                return redirect('sales_stock_history')
+                return redirect('sale_history')
         else:
             messages.error(request, 'Please correct the errors below.')
-            return render(request, 'distribution/sale_create.html', {
+            return render(request, 'distribution/sales/sale_create.html', {
                 'formset': formset,
                 'clients': Client.objects.all(),
                 'selected_client_id': int(client_id) if client_id else None
@@ -1211,7 +1171,7 @@ def sale_create(request):
     else:
         formset = SaleItemFormSet()
 
-    return render(request, 'distribution/sale_create.html', {
+    return render(request, 'distribution/sales/sale_create.html', {
         'formset': formset,
         'clients': Client.objects.all(),
         'selected_client_id': None
@@ -1234,7 +1194,7 @@ def sale_history(request):
     now = timezone.now()
     user_is_owner = is_owner(request.user)
     
-    return render(request, 'distribution/sale_history.html', {
+    return render(request, 'distribution/sales/sale_history.html', {
         'sales_data': sales_with_profit,
         'user_is_owner': user_is_owner,
         'clients': Client.objects.all(),
@@ -1243,7 +1203,7 @@ def sale_history(request):
 
 
 @owner_required
-def make_payment(request):
+def add_payment(request):
     """Record a client payment and apply it to the client's oldest unpaid sales."""
     if request.method == 'POST':
         form = PaymentForm(request.POST)
@@ -1290,14 +1250,14 @@ def make_payment(request):
     else:
         form = PaymentForm()
 
-    return render(request, 'distribution/make_payment.html', {'form': form})
+    return render(request, 'distribution/clients/add_payment.html', {'form': form})
 
 
 @login_required
 @login_required
 def payment_history(request):
     payments = Payment.objects.select_related('client').all().order_by('-date')
-    return render(request, 'distribution/payment_history.html', {'payments': payments})
+    return render(request, 'distribution/clients/payment_history.html', {'payments': payments})
 
 
 @login_required
@@ -1353,7 +1313,7 @@ def employee_management(request):
     else:
         form = DeliveryEmployeeForm()
 
-    return render(request, 'distribution/employee_management.html', {
+    return render(request, 'distribution/expenses/employee_management.html', {
         'employees': employees,
         'form': form,
     })
@@ -1414,7 +1374,7 @@ def expense_management(request):
         # Keep errors only inline with form fields.
         pass
 
-    return render(request, 'distribution/expense_management.html', {
+    return render(request, 'distribution/expenses/expense_management.html', {
         'expenses': expenses,
         'form': form,
     })
