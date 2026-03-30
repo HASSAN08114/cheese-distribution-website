@@ -1,0 +1,4 @@
+<form id="manufacturerForm" method="post" action="{% url 'manufacturer_add' %}">
+    {% csrf_token %}
+    {{ manufacturer_form.as_p }}
+</form>

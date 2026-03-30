@@ -3,8 +3,10 @@
 {% block title %}Make Payment{% endblock %}
 
 {% block content %}
-<h2 class="mb-4">Make Payment</h2>
 <div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">Make Payment</h5>
+    </div>
     <div class="card-body">
         <form method="post" id="paymentForm">
             {% csrf_token %}
@@ -24,7 +26,7 @@
                 {{ form.mode }}
                 {{ form.mode.errors }}
             </div>
-            <div class="mb-3" id="bank-field" style="display:none;">
+            <div class="mb-3 hidden-element" id="bank-field">
                 <label for="id_bank" class="form-label">Bank/Wallet</label>
                 {{ form.bank }}
                 {{ form.bank.errors }}

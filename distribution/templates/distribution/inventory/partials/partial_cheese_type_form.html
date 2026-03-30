@@ -1,0 +1,4 @@
+<form id="cheeseTypeForm" method="post" action="{% url 'cheese_type_add' %}">
+    {% csrf_token %}
+    {{ cheese_type_form.as_p }}
+</form>

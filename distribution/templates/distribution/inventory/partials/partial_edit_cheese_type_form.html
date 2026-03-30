@@ -2,7 +2,7 @@
     <h5 class="modal-title">Edit Cheese Type</h5>
     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
 </div>
-<form id="cheeseTypeForm" method="post" action="{% url 'cheese_type_edit' cheese_type.pk %}">
+<form method="post" id="editCheeseTypeForm" action="{% url 'cheese_type_edit' cheese_type.pk %}">
     {% csrf_token %}
     <div class="modal-body">
         {{ form.as_p }}

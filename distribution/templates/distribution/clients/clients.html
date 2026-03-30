@@ -2,19 +2,56 @@
 
 {% block title %}Clients{% endblock %}
 
-
 {% block content %}
-<div class="bg-info text-white py-4 mb-4 shadow-lg" style="margin: -1rem -1rem 0 -1rem; padding: 1.5rem!important;">
-    <div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center">
+
+<!-- All Clients Table -->
+<div class="card">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
         <div>
-            <h2 class="mb-1"><i class="bi bi-people"></i> Clients & Debt</h2>
-            <p class="mb-0 opacity-85">Manage your client relationships, payments, and outstanding debts</p>
+            <h5>Client Management</h5>
+            <p style="color: var(--text-secondary)">Manage your clients and their contact information</p>
         </div>
-        <button type="button" class="btn btn-light" data-bs-toggle="modal" data-bs-target="#clientModal">
-            <i class="bi bi-person-plus"></i> Add Client
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#clientModal">
+            <i class="bi bi-plus-lg"></i> Add Client
         </button>
     </div>
+    <div class="card-body card-body-compact">
+        <div class="table-responsive">
+            <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Phone</th>
+                    <th>Address</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for client_data in clients %}
+                <tr>
+                    <td><strong>{{ client_data.name }}</strong></td>
+                    <td>{{ client_data.phone }}</td>
+                    <td>{{ client_data.address|truncatewords:15 }}</td>
+                    <td class="text-end">
+                        <button type="button" class="btn btn-sm btn-outline-primary edit-btn" data-edit-url="{% url 'client_edit' client_data.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        {% if user_is_owner %}
+                        <button type="button" class="btn btn-sm btn-outline-danger" data-item-name="{{ client_data.name }}" data-delete-url="{% url 'client_delete' client_data.pk %}" data-bs-toggle="modal" data-bs-target="#deleteConfirmModal">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="9" class="text-center text-muted py-4">
+                        No clients found. Add your first client above.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 </div>
 
@@ -33,128 +70,10 @@
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" class="btn" form="clientForm">Save</button>
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary" form="clientForm">Save Client</button>
             </div>
         </div>
-    </div>
-</div>
-
-<!-- Debt Summary Stats -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card shadow-lg border-0">
-            <div class="card-body">
-                <h6 class="text-muted mb-2"><i class="bi bi-currency-dollar"></i> Total Outstanding Debt</h6>
-                <h3 class="text-danger">PKR {{ summary.total_outstanding_debt|floatformat:2 }}</h3>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card shadow-lg border-0">
-            <div class="card-body">
-                <h6 class="text-muted mb-2"><i class="bi bi-exclamation-circle"></i> Clients With Debt</h6>
-                <h3 class="text-warning">{{ summary.total_clients_with_debt }}</h3>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card shadow-lg border-0">
-            <div class="card-body">
-                <h6 class="text-muted mb-2"><i class="bi bi-people"></i> Total Clients</h6>
-                <h3 class="text-info">{{ summary.total_clients }}</h3>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card shadow-lg border-0">
-            <div class="card-body">
-                <h6 class="text-muted mb-2"><i class="bi bi-percent"></i> Debt Percentage</h6>
-                <h3 class="text-primary" id="debtPercentage">
-                    {% if summary.total_clients > 0 %}
-                        {{ summary.total_clients_with_debt|floatformat:2 }} / {{ summary.total_clients }}
-                        ({{ summary.total_clients_with_debt|divisibleby:summary.total_clients|yesno:"100,0" }}%)
-                    {% else %}0%{% endif %}
-                </h3>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- All Clients Table (with debt info) -->
-<div class="card shadow-lg border-0">
-    <div class="card-header bg-info text-white">
-        <h5 class="mb-0"><i class="bi bi-table"></i> All Clients & Debt</h5>
-    </div>
-    <div class="card-body">
-        <div class="table-responsive">
-            <table class="table">
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Phone</th>
-                    <th>Address</th>
-                    <th>Payment Status</th>
-                    <th>Outstanding</th>
-                    <th>Payment Methods</th>
-                    <th>Total Sales</th>
-                    <th>Total Paid</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for client_data in clients_with_dues %}
-                <tr>
-                    <td><strong>{{ client_data.client.name }}</strong></td>
-                    <td>{{ client_data.client.phone }}</td>
-                    <td>{{ client_data.client.address|truncatewords:15 }}</td>
-                    <td>
-                        {% if client_data.outstanding_dues > 0 %}
-                            <span class="badge bg-danger">Debited</span>
-                        {% elif client_data.total_sales > 0 %}
-                            <span class="badge bg-success">Credited</span>
-                        {% else %}
-                            <span class="badge bg-secondary">No Activity</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if client_data.outstanding_dues > 0 %}
-                            <span class="badge bg-danger fw-bold">PKR {{ client_data.outstanding_dues|floatformat:2 }}</span>
-                        {% else %}
-                            <span class="badge bg-success fw-bold">PKR 0.00</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if client_data.payment_methods %}
-                            {% for method in client_data.payment_methods %}
-                                <span class="badge bg-info me-1">{{ method|title }}</span>
-                            {% endfor %}
-                        {% else %}
-                            <small class="text-muted">-</small>
-                        {% endif %}
-                    </td>
-                    <td>PKR {{ client_data.total_sales|floatformat:2 }}</td>
-                    <td>PKR {{ client_data.total_paid|floatformat:2 }}</td>
-                    <td>
-                        <button type="button" class="btn btn-sm btn-outline-primary edit-btn" data-edit-url="{% url 'client_edit' client_data.client.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal">
-                            Edit
-                        </button>
-                        {% if user_is_owner %}
-                        <button type="button" class="btn btn-sm btn-outline-danger" data-item-name="{{ client_data.client.name }}" data-delete-url="{% url 'client_delete' client_data.client.pk %}" data-bs-toggle="modal" data-bs-target="#deleteConfirmModal">
-                            Delete
-                        </button>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="9" class="text-center text-muted py-4">
-                        No clients found. Add your first client above.
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
     </div>
 </div>
 

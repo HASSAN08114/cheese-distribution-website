@@ -3,12 +3,6 @@
 {% block title %}Sale History{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="bi bi-receipt-cutoff"></i> Sale History</h2>
-    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#quickSaleModal">
-        <i class="bi bi-plus-circle"></i> Create Quick Sale
-    </button>
-</div>
 
 <!-- Quick Sale Modal -->
 <div class="modal fade" id="quickSaleModal" tabindex="-1" aria-labelledby="quickSaleModalLabel" aria-hidden="true">
@@ -80,10 +74,16 @@
 </div>
 
 <div class="card shadow-sm">
-    <div class="card-header">
-        <h5 class="mb-0">All Sales</h5>
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h5 style="margin-bottom: 0.25rem;">Sale History</h5>
+            <p style="color: var(--text-secondary)">View all completed sales and transactions</p>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#quickSaleModal">
+            <i class="bi bi-plus-lg"></i> Create Quick Sale
+        </button>
     </div>
-    <div class="card-body">
+    <div class="card-body-compact">
         <table class="table table-hover">
             <thead>
                 <tr>
@@ -125,10 +125,11 @@
 <div id="sale-modal" class="modal" tabindex="-1"></div>
 {% endblock %}
 
-{% block extra_scripts %}
+{% block extra_js %}
 <script>
-// Sale History: Add/Remove Item logic (mirroring sale_create.html)
+// Sale History: Add/Remove Item logic + Modal handlers
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOMContentLoaded event fired - setting up handlers');
     const addButton = document.getElementById('addItemBtn');
     const container = document.getElementById('formset-container');
     const totalForms = document.getElementById('id_form-TOTAL_FORMS');
@@ -180,60 +181,6 @@ document.addEventListener('DOMContentLoaded', function() {
             updateRemoveButtons();
         });
     }
-
-    updateRemoveButtons();
-});
-// Sale History: Add/Remove Item logic (mirroring sale_create.html)
-document.addEventListener('DOMContentLoaded', function() {
-    const addButton = document.getElementById('addItemBtn');
-    const container = document.getElementById('formset-container');
-    const totalForms = document.getElementById('id_form-TOTAL_FORMS');
-    let formCount = parseInt(totalForms.value);
-
-    function updateRemoveButtons() {
-        container.querySelectorAll('.remove-item').forEach(function(btn) {
-            btn.onclick = function() {
-                const row = btn.closest('.formset-row');
-                if (container.querySelectorAll('.formset-row').length > 1) {
-                    row.remove();
-                    formCount--;
-                    totalForms.value = formCount;
-                }
-            };
-        });
-    }
-
-    addButton.addEventListener('click', function() {
-        const rows = container.querySelectorAll('.formset-row');
-        const lastRow = rows[rows.length - 1];
-        const newForm = lastRow.cloneNode(true);
-
-        const formRegex = RegExp(`form-(\\d+)-`, 'g');
-        newForm.innerHTML = newForm.innerHTML.replace(formRegex, function(match) {
-            return match.replace(/\\d+/, formCount);
-        });
-
-        const inputs = newForm.querySelectorAll('input, select');
-        inputs.forEach(function(input) {
-            if (input.name) {
-                input.name = input.name.replace(/\\d+/, formCount);
-            }
-            if (input.id) {
-                input.id = input.id.replace(/\\d+/, formCount);
-            }
-            if (input.type !== 'hidden' && input.type !== 'checkbox') {
-                input.value = '';
-            }
-            if (input.type === 'checkbox') {
-                input.checked = false;
-            }
-        });
-
-        container.appendChild(newForm);
-        formCount++;
-        totalForms.value = formCount;
-        updateRemoveButtons();
-    });
 
     updateRemoveButtons();
 
@@ -333,6 +280,46 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
+
+    // Sale History: View Sale Modal Handler
+    console.log('Setting up view-sale-modal click handler');
+    document.addEventListener('click', function(e) {
+        console.log('Document click detected on:', e.target);
+        const button = e.target.closest('.view-sale-modal');
+        if (button) {
+            console.log('View button clicked, Sale ID:', button.getAttribute('data-id'));
+            const saleId = button.getAttribute('data-id');
+            console.log('View button clicked, Sale ID:', saleId);
+            const url = `/sales/${saleId}/modal/`;
+            console.log('Fetching from URL:', url);
+            fetch(url)
+                .then(response => {
+                    console.log('Response status:', response.status);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.text();
+                })
+                .then(html => {
+                    console.log('HTML received, length:', html.length);
+                    const modalDiv = document.createElement('div');
+                    modalDiv.className = 'modal fade';
+                    modalDiv.tabIndex = -1;
+                    modalDiv.innerHTML = html;
+                    document.body.appendChild(modalDiv);
+                    const modal = new bootstrap.Modal(modalDiv);
+                    modal.show();
+                    // Clean up after modal closes
+                    modalDiv.addEventListener('hidden.bs.modal', function() {
+                        modalDiv.remove();
+                    });
+                })
+                .catch(error => {
+                    console.error('Error loading sale details:', error);
+                    alert('Failed to load sale details: ' + error.message);
+                });
+        }
+    });
 });
 </script>
 {% endblock %}

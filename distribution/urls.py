@@ -2,35 +2,36 @@ from django.urls import path
 from . import views 
 
 urlpatterns = [
-    path('cheese-types/', views.cheese_type_list, name='cheese_type_list'),
-    path('cheese-type/add/', views.cheese_type_add, name='cheese_type_add'),
-    path('cheese-type/<int:pk>/edit/', views.cheese_type_edit, name='cheese_type_edit'),
-    path('cheese-type/<int:pk>/delete/', views.cheese_type_delete, name='cheese_type_delete'),
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
     path('dashboard/', views.dashboard, name='dashboard'),
 
     path('api/client-analytics/', views.get_client_analytics, name='get_client_analytics'),
     path('api/product-analytics/', views.get_product_analytics, name='get_product_analytics'),
+    path('api/general-metrics/', views.get_general_metrics, name='get_general_metrics'),
+    path('api/dashboard-overview/', views.get_dashboard_overview, name='get_dashboard_overview'),
     path('api/sales-history/', views.get_sales_history, name='get_sales_history'),
     path('api/stock-history/', views.get_stock_history, name='get_stock_history'),
-    path('api/client-debt/', views.get_client_debt, name='get_client_debt'),
     path('api/payment-history/', views.get_payment_history, name='get_payment_history'),
     path('api/product-stock/<int:product_id>/', views.get_product_stock, name='get_product_stock'),
     
     # Merged inventory management (manufacturers + cheese)
-    path('inventory/inventory/', views.inventory_management, name='inventory_management'),
+    path('inventory/', views.inventory_management, name='inventory_management'),
     path('inventory/manufacturers/add/', views.manufacturer_add, name='manufacturer_add'),
     path('inventory/manufacturers/<int:pk>/edit/', views.manufacturer_edit, name='manufacturer_edit'),
     path('inventory/manufacturers/<int:pk>/delete/', views.manufacturer_delete, name='manufacturer_delete'),
     
-    path('inventory/cheese/add/', views.cheese_add, name='cheese_add'),
-    path('inventory/cheese/<int:pk>/edit/', views.cheese_edit, name='cheese_edit'),
-    path('inventory/cheese/<int:pk>/delete/', views.cheese_delete, name='cheese_delete'),
+    path('inventory/cheese-product/add/', views.cheese_add, name='cheese_add'),
+    path('inventory/cheese-product/<int:pk>/edit/', views.cheese_edit, name='cheese_edit'),
+    path('inventory/cheese-product/<int:pk>/delete/', views.cheese_delete, name='cheese_delete'),
     
+    path('inventory/cheese-type/add/', views.cheese_type_add, name='cheese_type_add'),
+    path('inventory/cheese-type/<int:pk>/edit/', views.cheese_type_edit, name='cheese_type_edit'),
+    path('inventory/cheese-type/<int:pk>/delete/', views.cheese_type_delete, name='cheese_type_delete'),
+
     path('inventory/stock/history/', views.stock_history, name='stock_history'),
     path('inventory/stock/<int:pk>/modal/', views.stock_modal_details, name='stock_modal_details_alt'),
-    path('inventory/api/stock/add/', views.add_stock, name='add_stock'),
+    path('inventory/stock/add/', views.add_stock, name='add_stock'),
 
     path('clients/', views.client_list, name='client_list'),
     path('clients/add/', views.client_add, name='client_add'),
@@ -45,7 +46,12 @@ urlpatterns = [
 
     path('returns/sale-item/', views.return_sale_item, name='return_sale_item'),
     path('returns/sale-all/', views.return_all_sale_items, name='return_all_sale_items'),
-    path('returns/stock/', views.return_stock_addition, name='return_stock_addition'),
+    
+    # Stock operations
+    path('stock/add/', views.add_stock_quantity, name='add_stock_quantity'),
+    path('stock/remove/', views.remove_stock_quantity, name='remove_stock_quantity'),
+    path('stock/change-price/', views.change_stock_price, name='change_stock_price'),
+    
     #Payment Management
     path('payments/add/', views.add_payment, name='add_payment'),
     path('payments/history/', views.payment_history, name='payment_history'),

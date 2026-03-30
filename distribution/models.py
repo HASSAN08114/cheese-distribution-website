@@ -83,7 +83,7 @@ class Client(models.Model):
 
     @property
     def amount_owed(self):
-        # Total sales minus total payments
+        # Total sales minus total payments (from Payment model)
         from django.db.models import Sum
         total_sales = self.sale_set.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
         total_paid = self.payment_set.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
@@ -113,22 +113,6 @@ class Payment(models.Model):
 
 
 class Sale(models.Model):
-    PAYMENT_STATUS_CHOICES = [
-        ('unpaid', 'Unpaid'),
-        ('partial', 'Partial'),
-        ('paid', 'Paid'),
-    ]
-
-    PAYMENT_METHOD_CHOICES = [
-        ('cash', 'Cash'),
-        ('bank_transfer', 'Bank Transfer'),
-        ('jazzcash', 'JazzCash'),
-        ('easypaisa', 'EasyPaisa'),
-        ('sadapay', 'SadaPay'),
-        ('online_banking', 'Online Banking'),
-        ('other', 'Other'),
-    ]
-
     client = models.ForeignKey(Client, on_delete=models.CASCADE)
     sale_date = models.DateTimeField(auto_now_add=True)
     total_amount = models.DecimalField(
@@ -136,50 +120,12 @@ class Sale(models.Model):
         decimal_places=2,
         default=Decimal('0.00')
     )
-    payment_status = models.CharField(
-        max_length=10,
-        choices=PAYMENT_STATUS_CHOICES,
-        default='unpaid'
-    )
-    payment_method = models.CharField(
-        max_length=20,
-        choices=PAYMENT_METHOD_CHOICES,
-        blank=True,
-        null=True
-    )
-    amount_paid = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=Decimal('0.00')
-    )
-    payment_date = models.DateTimeField(blank=True, null=True)
 
     def __str__(self):
-        return f"Sale #{self.id} - {self.client.name} - {self.sale_date.date()} - {self.get_payment_status_display()}"
+        return f"Sale #{self.id} - {self.client.name} - {self.sale_date.date()} - PKR {self.total_amount}"
 
     def calculate_total_profit(self):
         return sum(item.profit_per_packet * item.quantity_packets for item in self.saleitem_set.all())
-
-    def get_outstanding_amount(self):
-        """Calculate how much is still owed"""
-        return self.total_amount - self.amount_paid
-
-    def is_fully_paid(self):
-        """Check if the sale is fully paid"""
-        return self.amount_paid >= self.total_amount
-
-    def update_payment_status(self):
-        """Automatically update payment status based on amount paid"""
-        if self.amount_paid == 0:
-            self.payment_status = 'unpaid'
-        elif self.amount_paid >= self.total_amount:
-            self.payment_status = 'paid'
-            if not self.payment_date:
-                self.payment_date = timezone.now()
-        else:
-            self.payment_status = 'partial'
-
-        self.save()
 
     class Meta:
         ordering = ['-sale_date']
@@ -220,22 +166,53 @@ class SaleItem(models.Model):
         ordering = ['id']
 
 
-# Tracks each stock addition event
+# Tracks each stock operation event (add/remove/price_change)
 class StockAdditionHistory(models.Model):
-    cheese_product = models.ForeignKey(CheeseProduct, on_delete=models.CASCADE)
+    OPERATION_CHOICES = [
+        ('add', 'Add Stock'),
+        ('remove', 'Remove Stock'),
+        ('price_change', 'Price Change'),
+    ]
+    
+    operation_type = models.CharField(max_length=20, choices=OPERATION_CHOICES, default='add')
     added_by = models.ForeignKey(UserProfile, on_delete=models.SET_NULL, null=True)
-    quantity_packets = models.DecimalField(max_digits=10, decimal_places=2)
-    date_added = models.DateTimeField(auto_now_add=True)
-    modified = models.BooleanField(default=False, help_text="True if stock addition was returned or modified")
+    date_last_updated = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
-        return f"{self.cheese_product} - {self.quantity_packets} packets on {self.date_added}" 
+        item_count = self.stockadditionitem_set.count()
+        return f"Stock {self.get_operation_type_display()} #{self.id} - {item_count} product(s) on {self.date_last_updated}" 
+
+    def calculate_total_value(self):
+        """Calculate total value of all items in this stock operation"""
+        from decimal import Decimal
+        total = Decimal('0.00')
+        for item in self.stockadditionitem_set.all():
+            total += item.get_total_value()
+        return total
 
     class Meta:
-        ordering = ['-date_added']
+        ordering = ['-date_last_updated']
 
 
-# Tracks returns for both sales and stock additions
+# Individual items within a stock operation (add/remove/price_change)
+class StockAdditionItem(models.Model):
+    stock_addition = models.ForeignKey(StockAdditionHistory, on_delete=models.CASCADE)
+    cheese_product = models.ForeignKey(CheeseProduct, on_delete=models.CASCADE)
+    quantity_packets = models.IntegerField()  # Integer only
+    old_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    new_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
+    def get_total_value(self):
+        return self.quantity_packets * self.cheese_product.purchase_price_per_packet
+
+    def __str__(self):
+        return f"{self.cheese_product} - {self.quantity_packets} packets"
+
+    class Meta:
+        ordering = ['id']
+
+
+# Track returns for sales and stock operations
 class Return(models.Model):
     sale_item = models.ForeignKey(SaleItem, on_delete=models.CASCADE, null=True, blank=True)
     stock_addition = models.ForeignKey(StockAdditionHistory, on_delete=models.CASCADE, null=True, blank=True)
@@ -245,10 +222,8 @@ class Return(models.Model):
 
     def __str__(self):
         if self.sale_item:
-            return f"Return for SaleItem {self.sale_item.id} - {self.quantity_packets} packets"
-        elif self.stock_addition:
-            return f"Return for StockAddition {self.stock_addition.id} - {self.quantity_packets} packets"
-        return "Return"
+            return f"Return from Sale Item #{self.sale_item.id} - {self.quantity_packets} packets"
+        return f"Return from Stock Addition #{self.stock_addition.id} - {self.quantity_packets} packets"
 
     class Meta:
         ordering = ['-date_returned']

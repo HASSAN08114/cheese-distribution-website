@@ -1,0 +1,44 @@
+<div class="modal-header">
+    <h5 class="modal-title">Add Expense</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<form method="post" action="{% url 'expense_management' %}">
+    {% csrf_token %}
+    <div class="modal-body">
+        <div class="mb-3">
+            <label class="form-label">Employee (Optional)</label>
+            <select name="employee" id="employee_select" class="form-control">
+                <option value="">-- Select an employee --</option>
+                {% for employee in employees %}
+                <option value="{{ employee.pk }}">{{ employee.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Expense Type</label>
+            <select name="expense_type" id="expense_type_select" class="form-control" required>
+                <option value="">-- Select type --</option>
+                <option value="fuel">Fuel</option>
+                <option value="maintenance">Maintenance</option>
+                <option value="toll">Toll</option>
+                <option value="other">Other</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Amount (PKR)</label>
+            <input type="number" name="amount" class="form-control" step="0.01" min="0.01" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Expense Date</label>
+            <input type="date" name="expense_date" class="form-control" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Note</label>
+            <textarea name="note" class="form-control" rows="3" placeholder="Add any notes about this expense"></textarea>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Add Expense</button>
+    </div>
+</form>

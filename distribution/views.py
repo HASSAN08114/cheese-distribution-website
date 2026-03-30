@@ -17,6 +17,7 @@ from .forms import (
     SaleItemForm, SaleItemFormSet, UserForm, UserRoleForm, AddStockForm, AddStockFormSet,
     PaymentForm, DeliveryEmployeeForm, DeliveryExpenseForm,
 )
+from .forms import CheeseTypeForm
 from .decorators import owner_required, is_owner
 
 
@@ -62,26 +63,114 @@ def return_all_sale_items(request):
         item.save()
     return JsonResponse({'success': True})
 
-# AJAX endpoint to process return for stock addition
+# AJAX endpoint to add stock to a product
 @login_required
 @require_POST
-def return_stock_addition(request):
-    addition_id = request.POST.get('addition_id')
+def add_stock_quantity(request):
+    from .models import StockAdditionItem
+    product_id = request.POST.get('product_id')
     quantity = request.POST.get('quantity')
-    reason = request.POST.get('reason', '')
-    addition = get_object_or_404(StockAdditionHistory, pk=addition_id)
-    quantity = Decimal(quantity)
-    if quantity > addition.quantity_packets:
-        return JsonResponse({'success': False, 'error': 'Return quantity exceeds added quantity.'})
-    Return.objects.create(stock_addition=addition, quantity_packets=quantity, reason=reason)
-    addition.modified = True
-    addition.save()
-    # Optionally, update cheese product stock
-    addition.cheese_product.available_quantity_packets -= quantity
-    addition.cheese_product.save()
-    return JsonResponse({'success': True})
+    
+    product = get_object_or_404(CheeseProduct, pk=product_id)
+    quantity = int(quantity)
+    
+    if quantity <= 0:
+        return JsonResponse({'success': False, 'error': 'Quantity must be greater than 0'})
+    
+    # Create stock addition event
+    stock_addition = StockAdditionHistory.objects.create(
+        operation_type='add',
+        added_by=request.user.userprofile
+    )
+    
+    # Create stock item
+    StockAdditionItem.objects.create(
+        stock_addition=stock_addition,
+        cheese_product=product,
+        quantity_packets=quantity
+    )
+    
+    # Update product stock
+    product.available_quantity_packets += quantity
+    product.save()
+    
+    SiteActivity.update_activity(f'Added {quantity} packets to {product}')
+    return JsonResponse({'success': True, 'message': f'Added {quantity} packets to {product}'})
 
-# AJAX endpoint for sale modal details
+# AJAX endpoint to remove stock from a product
+@login_required
+@require_POST
+def remove_stock_quantity(request):
+    from .models import StockAdditionItem
+    product_id = request.POST.get('product_id')
+    quantity = request.POST.get('quantity')
+    
+    product = get_object_or_404(CheeseProduct, pk=product_id)
+    quantity = int(quantity)
+    
+    if quantity <= 0:
+        return JsonResponse({'success': False, 'error': 'Quantity must be greater than 0'})
+    
+    if product.available_quantity_packets < quantity:
+        return JsonResponse({'success': False, 'error': f'Insufficient stock. Available: {product.available_quantity_packets}'})
+    
+    # Create stock removal event
+    stock_addition = StockAdditionHistory.objects.create(
+        operation_type='remove',
+        added_by=request.user.userprofile
+    )
+    
+    # Create stock item (negative quantity for removal)
+    StockAdditionItem.objects.create(
+        stock_addition=stock_addition,
+        cheese_product=product,
+        quantity_packets=-quantity
+    )
+    
+    # Update product stock
+    product.available_quantity_packets -= quantity
+    product.save()
+    
+    SiteActivity.update_activity(f'Removed {quantity} packets from {product}')
+    return JsonResponse({'success': True, 'message': f'Removed {quantity} packets from {product}'})
+
+# AJAX endpoint to change product price
+@login_required
+@require_POST
+def change_stock_price(request):
+    from .models import StockAdditionItem
+    product_id = request.POST.get('product_id')
+    new_price = request.POST.get('new_price')
+    
+    product = get_object_or_404(CheeseProduct, pk=product_id)
+    old_price = product.purchase_price_per_packet
+    new_price = Decimal(new_price)
+    
+    if new_price <= 0:
+        return JsonResponse({'success': False, 'error': 'Price must be greater than 0'})
+    
+    # Create price change event
+    stock_addition = StockAdditionHistory.objects.create(
+        operation_type='price_change',
+        added_by=request.user.userprofile
+    )
+    
+    # Create stock item with price info
+    StockAdditionItem.objects.create(
+        stock_addition=stock_addition,
+        cheese_product=product,
+        quantity_packets=0,  # No quantity change for price updates
+        old_price=old_price,
+        new_price=new_price
+    )
+    
+    # Update product price
+    product.purchase_price_per_packet = new_price
+    product.save()
+    
+    SiteActivity.update_activity(f'Changed price of {product}: {old_price} → {new_price}')
+    return JsonResponse({'success': True, 'message': f'Price updated from {old_price} to {new_price}'})
+
 from django.views.decorators.http import require_GET
 
 @login_required
@@ -90,7 +179,7 @@ def sale_modal_details(request, pk):
     sale = get_object_or_404(Sale, pk=pk)
     sale_items = sale.saleitem_set.select_related('cheese_product').all()
     total_profit = sale.calculate_total_profit()
-    return render(request, 'distribution/partials/sale_modal_details.html', {
+    return render(request, 'distribution/sales/partials/partial_sale_modal_details.html', {
         'sale': sale,
         'sale_items': sale_items,
         'total_profit': total_profit
@@ -101,10 +190,13 @@ def sale_modal_details(request, pk):
 @require_GET
 def stock_modal_details(request, pk):
     addition = get_object_or_404(StockAdditionHistory, pk=pk)
-    returns = addition.return_set.all()
-    return render(request, 'distribution/partials/stock_modal_details.html', {
+    items = addition.stockadditionitem_set.select_related('cheese_product').all()
+    total_value = addition.calculate_total_value()
+    
+    return render(request, 'distribution/inventory/partials/partial_stock_modal_details.html', {
         'addition': addition,
-        'returns': returns
+        'items': items,
+        'total_value': total_value,
     })
 
 from .models import StockAdditionHistory, Return
@@ -112,15 +204,24 @@ from .models import StockAdditionHistory, Return
 
 @login_required
 def stock_history(request):
-    stock_additions = StockAdditionHistory.objects.select_related('cheese_product', 'added_by').all()
+    from .models import StockAdditionItem
+    stock_additions = StockAdditionHistory.objects.prefetch_related('stockadditionitem_set__cheese_product', 'added_by').all()
+    
+    # Get products for quick stock form
+    products = CheeseProduct.objects.select_related('manufacturer', 'type').all()
+    products_with_value = []
+    for product in products:
+        stock_value = product.available_quantity_packets * product.purchase_price_per_packet
+        products_with_value.append({
+            'product': product,
+            'stock_value': stock_value
+        })
+    
     return render(request, 'distribution/inventory/stock_history.html', {
         'stock_additions': stock_additions,
         'add_stock_formset': AddStockFormSet(),
+        'products_with_value': products_with_value,
     })
-
-def cheese_type_list(request):
-    types = CheeseType.objects.all()
-    return render(request, 'distribution/cheese_type_list.html', {'types': types})
 
 @login_required
 def cheese_type_add(request):
@@ -138,12 +239,12 @@ def cheese_type_add(request):
             if 'name' in form.errors:
                 error_msg = form.errors['name'][0]
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                html = render_to_string('distribution/partials/edit_cheese_type_form.html', {'form': form}, request=request)
+                html = render_to_string('distribution/inventory/partials/partial_edit_cheese_type_form.html', {'form': form}, request=request)
                 return JsonResponse({'success': False, 'html': html, 'error': error_msg})
     else:
         form = CheeseTypeForm()
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        html = render_to_string('distribution/partials/edit_cheese_type_form.html', {'form': form}, request=request)
+        html = render_to_string('distribution/inventory/partials/partial_edit_cheese_type_form.html', {'form': form}, request=request)
         return JsonResponse({'success': False, 'html': html})
     return render(request, 'distribution/cheese_type_form.html', {'form': form})
 
@@ -158,7 +259,7 @@ def cheese_type_edit(request, pk):
             return redirect('inventory_management')
     else:
         form = CheeseTypeForm(instance=cheese_type)
-    html = render_to_string('distribution/partials/edit_cheese_type_form.html', {'form': form, 'cheese_type': cheese_type}, request=request)
+    html = render_to_string('distribution/inventory/partials/partial_edit_cheese_type_form.html', {'form': form, 'cheese_type': cheese_type}, request=request)
     return JsonResponse({'html': html})
 
 @login_required
@@ -173,7 +274,9 @@ def cheese_type_delete(request, pk):
 
 def login_view(request):
     if request.user.is_authenticated:
-        return redirect('dashboard')
+        if request.user.userprofile.role == 'owner':
+            return redirect('dashboard')
+        return redirect('inventory_management')
     
     if request.method == 'POST':
         username = request.POST.get('username')
@@ -285,30 +388,18 @@ def get_client_analytics(request):
     total_profit_all = sum(client['total_profit'] for client in client_data)
     total_transactions_all = sum(client['total_transactions'] for client in client_data)
 
-    # Get payment analytics
-    if start_date and end_date:
-        sales_queryset = Sale.objects.filter(sale_date__date__range=[start_date, end_date])
-    else:
-        sales_queryset = Sale.objects.all()
-
-    # Calculate total outstanding debt from ALL sales (not just the period filter)
-    # This matches the client debt page calculation - group by client first
+    # Calculate total outstanding debt from ALL sales
+    # Using Payment model to find what has been paid
     clients_all = Client.objects.all()
     total_outstanding = Decimal('0.00')
     for client in clients_all:
         client_sales = Sale.objects.filter(client=client)
         if client_sales.exists():
             total_sales_amount = client_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-            total_amount_paid = client_sales.aggregate(total=Sum('amount_paid'))['total'] or Decimal('0.00')
+            total_amount_paid = Payment.objects.filter(client=client).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
             outstanding_amount = total_sales_amount - total_amount_paid
             if outstanding_amount > 0:
                 total_outstanding += outstanding_amount
-    
-    payment_status_counts = {
-        'paid': sales_queryset.filter(payment_status='paid').count(),
-        'partial': sales_queryset.filter(payment_status='partial').count(),
-        'unpaid': sales_queryset.filter(payment_status='unpaid').count(),
-    }
 
     summary = {
         'total_clients': total_clients,
@@ -317,7 +408,6 @@ def get_client_analytics(request):
         'total_transactions': total_transactions_all,
         'avg_client_value': float(total_revenue / total_clients) if total_clients > 0 else 0,
         'total_outstanding': float(total_outstanding),
-        'payment_status_counts': payment_status_counts,
     }
 
     return JsonResponse({
@@ -451,8 +541,8 @@ def get_product_analytics(request):
 
 
 @login_required
-def get_sales_history(request):
-    """AJAX endpoint to get sales history with payment status"""
+def get_general_metrics(request):
+    """AJAX endpoint to get general business metrics based on time period"""
     period = request.GET.get('period', 'all')
 
     now = timezone.now()
@@ -479,7 +569,155 @@ def get_sales_history(request):
         start_date = None
         end_date = None
 
-    # Get sales with payment information
+    # Get general metrics
+    if start_date and end_date:
+        sales_queryset = Sale.objects.filter(sale_date__date__range=[start_date, end_date])
+        expenses_queryset = DeliveryExpense.objects.filter(expense_date__range=[start_date, end_date])
+    else:
+        sales_queryset = Sale.objects.all()
+        expenses_queryset = DeliveryExpense.objects.all()
+
+    # Total Revenue
+    total_revenue = sales_queryset.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+
+    # Total Expenses
+    total_expenses = expenses_queryset.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
+    # Total Profit (from sales)
+    total_profit = sum(sale.calculate_total_profit() for sale in sales_queryset)
+    
+    # Net Profit (Profit - Expenses)
+    net_profit = float(total_profit) - float(total_expenses)
+
+    # Total Sales Count
+    total_sales_count = sales_queryset.count()
+
+    # Average Sale Value
+    avg_sale_value = float(total_revenue) / total_sales_count if total_sales_count > 0 else 0
+
+    # Total clients this period
+    clients_this_period = sales_queryset.values('client').distinct().count()
+
+    # Total products sold
+    total_items_sold = SaleItem.objects.filter(sale__in=sales_queryset).aggregate(
+        total=Sum('quantity_packets')
+    )['total'] or Decimal('0.00')
+
+    summary = {
+        'total_revenue': float(total_revenue),
+        'total_expenses': float(total_expenses),
+        'total_profit': float(total_profit),
+        'net_profit': float(net_profit),
+        'total_sales_count': total_sales_count,
+        'avg_sale_value': avg_sale_value,
+        'clients_this_period': clients_this_period,
+        'total_items_sold': float(total_items_sold),
+    }
+
+    return JsonResponse({
+        'summary': summary,
+        'period': period
+    })
+
+
+@login_required
+def get_dashboard_overview(request):
+    """Endpoint to get general dashboard overview metrics (not time-dependent)"""
+    # Total Outstanding Debt
+    total_outstanding = Decimal('0.00')
+    clients_all = Client.objects.all()
+    for client in clients_all:
+        client_sales = Sale.objects.filter(client=client)
+        if client_sales.exists():
+            total_sales_amount = client_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+            total_amount_paid = Payment.objects.filter(client=client).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            outstanding_amount = total_sales_amount - total_amount_paid
+            if outstanding_amount > 0:
+                total_outstanding += outstanding_amount
+
+    # Total Clients
+    total_clients_count = Client.objects.count()
+
+    # Total Products
+    total_products_count = CheeseProduct.objects.count()
+
+    # Total Stock Value (current stock * price)
+    total_stock_value = Decimal('0.00')
+    for product in CheeseProduct.objects.all():
+        stock_value = product.available_quantity_packets * product.purchase_price_per_packet
+        total_stock_value += stock_value
+
+    # Payment amounts by status
+    # Total Paid: sum of all payments
+    total_paid_amount = Payment.objects.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
+    # Total Partial Pending: sales that have some but not full payment
+    total_partial_pending = Decimal('0.00')
+    for client in clients_all:
+        client_sales = Sale.objects.filter(client=client)
+        client_total_sales = client_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+        client_total_paid = Payment.objects.filter(client=client).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        
+        if Decimal('0.00') < client_total_paid < client_total_sales:
+            outstanding = client_total_sales - client_total_paid
+            total_partial_pending += outstanding
+
+    # Total Unpaid: unpaid portion of all sales (total_sales - total_paid, but only count if > 0 and <= sales)
+    total_unpaid_amount = Decimal('0.00')
+    for client in clients_all:
+        client_sales = Sale.objects.filter(client=client)
+        client_total_sales = client_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+        client_total_paid = Payment.objects.filter(client=client).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        
+        outstanding = client_total_sales - client_total_paid
+        if outstanding > 0:
+            total_unpaid_amount += outstanding
+
+    summary = {
+        'total_outstanding': float(total_outstanding),
+        'total_clients': total_clients_count,
+        'total_products': total_products_count,
+        'total_stock_value': float(total_stock_value),
+        'total_paid_amount': float(total_paid_amount),
+        'total_partial_amount': float(total_partial_pending),
+        'total_unpaid_amount': float(total_unpaid_amount),
+    }
+
+    return JsonResponse({
+        'summary': summary
+    })
+
+
+@login_required
+def get_sales_history(request):
+    """AJAX endpoint to get sales history"""
+    period = request.GET.get('period', 'all')
+
+    now = timezone.now()
+
+    if period == 'today':
+        start_date = now.date()
+        end_date = now.date()
+    elif period == 'week':
+        start_date = now.date() - timedelta(days=7)
+        end_date = now.date()
+    elif period == 'month':
+        start_date = now.date() - timedelta(days=30)
+        end_date = now.date()
+    elif period == 'quarter':
+        start_date = now.date() - timedelta(days=90)
+        end_date = now.date()
+    elif period == '6months':
+        start_date = now.date() - timedelta(days=180)
+        end_date = now.date()
+    elif period == 'year':
+        start_date = now.date() - timedelta(days=365)
+        end_date = now.date()
+    else:  # 'all'
+        start_date = None
+        end_date = None
+
+    # Get sales
     if start_date and end_date:
         sales = Sale.objects.filter(sale_date__date__range=[start_date, end_date]).select_related('client')
     else:
@@ -493,11 +731,6 @@ def get_sales_history(request):
             'client_phone': sale.client.phone,
             'sale_date': sale.sale_date.strftime('%Y-%m-%d %H:%M'),
             'total_amount': float(sale.total_amount),
-            'amount_paid': float(sale.amount_paid),
-            'outstanding_amount': float(sale.get_outstanding_amount()),
-            'payment_status': sale.payment_status,
-            'payment_method': sale.get_payment_method_display() if sale.payment_method else None,
-            'payment_date': sale.payment_date.strftime('%Y-%m-%d %H:%M') if sale.payment_date else None,
             'total_profit': float(sale.calculate_total_profit()),
         })
 
@@ -507,24 +740,12 @@ def get_sales_history(request):
     # Calculate summary stats
     total_sales = len(sales_data)
     total_revenue = sum(sale['total_amount'] for sale in sales_data)
-    total_paid = sum(sale['amount_paid'] for sale in sales_data)
-    total_outstanding = sum(sale['outstanding_amount'] for sale in sales_data)
     total_profit = sum(sale['total_profit'] for sale in sales_data)
-
-    # Payment status breakdown
-    unpaid_count = sum(1 for sale in sales_data if sale['payment_status'] == 'unpaid')
-    partial_count = sum(1 for sale in sales_data if sale['payment_status'] == 'partial')
-    paid_count = sum(1 for sale in sales_data if sale['payment_status'] == 'paid')
 
     summary = {
         'total_sales': total_sales,
         'total_revenue': float(total_revenue),
-        'total_paid': float(total_paid),
-        'total_outstanding': float(total_outstanding),
         'total_profit': float(total_profit),
-        'unpaid_count': unpaid_count,
-        'partial_count': partial_count,
-        'paid_count': paid_count,
     }
 
     return JsonResponse({
@@ -563,27 +784,30 @@ def get_stock_history(request):
         start_date = None
         end_date = None
 
-    # Get stock addition history
-    from .models import StockAdditionHistory
+    # Get stock addition history with items
+    from .models import StockAdditionHistory, StockAdditionItem
     if start_date and end_date:
-        stock_history = StockAdditionHistory.objects.filter(
+        stock_additions = StockAdditionHistory.objects.filter(
             date_added__date__range=[start_date, end_date]
-        ).select_related('cheese_product__manufacturer', 'cheese_product__type', 'added_by__user')
+        ).prefetch_related('stockadditionitem_set__cheese_product__manufacturer', 'stockadditionitem_set__cheese_product__type', 'added_by__user')
     else:
-        stock_history = StockAdditionHistory.objects.all().select_related(
-            'cheese_product__manufacturer', 'cheese_product__type', 'added_by__user'
+        stock_additions = StockAdditionHistory.objects.all().prefetch_related(
+            'stockadditionitem_set__cheese_product__manufacturer', 'stockadditionitem_set__cheese_product__type', 'added_by__user'
         )
 
     stock_data = []
-    for stock_item in stock_history:
-        stock_data.append({
-            'id': stock_item.id,
-            'product_name': f"{stock_item.cheese_product.manufacturer.name} {stock_item.cheese_product.type.name} {stock_item.cheese_product.packet_size}kg",
-            'quantity_packets': float(stock_item.quantity_packets),
-            'date_added': stock_item.date_added.strftime('%Y-%m-%d %H:%M'),
-            'added_by': stock_item.added_by.user.username if stock_item.added_by else 'Unknown',
-            'modified': stock_item.modified,
-        })
+    for stock_addition in stock_additions:
+        for item in stock_addition.stockadditionitem_set.all():
+            stock_data.append({
+                'id': item.id,
+                'addition_id': stock_addition.id,
+                'product_name': f"{item.cheese_product.manufacturer.name} {item.cheese_product.type.name} {item.cheese_product.packet_size}kg",
+                'quantity_packets': float(item.quantity_packets),
+                'quantity_returned': float(item.quantity_returned),
+                'date_added': stock_addition.date_added.strftime('%Y-%m-%d %H:%M'),
+                'added_by': stock_addition.added_by.user.username if stock_addition.added_by else 'Unknown',
+                'modified': stock_addition.modified,
+            })
 
     # Sort by date descending
     stock_data.sort(key=lambda x: x['date_added'], reverse=True)
@@ -591,17 +815,20 @@ def get_stock_history(request):
     # Calculate summary stats
     total_stock_additions = len(stock_data)
     total_packets_added = sum(item['quantity_packets'] for item in stock_data)
+    total_packets_returned = sum(item['quantity_returned'] for item in stock_data)
 
     # Group by product for summary
     product_summary = {}
     for item in stock_data:
         if item['product_name'] not in product_summary:
-            product_summary[item['product_name']] = 0
-        product_summary[item['product_name']] += item['quantity_packets']
+            product_summary[item['product_name']] = {'added': 0, 'returned': 0}
+        product_summary[item['product_name']]['added'] += item['quantity_packets']
+        product_summary[item['product_name']]['returned'] += item['quantity_returned']
 
     summary = {
         'total_stock_additions': total_stock_additions,
         'total_packets_added': float(total_packets_added),
+        'total_packets_returned': float(total_packets_returned),
         'unique_products': len(product_summary),
         'product_summary': product_summary,
     }
@@ -610,99 +837,6 @@ def get_stock_history(request):
         'stock_history': stock_data,
         'summary': summary,
         'period': period
-    })
-
-
-@login_required
-def get_client_debt(request):
-    """AJAX endpoint to get client outstanding debt information"""
-    # Get all clients with their outstanding debt
-    clients = Client.objects.all()
-    client_debt_data = []
-    total_outstanding = Decimal('0.00')
-    
-    for client in clients:
-        # Get all sales for this client
-        client_sales = Sale.objects.filter(client=client)
-        
-        if client_sales.exists():
-            # Calculate totals
-            total_sales_amount = client_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-            total_amount_paid = client_sales.aggregate(total=Sum('amount_paid'))['total'] or Decimal('0.00')
-            
-            outstanding_amount = total_sales_amount - total_amount_paid
-            
-            if outstanding_amount > 0:
-                client_debt_data.append({
-                    'client_id': client.id,
-                    'client_name': client.name,
-                    'client_phone': client.phone,
-                    'total_sales': float(total_sales_amount),
-                    'total_paid': float(total_amount_paid),
-                    'outstanding_amount': float(outstanding_amount),
-                })
-                total_outstanding += outstanding_amount
-    
-    # Sort by outstanding amount descending
-    client_debt_data.sort(key=lambda x: x['outstanding_amount'], reverse=True)
-    
-    summary = {
-        'total_clients_with_debt': len(client_debt_data),
-        'total_outstanding_debt': float(total_outstanding),
-        'total_clients': Client.objects.count(),
-    }
-    
-    return JsonResponse({
-        'client_debt': client_debt_data,
-        'summary': summary,
-    })
-
-
-@login_required
-def client_debt_page(request):
-    """Dedicated page for viewing and managing client debt"""
-    clients = Client.objects.all()
-    user_is_owner = is_owner(request.user)
-    
-    # Get client debt data
-    client_debt_data = []
-    total_outstanding = Decimal('0.00')
-    
-    for client in clients:
-        # Get all sales for this client
-        client_sales = Sale.objects.filter(client=client)
-        
-        if client_sales.exists():
-            # Calculate totals
-            total_sales_amount = client_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-            total_amount_paid = client_sales.aggregate(total=Sum('amount_paid'))['total'] or Decimal('0.00')
-            
-            outstanding_amount = total_sales_amount - total_amount_paid
-            
-            if outstanding_amount > 0:
-                client_debt_data.append({
-                    'client_id': client.id,
-                    'client_name': client.name,
-                    'client_phone': client.phone,
-                    'total_sales': total_sales_amount,
-                    'total_paid': total_amount_paid,
-                    'outstanding_amount': outstanding_amount,
-                })
-                total_outstanding += outstanding_amount
-    
-    # Sort by outstanding amount descending
-    client_debt_data.sort(key=lambda x: x['outstanding_amount'], reverse=True)
-    
-    summary = {
-        'total_clients_with_debt': len(client_debt_data),
-        'total_outstanding_debt': total_outstanding,
-        'total_clients': Client.objects.count(),
-    }
-    
-    return render(request, 'distribution/client_debt.html', {
-        'client_debt_data': client_debt_data,
-        'summary': summary,
-        'user_is_owner': user_is_owner,
     })
 
 
@@ -729,26 +863,56 @@ def inventory_management(request):
     cheese_types = CheeseType.objects.all()
     # Calculate stock value for each product
     products_with_value = []
+    total_stock_quantity = Decimal('0.00')
+    low_stock_products = []
+    
     for product in products:
         stock_value = product.available_quantity_packets * product.purchase_price_per_packet
+        total_stock_quantity += product.available_quantity_packets
         products_with_value.append({
             'product': product,
             'stock_value': stock_value
         })
+        # Track low stock products (less than 10 packets)
+        if product.available_quantity_packets < 10:
+            low_stock_products.append({
+                'product': product,
+                'stock_value': stock_value,
+                'quantity': product.available_quantity_packets
+            })
+    
+    # Sort low stock products by quantity (lowest first)
+    low_stock_products.sort(key=lambda x: x['quantity'])
 
-    from .forms import ManufacturerForm, CheeseProductForm
+    from .forms import ManufacturerForm, CheeseProductForm, SaleItemFormSet
     manufacturer_form = ManufacturerForm()
     cheese_product_form = CheeseProductForm()
     cheese_type_form = CheeseTypeForm()
     add_stock_formset = AddStockFormSet()
+    sale_item_formset = SaleItemFormSet()
+    
+    inventory_summary = {
+        'total_products': len(products),
+        'total_stock_quantity': float(total_stock_quantity),
+        'low_stock_count': len(low_stock_products),
+    }
+    
+    user_is_owner = is_owner(request.user)
+    
     return render(request, 'distribution/inventory/management.html', {
         'manufacturers': manufacturers,
         'products_with_value': products_with_value,
+        'products': products,
         'manufacturer_form': manufacturer_form,
         'cheese_product_form': cheese_product_form,
         'cheese_type_form': cheese_type_form,
         'add_stock_formset': add_stock_formset,
+        'formset': sale_item_formset,
         'cheese_types': cheese_types,
+        'low_stock_products': low_stock_products,
+        'inventory_summary': inventory_summary,
+        'clients': Client.objects.all(),
+        'user_is_owner': user_is_owner,
     })
 
 
@@ -768,12 +932,12 @@ def manufacturer_add(request):
             if 'name' in form.errors:
                 error_msg = form.errors['name'][0]
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                html = render_to_string('distribution/partials/edit_manufacturer_form.html', {'form': form}, request=request)
+                html = render_to_string('distribution/inventory/partials/partial_edit_manufacturer_form.html', {'form': form}, request=request)
                 return JsonResponse({'success': False, 'html': html, 'error': error_msg})
     else:
         form = ManufacturerForm()
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        html = render_to_string('distribution/partials/edit_manufacturer_form.html', {'form': form}, request=request)
+        html = render_to_string('distribution/inventory/partials/partial_edit_manufacturer_form.html', {'form': form}, request=request)
         return JsonResponse({'success': False, 'html': html})
     return render(request, 'distribution/manufacturer_form.html', {'form': form, 'title': 'Add Manufacturer'})
 
@@ -787,13 +951,13 @@ def manufacturer_edit(request, pk):
             form.save()
             SiteActivity.update_activity(f'Manufacturer updated: {manufacturer.name}')
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return render(request, 'distribution/partials/edit_success.html', {'object': manufacturer, 'type': 'manufacturer'})
+                return render(request, 'distribution/shared/partial_edit_success.html', {'object': manufacturer, 'type': 'manufacturer'})
             messages.success(request, 'Manufacturer updated successfully.')
             return redirect('inventory_management')
     else:
         form = ManufacturerForm(instance=manufacturer)
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        html = render_to_string('distribution/partials/edit_manufacturer_form.html', {'form': form, 'manufacturer': manufacturer}, request=request)
+        html = render_to_string('distribution/inventory/partials/partial_edit_manufacturer_form.html', {'form': form, 'manufacturer': manufacturer}, request=request)
         return JsonResponse({'html': html})
     return render(request, 'distribution/manufacturer_form.html', {'form': form, 'title': 'Edit Manufacturer'})
 
@@ -834,12 +998,12 @@ def cheese_add(request):
             if form.errors:
                 error_msg = list(form.errors.values())[0][0]
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                html = render_to_string('distribution/partials/edit_cheese_form.html', {'form': form}, request=request)
+                html = render_to_string('distribution/inventory/partials/partial_edit_cheese_form.html', {'form': form}, request=request)
                 return JsonResponse({'success': False, 'html': html, 'error': error_msg})
     else:
         form = CheeseProductForm()
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        html = render_to_string('distribution/partials/edit_cheese_form.html', {'form': form}, request=request)
+        html = render_to_string('distribution/inventory/partials/partial_edit_cheese_form.html', {'form': form}, request=request)
         return JsonResponse({'success': False, 'html': html})
     return render(request, 'distribution/cheese_form.html', {'form': form, 'title': 'Add Cheese Product'})
 
@@ -852,13 +1016,13 @@ def cheese_edit(request, pk):
         if form.is_valid():
             form.save()
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return render(request, 'distribution/partials/edit_success.html', {'object': product, 'type': 'cheese'})
+                return render(request, 'distribution/shared/partial_edit_success.html', {'object': product, 'type': 'cheese'})
             messages.success(request, 'Cheese product updated successfully.')
             return redirect('inventory_management')
     else:
         form = CheeseProductForm(instance=product)
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        html = render_to_string('distribution/partials/edit_cheese_form.html', {'form': form, 'product': product}, request=request)
+        html = render_to_string('distribution/inventory/partials/partial_edit_cheese_form.html', {'form': form, 'product': product}, request=request)
         return JsonResponse({'html': html})
     return render(request, 'distribution/cheese_form.html', {'form': form, 'title': 'Edit Cheese Product'})
 
@@ -875,6 +1039,7 @@ def cheese_delete(request, pk):
 
 @login_required
 def add_stock(request):
+    from .models import StockAdditionItem
     if request.method == 'POST':
         formset = AddStockFormSet(request.POST)
         if formset.is_valid():
@@ -883,6 +1048,11 @@ def add_stock(request):
             if not valid_forms:
                 return JsonResponse({'success': False, 'error': 'Please add at least one stock item.'})
 
+            # Create a single stock addition event
+            stock_addition = StockAdditionHistory.objects.create(
+                added_by=request.user.userprofile
+            )
+            
             stock_added = []
             for form in valid_forms:
                 cheese_product = form.cleaned_data['cheese_product']
@@ -894,10 +1064,10 @@ def add_stock(request):
                 cheese_product.purchase_price_per_packet = purchase_price_per_packet
                 cheese_product.save()
 
-                # Create stock addition history
-                StockAdditionHistory.objects.create(
+                # Create stock addition item
+                StockAdditionItem.objects.create(
+                    stock_addition=stock_addition,
                     cheese_product=cheese_product,
-                    added_by=request.user.userprofile,
                     quantity_packets=quantity_packets
                 )
 
@@ -911,7 +1081,7 @@ def add_stock(request):
     else:
         formset = AddStockFormSet()
 
-    html = render_to_string('distribution/partials/add_stock_form.html', {'formset': formset}, request=request)
+    html = render_to_string('distribution/inventory/partials/partial_add_stock_form.html', {'formset': formset}, request=request)
     return JsonResponse({'html': html})
 
 
@@ -967,7 +1137,7 @@ def quick_sale_create(request):
     else:
         formset = SaleItemFormSet()
 
-    html = render_to_string('distribution/partials/quick_sale_form.html', {
+    html = render_to_string('distribution/sales/partials/partial_quick_sale_form.html', {
         'formset': formset,
         'clients': Client.objects.all()
     }, request=request)
@@ -979,60 +1149,13 @@ def client_list(request):
     clients = Client.objects.all()
     user_is_owner = is_owner(request.user)
 
-    # Calculate outstanding dues for each client
-    clients_with_dues = []
-    for client in clients:
-        # Get all sales for this client
-        client_sales = Sale.objects.filter(client=client)
-
-        if client_sales.exists():
-            # Calculate totals
-            total_sales_amount = client_sales.aggregate(
-                total=Sum('total_amount')
-            )['total'] or Decimal('0.00')
-
-            total_amount_paid = client_sales.aggregate(
-                total=Sum('amount_paid')
-            )['total'] or Decimal('0.00')
-
-            outstanding_amount = total_sales_amount - total_amount_paid
-
-            # Get unique payment methods used by this client
-            payment_methods = client_sales.exclude(payment_method__isnull=True).exclude(payment_method='').values_list('payment_method', flat=True).distinct()
-
-            clients_with_dues.append({
-                'client': client,
-                'outstanding_dues': outstanding_amount,
-                'payment_methods': list(payment_methods),
-                'total_sales': total_sales_amount,
-                'total_paid': total_amount_paid,
-            })
-        else:
-            # Client with no sales
-            clients_with_dues.append({
-                'client': client,
-                'outstanding_dues': Decimal('0.00'),
-                'payment_methods': [],
-                'total_sales': Decimal('0.00'),
-                'total_paid': Decimal('0.00'),
-            })
-
     from .forms import ClientForm
     client_form = ClientForm()
-    # Calculate debt summary for merged view
-    total_outstanding = sum([c['outstanding_dues'] for c in clients_with_dues if c['outstanding_dues'] > 0])
-    total_clients_with_debt = sum([1 for c in clients_with_dues if c['outstanding_dues'] > 0])
-    total_clients = len(clients_with_dues)
-    summary = {
-        'total_clients_with_debt': total_clients_with_debt,
-        'total_outstanding_debt': total_outstanding,
-        'total_clients': total_clients,
-    }
+    
     return render(request, 'distribution/clients/clients.html', {
-        'clients_with_dues': clients_with_dues,
+        'clients': clients,
         'user_is_owner': user_is_owner,
         'client_form': client_form,
-        'summary': summary,
     })
 
 
@@ -1059,13 +1182,13 @@ def client_edit(request, pk):
             form.save()
             SiteActivity.update_activity(f'Client updated: {client.name}')
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return render(request, 'distribution/partials/edit_success.html', {'object': client, 'type': 'client'})
+                return render(request, 'distribution/shared/partial_edit_success.html', {'object': client, 'type': 'client'})
             messages.success(request, 'Client updated successfully.')
             return redirect('client_list')
     else:
         form = ClientForm(instance=client)
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        return render(request, 'distribution/partials/edit_client_form.html', {'form': form, 'client': client})
+        return render(request, 'distribution/clients/partials/partial_edit_client_form.html', {'form': form, 'client': client})
     return render(request, 'distribution/client_form.html', {'form': form, 'title': 'Edit Client'})
 
 
@@ -1085,17 +1208,6 @@ def client_delete(request, pk):
 def sale_create(request):
     if request.method == 'POST':
         client_id = request.POST.get('client')
-        payment_method = request.POST.get('payment_method')
-        amount_paid_str = request.POST.get('amount_paid', '0').strip()
-        
-        # Convert amount_paid to Decimal with proper quantization
-        try:
-            if amount_paid_str:
-                amount_paid = Decimal(amount_paid_str).quantize(Decimal('0.01'))
-            else:
-                amount_paid = Decimal('0.00')
-        except:
-            amount_paid = Decimal('0.00')
 
         if not client_id:
             messages.error(request, 'Please select a client.')
@@ -1150,12 +1262,8 @@ def sale_create(request):
 
                     total_amount += selling_price_per_packet * quantity_packets
 
-                # Update sale with payment information
+                # Update sale with total amount
                 sale.total_amount = total_amount
-                sale.amount_paid = amount_paid
-                if payment_method:
-                    sale.payment_method = payment_method
-                sale.update_payment_status()
                 sale.save()
                 SiteActivity.update_activity(f'Sale created for {client.name}')
 
@@ -1204,7 +1312,7 @@ def sale_history(request):
 
 @owner_required
 def add_payment(request):
-    """Record a client payment and apply it to the client's oldest unpaid sales."""
+    """Record a client payment."""
     if request.method == 'POST':
         form = PaymentForm(request.POST)
         if form.is_valid():
@@ -1213,38 +1321,9 @@ def add_payment(request):
             mode = form.cleaned_data['mode']
             bank = form.cleaned_data.get('bank') or ''
 
-            remaining = Decimal(amount)
-
-            # Apply payments to the client's sales in chronological order.
-            sales = Sale.objects.filter(client=client).order_by('sale_date', 'id')
-            for sale in sales:
-                outstanding = sale.get_outstanding_amount()
-                if outstanding <= 0:
-                    continue
-
-                apply_amount = min(outstanding, remaining)
-                if apply_amount <= 0:
-                    continue
-
-                sale.amount_paid = sale.amount_paid + apply_amount
-                sale.payment_date = timezone.now()
-                sale.payment_method = 'online_banking' if mode == 'online' else 'cash'
-
-                # Update payment status manually (avoid calling Sale.update_payment_status()).
-                if sale.amount_paid == 0:
-                    sale.payment_status = 'unpaid'
-                elif sale.amount_paid >= sale.total_amount:
-                    sale.payment_status = 'paid'
-                else:
-                    sale.payment_status = 'partial'
-
-                sale.save()
-                remaining -= apply_amount
-                if remaining <= 0:
-                    break
-
+            # Record payment - debt is calculated at query time
             Payment.objects.create(client=client, amount=amount, mode=mode, bank=bank)
-            SiteActivity.update_activity(f'Payment of {amount} recorded for {client.name}')
+            SiteActivity.update_activity(f'Payment of PKR {amount} recorded for {client.name}')
             messages.success(request, 'Payment recorded successfully.')
             return redirect('payment_history')
     else:
@@ -1254,10 +1333,10 @@ def add_payment(request):
 
 
 @login_required
-@login_required
 def payment_history(request):
     payments = Payment.objects.select_related('client').all().order_by('-date')
-    return render(request, 'distribution/clients/payment_history.html', {'payments': payments})
+    clients = Client.objects.all()
+    return render(request, 'distribution/clients/payment_history.html', {'payments': payments, 'clients': clients})
 
 
 @login_required
@@ -1336,7 +1415,7 @@ def employee_edit(request, pk):
     else:
         form = DeliveryEmployeeForm(instance=employee)
 
-    return render(request, 'distribution/partials/edit_employee_form.html', {
+    return render(request, 'distribution/expenses/partials/partial_edit_employee_form.html', {
         'employee': employee,
         'form': form,
     })
@@ -1398,7 +1477,7 @@ def expense_edit(request, pk):
     else:
         form = DeliveryExpenseForm(instance=expense)
 
-    return render(request, 'distribution/partials/edit_expense_form.html', {
+    return render(request, 'distribution/expenses/partials/partial_edit_expense_form.html', {
         'expense': expense,
         'form': form,
     })
@@ -1426,30 +1505,6 @@ def sale_detail(request, pk):
         'sale_items': sale_items,
         'total_profit': total_profit
     })
-
-
-@login_required
-def setup_owner(request):
-    """Setup page to make first user owner if no owners exist"""
-    # Check if any owner exists
-    owners = UserProfile.objects.filter(role='owner')
-    if owners.exists():
-        messages.info(request, 'An owner already exists. Please contact them to change your role.')
-        return redirect('dashboard')
-    
-    # If current user doesn't have profile, create one
-    try:
-        profile = UserProfile.objects.get(user=request.user)
-    except UserProfile.DoesNotExist:
-        profile = UserProfile.objects.create(user=request.user, role='employee')
-    
-    if request.method == 'POST':
-        profile.role = 'owner'
-        profile.save()
-        messages.success(request, 'You have been set as the owner. You now have full access to all features!')
-        return redirect('user_list')
-    
-    return render(request, 'distribution/setup_owner.html', {'user': request.user})
 
 
 @owner_required

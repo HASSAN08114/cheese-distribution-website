@@ -3,138 +3,172 @@
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
-<div class="dashboard-header bg-primary text-white py-4 mb-4">
-    <div class="container-fluid">
-        <div class="row align-items-center">
-            <div class="col-md-8">
-                <h2 class="mb-1"><i class="bi bi-bar-chart-line-fill"></i> Business Analytics Dashboard</h2>
-                <p class="mb-0 opacity-85">Monitor your cheese distribution business performance</p>
-            </div>
-            <div class="col-md-4 text-end">
-                <div class="text-white-50">
-                    {% if last_activity %}
-                        <small>Last activity: {{ last_activity.last_activity_time|date:"M d, Y H:i" }}</small>
-                        <br>
-                        <small style="font-size: 0.85rem;">{{ last_activity.last_activity_description }}</small>
-                    {% else %}
-                        <small>No activity recorded yet</small>
-                    {% endif %}
-                </div>
-            </div>
+<div style="padding: 1.5rem 0;">
+    <div class="row align-items-center mb-4">
+        <div class="col-md-8">
+            <h1 style="font-size: 2rem; font-weight: 700; color: var(--text-primary); margin: 0;">Business Analytics</h1>
+            <p style="color: var(--text-secondary); font-size: 0.95rem; margin: 0.5rem 0 0 0;">Monitor your cheese distribution business</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <small style="color: var(--text-secondary);">
+                {% if last_activity %}
+                    <strong>Last Activity:</strong> {{ last_activity.last_activity_time|date:"M d, Y H:i" }}<br>
+                    {{ last_activity.last_activity_description }}
+                {% else %}
+                    <span>No activity recorded yet</span>
+                {% endif %}
+            </small>
         </div>
     </div>
-</div>
 
-<!-- Time Period Filters -->
-<div class="card mb-4">
-    <div class="card-header">
-        <h6 class="mb-0">Time Period Filters</h6>
-    </div>
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-12">
-                <div class="btn-group flex-wrap" role="group" aria-label="Time period filters">
-                    <button type="button" class="btn btn-outline-primary active" data-period="all">
-                        All Time
-                    </button>
-                    <button type="button" class="btn btn-outline-primary" data-period="today">
-                        Today
-                    </button>
-                    <button type="button" class="btn btn-outline-primary" data-period="week">
-                        Last 7 Days
-                    </button>
-                    <button type="button" class="btn btn-outline-primary" data-period="month">
-                        Last 30 Days
-                    </button>
-                    <button type="button" class="btn btn-outline-primary" data-period="quarter">
-                        Last 90 Days
-                    </button>
-                    <button type="button" class="btn btn-outline-primary" data-period="6months">
-                        Last 6 Months
-                    </button>
-                    <button type="button" class="btn btn-outline-primary" data-period="year">
-                        Last Year
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 
-<!-- Payment Status Overview -->
-<div class="row mb-4">
-    <div class="col-md-9">
-        <div class="card shadow-lg border-0">
-            <div class="card-header bg-secondary text-white">
-                <h6 class="mb-0"><i class="bi bi-credit-card-fill"></i> Payment Status Overview</h6>
+    <div class="row mb-4 g-3">
+        <div class="col-md-4">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle mb-2 text-success fw-semibold">Total Paid</h6>
+                    <h3 class="card-text mb-0 text-success fw-bold" id="total-paid-amount">PKR 0.00</h3>
+                </div>
             </div>
-            <div class="card-body">
-                <div class="row text-center">
-                    <div class="col-md-3 mb-3">
-                        <div class="bg-light border shadow-sm p-3 rounded">
-                            <div class="text-danger mb-2">
-                                <i class="bi bi-exclamation-circle-fill fs-4"></i>
-                            </div>
-                            <h4 class="text-danger mb-1 fw-bold" id="unpaid-count">0</h4>
-                            <small class="text-muted fw-semibold">Unpaid Sales</small>
-                        </div>
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <div class="bg-light border shadow-sm p-3 rounded">
-                            <div class="text-warning mb-2">
-                                <i class="bi bi-clock-fill fs-4"></i>
-                            </div>
-                            <h4 class="text-warning mb-1 fw-bold" id="partial-count">0</h4>
-                            <small class="text-muted fw-semibold">Partial Payments</small>
-                        </div>
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <div class="bg-light border shadow-sm p-3 rounded">
-                            <div class="text-success mb-2">
-                                <i class="bi bi-check-circle-fill fs-4"></i>
-                            </div>
-                            <h4 class="text-success mb-1 fw-bold" id="paid-count">0</h4>
-                            <small class="text-muted fw-semibold">Fully Paid</small>
-                        </div>
-                    </div>
-                    <div class="col-md-3 mb-3">
-                        <div class="bg-light border shadow-sm p-3 rounded">
-                            <div class="text-primary mb-2">
-                                <i class="bi bi-cash-stack fs-4"></i>
-                            </div>
-                            <h4 class="text-primary mb-1 fw-bold" id="total-outstanding">PKR 0.00</h4>
-                            <small class="text-muted fw-semibold">Total Outstanding</small>
-                        </div>
-                    </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle mb-2 text-danger fw-semibold">Total Unpaid Debt</h6>
+                    <h3 class="card-text mb-0 text-danger fw-bold" id="total-unpaid-amount">PKR 0.00</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle mb-2 text-muted fw-semibold">Stock Value</h6>
+                    <h3 class="card-text mb-0 text-success fw-bold" id="total-stock-value">PKR 0.00</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle mb-2 text-muted fw-semibold">Total Clients</h6>
+                    <h3 class="card-text mb-0 text-primary fw-bold" id="total-clients-overview">0</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle mb-2 text-muted fw-semibold">Total Products</h6>
+                    <h3 class="card-text mb-0 text-info fw-bold" id="total-products-overview">0</h3>
                 </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card shadow-lg border-0 bg-light h-100">
-            <div class="card-body text-center d-flex flex-column justify-content-center align-items-center">
-                <div class="text-danger mb-2">
-                    <i class="bi bi-cash-coin fs-1"></i>
+
+    <!-- Time Period Filter -->
+    <div style="background: white; padding: 1rem; border-radius: 8px; display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);">
+        <span style="color: var(--text-secondary); font-weight: 600; margin-right: 1rem; align-self: center;">Filter by Period:</span>
+        <button type="button" class="btn btn-sm active" data-period="all">All Time</button>
+        <button type="button" class="btn btn-sm" data-period="today">Today</button>
+        <button type="button" class="btn btn-sm" data-period="week">Last 7 Days</button>
+        <button type="button" class="btn btn-sm" data-period="month">Last 30 Days</button>
+        <button type="button" class="btn btn-sm" data-period="quarter">Last 90 Days</button>
+        <button type="button" class="btn btn-sm" data-period="6months">Last 6 Months</button>
+        <button type="button" class="btn btn-sm" data-period="year">Last Year</button>
+    </div>
+
+    <!-- Period-Based Metrics Section -->
+    <div class="row mb-4 g-3" id="period-metrics-cards">
+        <div class="col-md-3">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle mb-2 text-muted fw-semibold">Total Revenue</h6>
+                    <h3 class="card-text mb-0 text-primary fw-bold" id="total-revenue">PKR 0.00</h3>
                 </div>
-                <h6 class="card-subtitle mb-2 text-muted fw-semibold">Today's Expenses</h6>
-                <h3 class="card-text mb-0 text-dark fw-bold">PKR {{ daily_expenses|floatformat:2 }}</h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle mb-2 text-muted fw-semibold">Total Profit</h6>
+                    <h3 class="card-text mb-0 text-success fw-bold" id="total-profit">PKR 0.00</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle mb-2 text-muted fw-semibold">Total Expenses</h6>
+                    <h3 class="card-text mb-0 text-danger fw-bold" id="total-expenses">PKR 0.00</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle mb-2 text-muted fw-semibold">Net Profit</h6>
+                    <h3 class="card-text mb-0 text-info fw-bold" id="net-profit">PKR 0.00</h3>
+                </div>
             </div>
         </div>
     </div>
-</div>
+
+    <!-- Additional Period Metrics -->
+    <div class="row mb-4 g-3">
+        <div class="col-md-2">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle mb-2 text-muted fw-semibold">Total Sales</h6>
+                    <h3 class="card-text mb-0 text-dark fw-bold" id="total-sales-count">0</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle mb-2 text-muted fw-semibold">Avg Sale Value</h6>
+                    <h3 class="card-text mb-0 text-dark fw-bold" id="avg-sale-value">PKR 0.00</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle mb-2 text-muted fw-semibold">Active Clients</h6>
+                    <h3 class="card-text mb-0 text-dark fw-bold" id="active-clients">0</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle mb-2 text-muted fw-semibold">Items Sold</h6>
+                    <h3 class="card-text mb-0 text-dark fw-bold" id="total-items-sold">0</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle mb-2 text-muted fw-semibold">Profit Margin</h6>
+                    <h3 class="card-text mb-0 text-dark fw-bold" id="profit-margin">0%</h3>
+                </div>
+            </div>
+        </div>
+    </div>
 
 <!-- Analytics Tabs -->
-<div class="card shadow-lg border-0 mb-4">
+<div class="card mb-4">
     <div class="card-header bg-light border-bottom">
         <ul class="nav nav-tabs card-header-tabs" id="analyticsTabs" role="tablist">
             <li class="nav-item" role="presentation">
                 <button class="nav-link active text-primary fw-bold border-0" id="clients-tab" data-bs-toggle="tab" data-bs-target="#clients" type="button" role="tab">
-                    <i class="bi bi-people-fill"></i> Client Analytics
+                    Client Analytics
                 </button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link text-muted fw-bold border-0" id="products-tab" data-bs-toggle="tab" data-bs-target="#products" type="button" role="tab">
-                    <i class="bi bi-box-seam-fill"></i> Product Analytics
+                    Product Analytics
                 </button>
             </li>
         </ul>
@@ -144,62 +178,14 @@
         <div class="tab-content" id="analyticsTabsContent">
     <!-- Client Analytics Tab -->
     <div class="tab-pane fade show active" id="clients" role="tabpanel">
-        <!-- Client Summary Cards -->
-        <div class="row mb-4" id="client-summary-cards">
-            <div class="col-md-3 mb-3">
-                <div class="card shadow-lg border-0 bg-light">
-                    <div class="card-body text-center">
-                        <div class="text-primary mb-2">
-                            <i class="bi bi-cash-stack fs-1"></i>
-                        </div>
-                        <h6 class="card-subtitle mb-2 text-muted fw-semibold">Total Revenue</h6>
-                        <h3 class="card-text mb-0 text-dark fw-bold" id="client-total-revenue">PKR 0.00</h3>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3 mb-3">
-                <div class="card shadow-lg border-0 bg-light">
-                    <div class="card-body text-center">
-                        <div class="text-success mb-2">
-                            <i class="bi bi-graph-up-arrow fs-1"></i>
-                        </div>
-                        <h6 class="card-subtitle mb-2 text-muted fw-semibold">Total Profit</h6>
-                        <h3 class="card-text mb-0 text-dark fw-bold" id="client-total-profit">PKR 0.00</h3>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3 mb-3">
-                <div class="card shadow-lg border-0 bg-light">
-                    <div class="card-body text-center">
-                        <div class="text-info mb-2">
-                            <i class="bi bi-people-fill fs-1"></i>
-                        </div>
-                        <h6 class="card-subtitle mb-2 text-muted fw-semibold">Total Clients</h6>
-                        <h3 class="card-text mb-0 text-dark fw-bold" id="client-total-clients">0</h3>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3 mb-3">
-                <div class="card shadow-lg border-0 bg-light">
-                    <div class="card-body text-center">
-                        <div class="text-secondary mb-2">
-                            <i class="bi bi-person-lines-fill fs-1"></i>
-                        </div>
-                        <h6 class="card-subtitle mb-2 text-muted fw-semibold">Avg Client Value</h6>
-                        <h3 class="card-text mb-0 text-dark fw-bold" id="client-avg-client-value">PKR 0.00</h3>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Client Analytics Table -->
-        <div class="card shadow-lg border-0">
+        <div class="card">
             <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
-                <h6 class="mb-0"><i class="bi bi-table"></i> Client Performance Analytics</h6>
+                <h6 class="mb-0">Client Performance Analytics</h6>
                 <div class="d-flex gap-2">
-                    <input type="text" class="form-control form-control-sm bg-white border-0" id="client-search" placeholder="Search clients..." style="width: 250px;">
+                    <input type="text" class="form-control form-control-sm bg-white border width-search-sm" id="client-search" placeholder="Search clients...">
                     <button type="button" class="btn btn-sm btn-light text-secondary fw-semibold" id="client-export-btn">
-                        <i class="bi bi-download"></i> Export
+                        Export
                     </button>
                 </div>
             </div>
@@ -208,13 +194,13 @@
                     <table class="table table-hover" id="client-analytics-table">
                         <thead class="table-light">
                             <tr>
-                                <th><i class="bi bi-person"></i> Client Name</th>
-                                <th><i class="bi bi-telephone"></i> Phone</th>
-                                <th><i class="bi bi-receipt"></i> Total Sales</th>
-                                <th><i class="bi bi-graph-up"></i> Total Profit</th>
-                                <th><i class="bi bi-hash"></i> Transactions</th>
-                                <th><i class="bi bi-calculator"></i> Avg Sale</th>
-                                <th><i class="bi bi-calendar-event"></i> Last Sale</th>
+                                <th>Client Name</th>
+                                <th>Phone</th>
+                                <th>Total Sales</th>
+                                <th>Total Profit</th>
+                                <th>Transactions</th>
+                                <th>Avg Sale</th>
+                                <th>Last Sale</th>
                             </tr>
                         </thead>
                         <tbody id="client-table-body">
@@ -236,60 +222,12 @@
 
     <!-- Product Analytics Tab -->
     <div class="tab-pane fade" id="products" role="tabpanel">
-        <!-- Product Summary Cards -->
-        <div class="row mb-4" id="product-summary-cards">
-            <div class="col-md-3 mb-3">
-                <div class="card shadow-lg border-0 bg-light">
-                    <div class="card-body text-center">
-                        <div class="text-primary mb-2">
-                            <i class="bi bi-cash-stack fs-1"></i>
-                        </div>
-                        <h6 class="card-subtitle mb-2 text-muted fw-semibold">Total Revenue</h6>
-                        <h3 class="card-text mb-0 text-dark fw-bold" id="product-total-revenue">PKR 0.00</h3>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3 mb-3">
-                <div class="card shadow-lg border-0 bg-light">
-                    <div class="card-body text-center">
-                        <div class="text-success mb-2">
-                            <i class="bi bi-graph-up-arrow fs-1"></i>
-                        </div>
-                        <h6 class="card-subtitle mb-2 text-muted fw-semibold">Total Profit</h6>
-                        <h3 class="card-text mb-0 text-dark fw-bold" id="product-total-profit">PKR 0.00</h3>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3 mb-3">
-                <div class="card shadow-lg border-0 bg-light">
-                    <div class="card-body text-center">
-                        <div class="text-info mb-2">
-                            <i class="bi bi-box-seam-fill fs-1"></i>
-                        </div>
-                        <h6 class="card-subtitle mb-2 text-muted fw-semibold">Items Sold</h6>
-                        <h3 class="card-text mb-0 text-dark fw-bold" id="product-total-quantity">0</h3>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3 mb-3">
-                <div class="card shadow-lg border-0 bg-light">
-                    <div class="card-body text-center">
-                        <div class="text-warning mb-2">
-                            <i class="bi bi-exclamation-triangle-fill fs-1"></i>
-                        </div>
-                        <h6 class="card-subtitle mb-2 text-muted fw-semibold">Low Stock Alerts</h6>
-                        <h3 class="card-text mb-0 text-dark fw-bold" id="low-stock-count">0</h3>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Top/Bottom Performers -->
-        <div class="row mb-4">
+        <div class="row mb-4 p-4">
             <div class="col-md-6">
-                <div class="card shadow-lg border-0">
+                <div class="card">
                     <div class="card-header bg-primary text-white">
-                        <h6 class="mb-0"><i class="bi bi-trophy-fill"></i> Top 5 Best-Selling Products</h6>
+                        <h6 class="mb-0">Top 5 Best-Selling Products</h6>
                     </div>
                     <div class="card-body">
                         <div id="top-performers-list">
@@ -303,9 +241,9 @@
                 </div>
             </div>
             <div class="col-md-6">
-                <div class="card shadow-lg border-warning">
+                <div class="card">
                     <div class="card-header bg-warning text-dark">
-                        <h6 class="mb-0"><i class="bi bi-arrow-down-circle-fill"></i> Bottom 5 Least-Selling Products</h6>
+                        <h6 class="mb-0">Bottom 5 Least-Selling Products</h6>
                     </div>
                     <div class="card-body">
                         <div id="bottom-performers-list">
@@ -321,13 +259,13 @@
         </div>
 
         <!-- Product Analytics Table -->
-        <div class="card shadow-lg border-0">
+        <div class="card">
             <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-                <h6 class="mb-0"><i class="bi bi-table"></i> Product Performance Analytics</h6>
+                <h6 class="mb-0">Product Performance Analytics</h6>
                 <div class="d-flex gap-2">
-                    <input type="text" class="form-control form-control-sm bg-white" id="product-search" placeholder="Search products..." style="width: 250px;">
+                    <input type="text" class="form-control form-control-sm bg-white width-search-sm" id="product-search" placeholder="Search products...">
                     <button type="button" class="btn btn-sm btn-light text-dark" id="product-export-btn">
-                        <i class="bi bi-download"></i> Export
+                        Export
                     </button>
                 </div>
             </div>
@@ -336,14 +274,14 @@
                     <table class="table table-hover" id="product-analytics-table">
                         <thead class="table-light">
                             <tr>
-                                <th><i class="bi bi-box"></i> Product Name</th>
-                                <th><i class="bi bi-hash"></i> Quantity Sold</th>
-                                <th><i class="bi bi-currency-dollar"></i> Revenue</th>
-                                <th><i class="bi bi-graph-up"></i> Profit</th>
-                                <th><i class="bi bi-percent"></i> Margin</th>
-                                <th><i class="bi bi-package"></i> Current Stock</th>
-                                <th><i class="bi bi-arrow-repeat"></i> Turnover</th>
-                                <th><i class="bi bi-receipt"></i> Transactions</th>
+                                <th>Product Name</th>
+                                <th>Quantity Sold</th>
+                                <th>Revenue</th>
+                                <th>Profit</th>
+                                <th>Margin</th>
+                                <th>Current Stock</th>
+                                <th>Turnover</th>
+                                <th>Transactions</th>
                             </tr>
                         </thead>
                         <tbody id="product-table-body">
@@ -365,8 +303,6 @@
     </div>
 </div>
 
-<!-- Your Role Card -->
-
 {% endblock %}
 
 {% block extra_js %}
@@ -377,6 +313,8 @@ document.addEventListener('DOMContentLoaded', function() {
     let allProductData = [];
 
     // Load initial data
+    loadDashboardOverview();
+    loadGeneralMetrics('all');
     loadClientAnalytics('all');
     loadProductAnalytics('all');
 
@@ -386,17 +324,28 @@ document.addEventListener('DOMContentLoaded', function() {
             // Remove active class from all buttons
             document.querySelectorAll('[data-period]').forEach(btn => {
                 btn.classList.remove('active');
+                btn.style.background = 'white';
+                btn.style.color = 'var(--text-primary)';
+                btn.style.border = '1px solid var(--border)';
             });
 
             // Add active class to clicked button
             this.classList.add('active');
+            this.style.background = 'var(--primary)';
+            this.style.color = 'white';
+            this.style.border = '1px solid var(--primary)';
 
-            // Load data for selected period for both tabs
+            // Load data for selected period
             currentPeriod = this.dataset.period;
+            loadGeneralMetrics(currentPeriod);
             loadClientAnalytics(currentPeriod);
             loadProductAnalytics(currentPeriod);
         });
     });
+
+    // Initialize first active button styling
+    document.querySelector('[data-period="all"]').style.background = 'var(--primary)';
+    document.querySelector('[data-period="all"]').style.color = 'white';
 
     // Tab switching - load data when switching to product tab
     document.getElementById('products-tab').addEventListener('shown.bs.tab', function() {
@@ -417,6 +366,32 @@ document.addEventListener('DOMContentLoaded', function() {
         filterProducts(searchTerm);
     });
 
+    function loadGeneralMetrics(period) {
+        fetch(`/api/general-metrics/?period=${period}`, {
+            credentials: 'include'
+        })
+            .then(response => response.json())
+            .then(data => {
+                updateGeneralMetricsCards(data.summary);
+            })
+            .catch(error => {
+                console.error('Error loading general metrics:', error);
+            });
+    }
+
+    function loadDashboardOverview() {
+        fetch(`/api/dashboard-overview/`, {
+            credentials: 'include'
+        })
+            .then(response => response.json())
+            .then(data => {
+                updateDashboardOverviewCards(data.summary);
+            })
+            .catch(error => {
+                console.error('Error loading dashboard overview:', error);
+            });
+    }
+
     function loadClientAnalytics(period) {
         fetch(`/api/client-analytics/?period=${period}`, {
             credentials: 'include'
@@ -424,8 +399,6 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 allClientData = data.clients;
-                updateClientSummaryCards(data.summary);
-                updatePaymentStatusCards(data.summary);
                 renderClientTable(data.clients);
             })
             .catch(error => {
@@ -433,7 +406,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('client-table-body').innerHTML = `
                     <tr>
                         <td colspan="7" class="text-center text-danger py-4">
-                            <i class="bi bi-exclamation-triangle"></i>
                             Error loading client data. Please try again.
                         </td>
                     </tr>
@@ -448,7 +420,6 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 allProductData = data.products;
-                updateProductSummaryCards(data.summary);
                 renderProductTable(data.products);
                 renderTopPerformers(data.top_performers);
                 renderBottomPerformers(data.bottom_performers);
@@ -458,12 +429,36 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('product-table-body').innerHTML = `
                     <tr>
                         <td colspan="8" class="text-center text-danger py-4">
-                            <i class="bi bi-exclamation-triangle"></i>
                             Error loading product data. Please try again.
                         </td>
                     </tr>
                 `;
             });
+    }
+
+    function updateDashboardOverviewCards(summary) {
+        document.getElementById('total-clients-overview').textContent = summary.total_clients;
+        document.getElementById('total-products-overview').textContent = summary.total_products;
+        document.getElementById('total-stock-value').textContent = `PKR ${summary.total_stock_value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('total-paid-amount').textContent = `PKR ${summary.total_paid_amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('total-unpaid-amount').textContent = `PKR ${summary.total_unpaid_amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    }
+
+    function updateGeneralMetricsCards(summary) {
+        document.getElementById('total-revenue').textContent = `PKR ${summary.total_revenue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('total-profit').textContent = `PKR ${summary.total_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('total-expenses').textContent = `PKR ${summary.total_expenses.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('net-profit').textContent = `PKR ${summary.net_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('total-sales-count').textContent = summary.total_sales_count;
+        document.getElementById('avg-sale-value').textContent = `PKR ${summary.avg_sale_value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        document.getElementById('active-clients').textContent = summary.clients_this_period;
+        document.getElementById('total-items-sold').textContent = summary.total_items_sold.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        
+        // Calculate and display profit margin
+        if (summary.total_revenue > 0) {
+            const profitMargin = (summary.total_profit / summary.total_revenue * 100).toFixed(1);
+            document.getElementById('profit-margin').textContent = profitMargin + '%';
+        }
     }
 
     function updateClientSummaryCards(summary) {
@@ -474,17 +469,17 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function updatePaymentStatusCards(summary) {
-        document.getElementById('unpaid-count').textContent = summary.payment_status_counts ? summary.payment_status_counts.unpaid : 0;
-        document.getElementById('partial-count').textContent = summary.payment_status_counts ? summary.payment_status_counts.partial : 0;
-        document.getElementById('paid-count').textContent = summary.payment_status_counts ? summary.payment_status_counts.paid : 0;
-        document.getElementById('total-outstanding').textContent = `PKR ${summary.total_outstanding ? summary.total_outstanding.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0.00'}`;
-    }
-
-    function updateProductSummaryCards(summary) {
-        document.getElementById('product-total-revenue').textContent = `PKR ${summary.total_revenue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-        document.getElementById('product-total-profit').textContent = `PKR ${summary.total_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-        document.getElementById('product-total-quantity').textContent = summary.total_quantity_sold.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        document.getElementById('low-stock-count').textContent = summary.low_stock_count;
+        const unpaidElement = document.getElementById('unpaid-count');
+        if (unpaidElement) unpaidElement.textContent = summary.payment_status_counts ? summary.payment_status_counts.unpaid : 0;
+        
+        const partialElement = document.getElementById('partial-count');
+        if (partialElement) partialElement.textContent = summary.payment_status_counts ? summary.payment_status_counts.partial : 0;
+        
+        const paidElement = document.getElementById('paid-count');
+        if (paidElement) paidElement.textContent = summary.payment_status_counts ? summary.payment_status_counts.paid : 0;
+        
+        const outstandingElement = document.getElementById('total-outstanding');
+        if (outstandingElement) outstandingElement.textContent = `PKR ${summary.total_outstanding ? summary.total_outstanding.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0.00'}`;
     }
 
     function renderClientTable(clients) {
@@ -494,7 +489,7 @@ document.addEventListener('DOMContentLoaded', function() {
             tbody.innerHTML = `
                 <tr>
                     <td colspan="7" class="text-center text-muted py-4">
-                        <i class="bi bi-inbox"></i> No client data available for this period
+                        No client data available for this period
                     </td>
                 </tr>
             `;
@@ -523,7 +518,7 @@ document.addEventListener('DOMContentLoaded', function() {
             tbody.innerHTML = `
                 <tr>
                     <td colspan="8" class="text-center text-muted py-4">
-                        <i class="bi bi-inbox"></i> No product data available for this period
+                        No product data available for this period
                     </td>
                 </tr>
             `;
@@ -531,9 +526,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const rows = products.map(product => {
-            const stockClass = product.current_stock < 10 ? 'text-danger' : product.current_stock < 50 ? 'text-warning' : 'text-success';
-            const stockIcon = product.current_stock < 10 ? 'bi-exclamation-triangle' : product.current_stock < 50 ? 'bi-dash-circle' : 'bi-check-circle';
-
             return `
                 <tr>
                     <td><strong>${product.name}</strong></td>
@@ -541,7 +533,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <td><span class="badge bg-primary">PKR ${product.total_revenue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
                     <td><span class="badge bg-success">PKR ${product.total_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
                     <td><span class="badge bg-secondary">${product.profit_margin.toFixed(1)}%</span></td>
-                    <td><span class="text-${stockClass.split('-')[1]}"><i class="bi ${stockIcon}"></i> ${product.current_stock.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
+                    <td><span class="text-${ product.current_stock < 10 ? 'danger' : product.current_stock < 50 ? 'warning' : 'success'}">${product.current_stock.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
                     <td><span class="badge bg-light text-dark">${product.stock_turnover.toFixed(2)}x</span></td>
                     <td><span class="badge bg-dark">${product.transaction_count}</span></td>
                 </tr>
@@ -560,7 +552,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const list = products.map((product, index) => `
-            <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded">
+            <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light">
                 <div>
                     <strong class="text-success">#${index + 1}</strong>
                     <span class="ms-2">${product.name}</span>
@@ -584,7 +576,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const list = products.map((product, index) => `
-            <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded">
+            <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light">
                 <div>
                     <strong class="text-warning">#${products.length - index}</strong>
                     <span class="ms-2">${product.name}</span>

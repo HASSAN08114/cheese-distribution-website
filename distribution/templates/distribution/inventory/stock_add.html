@@ -3,9 +3,10 @@
 {% block title %}Add Stock{% endblock %}
 
 {% block content %}
-<h2 class="mb-4">Add Stock</h2>
-
 <div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">Add Stock</h5>
+    </div>
     <div class="card-body">
         <form method="post" id="addStockForm">
             {% csrf_token %}
@@ -37,7 +38,7 @@
                         {% endif %}
                     </div>
                     <div class="col-md-2 d-flex align-items-end">
-                        <button type="button" class="btn btn-danger btn-sm remove-item" style="margin-top: 1.8em;">Remove</button>
+                        <button type="button" class="btn btn-danger btn-sm remove-item btn-align-top">Remove</button>
                     </div>
                 </div>
                 {% endfor %}

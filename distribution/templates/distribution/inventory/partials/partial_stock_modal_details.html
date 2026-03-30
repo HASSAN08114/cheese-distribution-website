@@ -1,0 +1,63 @@
+<div class="modal-dialog modal-lg">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">Stock Operation #{{ addition.id }}</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+            <div class="mb-3">
+                <p><strong>Date:</strong> {{ addition.date_last_updated|date:"M d, Y H:i" }}</p>
+                <p><strong>Operation Type:</strong> 
+                    {% if addition.operation_type == 'add' %}
+                        <span class="badge bg-success">Add Stock</span>
+                    {% elif addition.operation_type == 'remove' %}
+                        <span class="badge bg-danger">Remove Stock</span>
+                    {% elif addition.operation_type == 'price_change' %}
+                        <span class="badge bg-info">Price Change</span>
+                    {% endif %}
+                </p>
+                <p><strong>Performed By:</strong> {% if addition.added_by %}{{ addition.added_by.user.username }}{% else %}N/A{% endif %}</p>
+            </div>
+            
+            <hr>
+            <h6>Operation Details</h6>
+            
+            {% if items %}
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Product</th>
+                            {% if addition.operation_type == 'price_change' %}
+                                <th>Old Price</th>
+                                <th>New Price</th>
+                            {% else %}
+                                <th>Quantity</th>
+                                <th>Price/Packet</th>
+                            {% endif %}
+                            <th class="text-end">Total Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        <tr>
+                            <td>{{ item.cheese_product }}</td>
+                            {% if addition.operation_type == 'price_change' %}
+                                <td>PKR {{ item.old_price|floatformat:2 }}</td>
+                                <td>PKR {{ item.new_price|floatformat:2 }}</td>
+                            {% else %}
+                                <td>{{ item.quantity_packets }} packets</td>
+                                <td>PKR {{ item.cheese_product.purchase_price_per_packet|floatformat:2 }}</td>
+                            {% endif %}
+                            <td class="text-end">PKR {{ item.get_total_value|floatformat:2 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted">No items in this stock operation.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>

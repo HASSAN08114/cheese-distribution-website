@@ -3,16 +3,12 @@
 {% block title %}Create Sale{% endblock %}
 
 {% block content %}
-<div class="bg-primary text-white py-4 mb-4 shadow-lg" style="margin: -1rem -1rem 0 -1rem; padding: 1.5rem!important;">
-    <div class="container-fluid">
-    <h2 class="mb-1"><i class="bi bi-receipt"></i> Create New Sale</h2>
-    <p class="mb-0 opacity-85">Record a new cheese sale transaction</p>
-    </div>
-</div>
-
-<div class="card shadow-lg border-0">
-    <div class="card-header bg-primary text-white">
-        <h5 class="mb-0"><i class="bi bi-pencil-square"></i> Sale Details</h5>
+<div class="card">
+    <div class="card-header">
+        <div>
+            <h5 style="margin-bottom: 0.25rem;">Create New Sale</h5>
+            <p style="color: var(--text-secondary); margin: 0; font-size: 0.95rem;">Record a new cheese sale transaction</p>
+        </div>
     </div>
     <div class="card-body">
         <form method="post" id="saleForm">
@@ -26,27 +22,6 @@
                     <option value="{{ client.pk }}" {% if selected_client_id == client.pk %}selected{% endif %}>{{ client.name }}</option>
                     {% endfor %}
                 </select>
-            </div>
-
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <label for="payment_method" class="form-label">Payment Method</label>
-                    <select name="payment_method" id="payment_method" class="form-control">
-                        <option value="">Select payment method</option>
-                        <option value="cash">Cash</option>
-                        <option value="bank_transfer">Bank Transfer</option>
-                        <option value="jazzcash">JazzCash</option>
-                        <option value="easypaisa">EasyPaisa</option>
-                        <option value="sadapay">SadaPay</option>
-                        <option value="online_banking">Online Banking</option>
-                        <option value="other">Other</option>
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label for="amount_paid" class="form-label">Amount Paid Now (PKR)</label>
-                    <input type="number" name="amount_paid" id="amount_paid" class="form-control" step="0.01" min="0" value="0">
-                    <small class="text-muted">Leave as 0 if payment will be made later</small>
-                </div>
             </div>
 
             <div class="border-top pt-4 mt-4">
@@ -71,14 +46,14 @@
                         {% endif %}
                     </div>
                     <div class="col-md-2">
-                        <label class="form-label">Selling Price (PKR/Packet) <span class="purchase-price-label" style="color: #6c757d; font-size: 0.875rem; font-weight: normal;"></span></label>
+                        <label class="form-label">Selling Price (PKR/Packet) <span class="purchase-price-label font-size-helper"></span></label>
                         {{ form.selling_price_per_packet }}
                         {% if form.selling_price_per_packet.errors %}
                             <div class="text-danger">{{ form.selling_price_per_packet.errors }}</div>
                         {% endif %}
                     </div>
                     <div class="col-md-2 d-flex align-items-end">
-                        <button type="button" class="btn btn-danger btn-sm remove-item" style="margin-top: 1.8em;">Remove</button>
+                        <button type="button" class="btn btn-danger btn-sm remove-item btn-align-top">Remove</button>
                     </div>
                 </div>
                 {% endfor %}

@@ -3,23 +3,83 @@
 {% block title %}Inventory Management{% endblock %}
 
 {% block content %}
-<div class="d-flex flex-row" style="gap: 1.5rem; min-height: 80vh;">
-    <!-- Left: Manufacturers & Cheese Types -->
-    <div class="d-flex flex-column flex-shrink-0" style="width: 320px; gap: 1rem;">
-        <div>
-            <button type="button" class="btn btn-primary btn-sm w-100 mb-2" data-bs-toggle="modal" data-bs-target="#manufacturerModal">
-                <i class="bi bi-plus-circle"></i> Add Manufacturer
+<div style="margin-bottom: 2rem;">
+    <h1 style="font-size: 1.75rem; font-weight: 700; margin-bottom: 0.25rem;">Inventory Management</h1>
+    <p style="color: var(--text-secondary); margin: 0;">Manage manufacturers, cheese types, and product inventory</p>
+</div>
+
+<!-- Inventory Metrics -->
+<div class="row mb-4 g-3">
+    <div class="col-md-3">
+        <div class="card bg-light">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted fw-semibold">Total Products</h6>
+                <h3 class="card-text mb-0 text-primary fw-bold">{{ inventory_summary.total_products }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-light">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 text-muted fw-semibold">Total Stock Quantity</h6>
+                <h3 class="card-text mb-0 text-info fw-bold">{{ inventory_summary.total_stock_quantity|floatformat:2 }} packets</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card {% if inventory_summary.low_stock_count > 0 %}bg-light border-warning{% else %}bg-light{% endif %}">
+            <div class="card-body text-center">
+                <h6 class="card-subtitle mb-2 {% if inventory_summary.low_stock_count > 0 %}text-warning{% else %}text-muted{% endif %} fw-semibold">Low Stock Items</h6>
+                <h3 class="card-text mb-0 {% if inventory_summary.low_stock_count > 0 %}text-warning{% else %}text-success{% endif %} fw-bold">{{ inventory_summary.low_stock_count }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Setup Buttons Row -->
+<div class="row mb-4 g-3">
+    <div class="col-12">
+        <h6 style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.75rem;">Setup</h6>
+        <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-light-blue" data-bs-toggle="modal" data-bs-target="#manufacturerModal">
+                <i class="bi bi-plus-lg"></i> Add Manufacturer
             </button>
-            <button type="button" class="btn btn-info btn-sm w-100 mb-2" data-bs-toggle="modal" data-bs-target="#cheeseTypeModal">
-                <i class="bi bi-plus-circle"></i> Add Type
+            <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#cheeseTypeModal">
+                <i class="bi bi-plus-lg"></i> Add Type
+            </button>
+            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#cheeseProductModal">
+                <i class="bi bi-plus-lg"></i> Add Product
             </button>
         </div>
-        <div class="card" style="font-size: 0.95em;">
-            <div class="card-header bg-primary text-white py-2">
-                <h6 class="mb-0">Manufacturers</h6>
+    </div>
+</div>
+
+<!-- Operations Buttons Row -->
+<div class="row mb-4 g-3">
+    <div class="col-12">
+        <h6 style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.75rem;">Operations</h6>
+        <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addSaleModal">
+                <i class="bi bi-plus-lg"></i> Add Sale
+            </button>
+            <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#quickPaymentModal">
+                <i class="bi bi-plus-lg"></i> Add Payment
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Manufacturers & Cheese Types (Left) and Cheese Products (Right) Section -->
+<div class="row mb-4 g-3">
+    <!-- Left Column: Manufacturers & Cheese Types -->
+    <div class="col-lg-3 d-flex flex-column gap-3">
+        <!-- Manufacturers -->
+        <div class="card font-size-base-em h-100 d-flex flex-column">
+            <div class="card-header card-header-primary">
+                <h6>Manufacturers</h6>
             </div>
-            <div class="card-body" style="padding: 0 0.5rem 0 0.5rem;">
-                <div class="table-responsive">
+            <div class="card-body card-body-compact flex-grow-1 d-flex flex-column">
+                <div class="table-responsive flex-grow-1">
                     <table class="table table-sm table-hover mb-0">
                         <thead class="table-light">
                             <tr>
@@ -38,7 +98,9 @@
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="2" class="text-center text-muted py-2"><i class="bi bi-inbox" style="font-size: 1.2rem;"></i><br>No manufacturers found.</td>
+                                <td colspan="2" class="text-center text-muted py-2">
+                                    <p class="mb-0 font-size-sm-em">No manufacturers found.</p>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -46,12 +108,14 @@
                 </div>
             </div>
         </div>
-        <div class="card" style="font-size: 0.95em;">
-            <div class="card-header bg-info text-white py-2">
-                <h6 class="mb-0">Types</h6>
+
+        <!-- Cheese Types -->
+        <div class="card font-size-base-em h-100 d-flex flex-column">
+            <div class="card-header card-header-primary">
+                <h6>Types</h6>
             </div>
-            <div class="card-body" style="padding: 0 0.5rem 0 0.5rem;">
-                <div class="table-responsive">
+            <div class="card-body card-body-compact flex-grow-1 d-flex flex-column">
+                <div class="table-responsive flex-grow-1">
                     <table class="table table-sm table-hover mb-0">
                         <thead class="table-light">
                             <tr>
@@ -60,7 +124,6 @@
                             </tr>
                         </thead>
                         <tbody id="cheeseTypeTableBody">
-                            <!-- Debug: {{ cheese_types|length }} cheese types -->
                             {% for type in cheese_types %}
                             <tr>
                                 <td>{{ type.name }}</td>
@@ -71,7 +134,9 @@
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="2" class="text-center text-muted py-2"><i class="bi bi-inbox" style="font-size: 1.2rem;"></i><br>No cheese types found.</td>
+                                <td colspan="2" class="text-center text-muted py-2">
+                                    <p class="mb-0 font-size-sm-em">No cheese types found.</p>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -80,57 +145,80 @@
             </div>
         </div>
     </div>
-    <!-- Right: Cheese Products -->
-    <div class="flex-grow-1 d-flex flex-column">
+
+    <!-- Right Column: Cheese Products Table -->
+    <div class="col-lg-9 d-flex flex-column">
         <div class="card mb-3 flex-grow-1 d-flex flex-column">
-            <div class="card-header bg-success text-white py-2 d-flex justify-content-between align-items-center">
-                <h6 class="mb-0">Products</h6>
-                <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#cheeseProductModal">
-                        <i class="bi bi-plus-circle"></i> Add Cheese Product
-                    </button>
-                </div>
-                <input class="form-control form-control-sm ms-2" type="search" placeholder="Search cheese products..." aria-label="Search" id="cheeseProductSearch" style="max-width: 350px;">
-            </div>
-        <div class="card-body flex-grow-1 d-flex flex-column" style="padding: 0 0.5rem 0 0.5rem;">
-            <div class="table-responsive flex-grow-1">
-                <table class="table table-sm table-hover mb-0" id="cheeseProductTable">
-                    <thead class="table-light">
-                        <tr style="font-size: 0.95em;">
-                            <th>Manufacturer</th>
-                            <th>Type</th>
-                            <th>Size</th>
-                            <th>Purchase Price (PKR/Packet)</th>
-                            <th>Available Quantity (Packets)</th>
-                            <th>Stock Value</th>
-                            <th>Date Added</th>
-                            <th class="text-end">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in products_with_value %}
-                        <tr>
-                            <td>{{ item.product.manufacturer.name }}</td>
-                            <td>{{ item.product.type.name }}</td>
-                            <td>{{ item.product.packet_size }} KG</td>
-                            <td>PKR {{ item.product.purchase_price_per_packet|floatformat:2 }}</td>
-                            <td><span class="badge {% if item.product.available_quantity_packets > 10 %}bg-success{% elif item.product.available_quantity_packets > 0 %}bg-warning{% else %}bg-danger{% endif %}" style="font-size: 0.85em;">{{ item.product.available_quantity_packets|floatformat:2 }} packets</span></td>
-                            <td>PKR {{ item.stock_value|floatformat:2 }}</td>
-                            <td>{{ item.product.date_added|date:"M d, Y" }}</td>
-                            <td class="text-end">
-                                <button type="button" class="btn btn-xs btn-outline-warning edit-btn" data-edit-url="{% url 'cheese_edit' item.product.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal"><i class="bi bi-pencil"></i></button>
-                                <button type="button" class="btn btn-xs btn-outline-danger" data-item-name="{{item.product.manufacturer.name}} {{ item.product.name }}" data-delete-url="{% url 'cheese_delete' item.product.pk %}" data-bs-toggle="modal" data-bs-target="#deleteConfirmModal"><i class="bi bi-trash"></i></button>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="7" class="text-center text-muted py-2"><i class="bi bi-inbox" style="font-size: 1.2rem;"></i><br>No cheese products found.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                    </table>
-                </div>
-            </div>
+    <div class="card-header card-header-success d-flex justify-content-between align-items-center">
+        <h6>Products</h6>
+        <div class="d-flex gap-2 align-items-center">
+            <input class="form-control form-control-sm max-width-search" type="search" placeholder="Search cheese products..." aria-label="Search" id="cheeseProductSearch">
+        </div>
+    </div>
+    <div class="card-body flex-grow-1 d-flex flex-column card-body-compact">
+        <div class="table-responsive flex-grow-1">
+            <table class="table table-sm table-hover mb-0" id="cheeseProductTable">
+                <thead class="table-light">
+                    <tr class="font-size-base-em">
+                        <th>Manufacturer</th>
+                        <th>Type</th>
+                        <th>Size</th>
+                        <th>Purchase Price (PKR/Packet)</th>
+                        <th>Available Quantity (Packets)</th>
+                        {% if user_is_owner %}<th class="text-end">Actions</th>{% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in products_with_value %}
+                    <tr class="{% if item.product.available_quantity_packets > 10 %}table-success{% elif item.product.available_quantity_packets > 0 %}table-warning{% else %}table-danger{% endif %}">
+                        <td>{{ item.product.manufacturer.name }}</td>
+                        <td>{{ item.product.type.name }}</td>
+                        <td>{{ item.product.packet_size }} KG</td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <span>PKR {{ item.product.purchase_price_per_packet|floatformat:2 }}</span>
+                                <button type="button" class="btn btn-xs btn-outline-info change-price-btn" data-product-id="{{ item.product.id }}" title="Change Price">
+                                    <i class="bi bi-pencil-square"></i>
+                                </button>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <button type="button" class="btn btn-xs btn-outline-danger remove-stock-btn" data-product-id="{{ item.product.id }}" title="Remove Stock">
+                                    <i class="bi bi-dash-circle"></i>
+                                </button>
+                                <span>{{ item.product.available_quantity_packets|stringformat:"0g" }} packets</span>
+                                <button type="button" class="btn btn-xs btn-outline-warning add-stock-btn" data-product-id="{{ item.product.id }}" title="Add Stock">
+                                    <i class="bi bi-plus-circle"></i>
+                                </button>
+                            </div>
+                        </td>
+                        <td class="text-end">
+                            {% if user_is_owner %}
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-xs btn-outline-secondary edit-btn" data-edit-url="{% url 'cheese_edit' item.product.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal" title="Edit">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button type="button" class="btn btn-xs btn-outline-danger" data-item-name="{{item.product.manufacturer.name}} {{ item.product.name }}" data-delete-url="{% url 'cheese_delete' item.product.pk %}" data-bs-toggle="modal" data-bs-target="#deleteConfirmModal" title="Delete">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-2">
+                            <p class="mb-0 font-size-sm-em">No cheese products found.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
         </div>
     </div>
 </div>
@@ -139,35 +227,25 @@
 
 {% block modals %}
 
-<!-- Delete Modals: Rendered outside main content for proper stacking -->
+<!-- Delete Modal -->
 <div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-
             <form method="post" id="delete-form">
                 {% csrf_token %}
-
                 <div class="modal-header">
                     <h5 class="modal-title">Confirm Delete</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-
                 <div class="modal-body">
                     Are you sure you want to delete
                     <strong id="delete-item-name"></strong>?
                 </div>
-
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                        Cancel
-                    </button>
-                    <button type="submit" class="btn btn-danger">
-                        Delete
-                    </button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Delete</button>
                 </div>
-
             </form>
-
         </div>
     </div>
 </div>
@@ -181,36 +259,11 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form id="manufacturerForm" method="post" action="{% url 'manufacturer_add' %}">
-                    {% csrf_token %}
-                    {{ manufacturer_form.as_p }}
-                </form>
+                {% include 'distribution/inventory/partials/partial_manufacturer_form.html' %}
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="submit" class="btn btn-primary" form="manufacturerForm">Save</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Cheese Product Modal -->
-<div class="modal fade" id="cheeseProductModal" tabindex="-1" aria-labelledby="cheeseProductModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="cheeseProductModalLabel">Add Cheese Product</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form id="cheeseProductForm" method="post" action="{% url 'cheese_add' %}">
-                    {% csrf_token %}
-                    {{ cheese_product_form.as_p }}
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" class="btn btn-primary" form="cheeseProductForm">Save</button>
             </div>
         </div>
     </div>
@@ -225,10 +278,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form id="cheeseTypeForm" method="post" action="{% url 'cheese_type_add' %}">
-                    {% csrf_token %}
-                    {{ cheese_type_form.as_p }}
-                </form>
+                {% include 'distribution/inventory/partials/partial_cheese_type_form.html' %}
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -238,27 +288,159 @@
     </div>
 </div>
 
-<!-- Generic Modal for Dynamic Edit Forms -->
+<!-- Cheese Product Modal -->
+<div class="modal fade" id="cheeseProductModal" tabindex="-1" aria-labelledby="cheeseProductModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="cheeseProductModalLabel">Add Cheese Product</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                {% include 'distribution/inventory/partials/partial_cheese_product_form.html' %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary" form="cheeseProductForm">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Stock Modal -->
+<div class="modal fade" id="addStockModal" tabindex="-1" aria-labelledby="addStockModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addStockModalLabel">Add Stock</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                {% include 'distribution/inventory/partials/partial_add_stock_modal.html' %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary" form="addStockForm">Add Stock</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Remove Stock Modal -->
+<div class="modal fade" id="removeStockModal" tabindex="-1" aria-labelledby="removeStockModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="removeStockModalLabel">Remove Stock</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="removeStockForm" method="post" action="{% url 'remove_stock_quantity' %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Product</label>
+                        <select name="product_id" class="form-control" id="removeStockProduct" required>
+                            <option value="">Select product</option>
+                            {% for item in products_with_value %}
+                            <option value="{{ item.product.id }}">{{ item.product }} (Available: {{ item.product.available_quantity_packets|floatformat:0 }} packets)</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Quantity to Remove (Packets)</label>
+                        <input type="number" name="quantity" class="form-control" min="1" step="1" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Remove Stock</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Change Price Modal -->
+<div class="modal fade" id="changePriceModal" tabindex="-1" aria-labelledby="changePriceModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="changePriceModalLabel">Change Product Price</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="changePriceForm" method="post" action="{% url 'change_stock_price' %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Product</label>
+                        <select name="product_id" class="form-control" id="changePriceProduct" required>
+                            <option value="">Select product</option>
+                            {% for item in products_with_value %}
+                            <option value="{{ item.product.id }}" data-current-price="{{ item.product.purchase_price_per_packet }}">
+                                {{ item.product }} (Current: PKR {{ item.product.purchase_price_per_packet|floatformat:2 }}/packet)
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" id="currentPriceLabel"></label>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">New Price (PKR/Packet)</label>
+                        <input type="number" name="new_price" class="form-control" min="0.01" step="0.01" required placeholder="Enter new price">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-info">Update Price</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Dynamic Edit Modal -->
 <div class="modal fade" id="dynamicEditModal" tabindex="-1" aria-labelledby="dynamicEditModalLabel" aria-hidden="true">
     <div class="modal-dialog">
-        <div class="modal-content" id="addStockModalContent">
+        <div class="modal-content" id="dynamicEditModalContent">
             <!-- Content will be loaded here via AJAX -->
         </div>
     </div>
 </div>
 
-<!-- Quick Sale Modal -->
-<div class="modal fade" id="quickSaleModal" tabindex="-1" aria-labelledby="quickSaleModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content" id="quickSaleModalContent">
-            <!-- Content will be loaded here via AJAX -->
+<!-- Add Sale Modal -->
+<div class="modal fade" id="addSaleModal" tabindex="-1" aria-labelledby="addSaleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            {% include 'distribution/sales/partials/partial_add_sale_modal.html' %}
         </div>
     </div>
 </div>
-<div class="modal fade" id="dynamicEditModal" tabindex="-1" aria-labelledby="dynamicEditModalLabel" aria-hidden="true">
+
+<!-- Add Expense Modal Placeholder -->
+<div class="modal fade" id="addExpenseModal" tabindex="-1" aria-labelledby="addExpenseModalLabel" aria-hidden="true">
     <div class="modal-dialog">
-        <div class="modal-content" id="dynamicEditModalContent">
-            <!-- Content will be loaded here via AJAX -->
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addExpenseModalLabel">Add Expense</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted"><em>Add Expense functionality - Coming Soon</em></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" disabled>Add Expense</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Payment Modal -->
+<div class="modal fade" id="quickPaymentModal" tabindex="-1" aria-labelledby="quickPaymentModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            {% include 'distribution/clients/partials/partial_quick_payment_form.html' %}
         </div>
     </div>
 </div>
@@ -270,6 +452,61 @@
 document.addEventListener("DOMContentLoaded", function () {
     const deleteModal = document.getElementById("deleteConfirmModal");
 
+    // Handle Add Stock button clicks in products table
+    document.querySelectorAll('.add-stock-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            const productId = this.getAttribute('data-product-id');
+            document.getElementById('addStockProductId').value = productId;
+            // Clear the form fields
+            document.getElementById('addStockForm').reset();
+            // Re-set the product ID since reset() clears hidden inputs too
+            document.getElementById('addStockProductId').value = productId;
+            const modal = new bootstrap.Modal(document.getElementById('addStockModal'));
+            modal.show();
+        });
+    });
+
+    // Handle Remove Stock button clicks in products table
+    document.querySelectorAll('.remove-stock-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            const productId = this.getAttribute('data-product-id');
+            const productSelect = document.getElementById('removeStockProduct');
+            if (productSelect) {
+                productSelect.value = productId;
+            }
+            const modal = new bootstrap.Modal(document.getElementById('removeStockModal'));
+            modal.show();
+        });
+    });
+
+    // Handle Change Price button clicks in products table
+    document.querySelectorAll('.change-price-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            const productId = this.getAttribute('data-product-id');
+            const productSelect = document.getElementById('changePriceProduct');
+            if (productSelect) {
+                productSelect.value = productId;
+                // Trigger change event to update current price display
+                productSelect.dispatchEvent(new Event('change'));
+            }
+            const modal = new bootstrap.Modal(document.getElementById('changePriceModal'));
+            modal.show();
+        });
+    });
+
+    // Handle Change Price modal - show current price when product is selected
+    const changePriceProduct = document.getElementById('changePriceProduct');
+    if (changePriceProduct) {
+        changePriceProduct.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const currentPrice = selectedOption.getAttribute('data-current-price');
+            const currentPriceLabel = document.getElementById('currentPriceLabel');
+            if (currentPrice && currentPriceLabel) {
+                currentPriceLabel.textContent = `Current Price: PKR ${parseFloat(currentPrice).toFixed(2)}/packet`;
+                currentPriceLabel.className = 'form-label text-muted';
+            }
+        });
+    }
 
     // Live search for cheese products
     const searchInput = document.getElementById('cheeseProductSearch');
@@ -507,6 +744,63 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         });
     });
+
+    // Handle Add Sale form submission via AJAX
+    const addSaleForm = document.querySelector('#addSaleModal form');
+    if (addSaleForm) {
+        addSaleForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const modal = bootstrap.Modal.getInstance(document.getElementById('addSaleModal'));
+            
+            fetch(this.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': this.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Show success message
+                    const alertHTML = `<div class="alert alert-success alert-dismissible fade show" role="alert">
+                        ${data.message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>`;
+                    
+                    const alertContainer = document.querySelector('[role="main"]') || document.body;
+                    const alertDiv = document.createElement('div');
+                    alertDiv.innerHTML = alertHTML;
+                    alertContainer.insertBefore(alertDiv.firstElementChild, alertContainer.firstChild);
+                    
+                    // Close modal and reset form
+                    modal.hide();
+                    addSaleForm.reset();
+                    
+                    // Reload page after 2 seconds to show updated data
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    // Show error message
+                    const errorHTML = `<div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        ${data.error}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>`;
+                    
+                    const alertContainer = document.querySelector('[role="main"]') || document.body;
+                    const alertDiv = document.createElement('div');
+                    alertDiv.innerHTML = errorHTML;
+                    alertContainer.insertBefore(alertDiv.firstElementChild, alertContainer.firstChild);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while creating the sale.');
+            });
+        });
+    }
 });
 </script>
 {% endblock %}

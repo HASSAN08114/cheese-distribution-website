@@ -3,28 +3,20 @@
 {% block title %}Expense Management{% endblock %}
 
 {% block content %}
-<div class="bg-danger text-white py-4 mb-4 shadow-lg" style="margin: -1rem -1rem 0 -1rem; padding: 1.5rem!important;">
-    <div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center">
-        <div>
-            <h2 class="mb-1"><i class="bi bi-cash-coin"></i> Expense Management</h2>
-            <p class="mb-0 opacity-85">Track delivery and operational expenses</p>
-        </div>
-        <button type="button" class="btn btn-light" data-bs-toggle="modal" data-bs-target="#addExpenseModal">
-            <i class="bi bi-plus-circle"></i> Add Expense
-        </button>
+<div class="card">
+  <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+    <div>
+      <h5 style="margin-bottom: 0.25rem;">Expense Management</h5>
+      <p style="color: var(--text-secondary); margin: 0; font-size: 0.95rem;">Track delivery and operational expenses</p>
     </div>
-    </div>
-</div>
-
-<div class="card shadow-lg border-0">
-  <div class="card-header bg-danger text-white">
-    <h5 class="mb-0"><i class="bi bi-list-ul"></i> Bike / Delivery Expenses</h5>
+    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addExpenseModal">
+        <i class="bi bi-plus-lg"></i> Add Expense
+    </button>
   </div>
-  <div class="card-body" style="padding: 0 0.5rem 0 0.5rem;">
+  <div class="card-body card-body-compact">
     <div class="table-responsive">
       <table class="table table-hover align-middle">
-        <thead class="table-light">
+        <thead>
           <tr>
             <th>Date</th>
             <th>Employee</th>
@@ -66,7 +58,7 @@
                 data-bs-toggle="modal"
                 data-bs-target="#dynamicExpenseEditModal"
               >
-                <i class="bi bi-pencil"></i> Edit
+                <i class="bi bi-pencil"></i>
               </button>
               <button
                 type="button"
@@ -76,7 +68,7 @@
                 data-bs-toggle="modal"
                 data-bs-target="#deleteExpenseConfirmModal"
               >
-                <i class="bi bi-trash"></i> Remove
+                <i class="bi bi-trash"></i>
               </button>
             </td>
           </tr>

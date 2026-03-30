@@ -3,37 +3,64 @@
 {% block title %}Stock Addition History{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="bi bi-box-seam"></i> Stock Addition History</h2>
+
+<!-- Quick Stock Modal -->
+<div class="modal fade" id="quickStockModal" tabindex="-1" aria-labelledby="quickStockModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            {% include 'distribution/inventory/partials/partial_quick_stock_form.html' %}
+        </div>
+    </div>
 </div>
 
 <!-- Stock Additions Table -->
 <div class="card">
-    <div class="card-header bg-dark text-white">
-        <h5 class="mb-0"><i class="bi bi-list-ul"></i> All Stock Additions</h5>
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h5 style="margin-bottom: 0.25rem;">Stock Addition History</h5>
+            <p style="color: var(--text-secondary)">View all stock additions and modifications</p>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#quickStockModal">
+            <i class="bi bi-plus-lg"></i> Add Stock
+        </button>
     </div>
-    <div class="card-body" style="padding: 0 0.5rem 0 0.5rem;">
+    <div class="card-body card-body-compact">
         <div class="table-responsive">
             <table class="table table-hover">
                 <thead class="table-light">
                     <tr>
-                        <th>Product</th>
-                        <th>Quantity Added</th>
+                        <th>Products</th>
+                        <th>Operation Type</th>
                         <th>Added By</th>
-                        <th>Date Added</th>
-                        <th>Modified</th>
+                        <th>Date</th>
                         <th class="text-end">Actions</th>   
                     </tr>
                 </thead>
                 <tbody>
                     {% if stock_additions %}
                     {% for addition in stock_additions %}
-                    <tr class="{% if addition.modified %}table-warning{% endif %}" style="cursor:pointer;">
-                        <td>{{ addition.cheese_product }}</td>
-                        <td>{{ addition.quantity_packets }}</td>
+                    <tr>
+                        <td>
+                            {{ addition.stockadditionitem_set.count }} item(s)
+                            <br>
+                            <small class="text-muted">
+                                {% for item in addition.stockadditionitem_set.all %}
+                                    {{ item.cheese_product.type.name }}
+                                    {% if not forloop.last %}, {% endif %}
+                                {% endfor %}
+                            </small>
+                        </td>
+                        <td>
+                            {% if addition.operation_type == 'add' %}
+                                <span class="badge bg-success">Add Stock</span>
+                            {% elif addition.operation_type == 'remove' %}
+                                <span class="badge bg-danger">Remove Stock</span>
+                            {% elif addition.operation_type == 'price_change' %}
+                                <span class="badge bg-info">Price Change</span>
+                            {% endif %}
+                        </td>
                         <td>{% if addition.added_by %}{{ addition.added_by.user.username }}{% else %}N/A{% endif %}</td>
-                        <td>{{ addition.date_added }}</td>
-                        <td>{% if addition.modified %}Yes{% else %}No{% endif %}</td>
+                        <td>{{ addition.date_last_updated|date:"M d, Y H:i" }}</td>
                         <td class="text-end">
                             <button class="btn btn-sm btn-outline-secondary view-stock-modal" data-id="{{ addition.id }}">View</button>
                         </td>
@@ -42,8 +69,7 @@
                     {% else %}
                     <tr>
                         <td colspan="5" class="text-center text-muted py-4">
-                            <i class="bi bi-inbox" style="font-size: 2rem;"></i>
-                            <p class="mt-2">No stock additions found.</p>
+                            <p class="mb-0">No stock additions found.</p>
                         </td>
                     </tr>
                     {% endif %}
@@ -58,13 +84,33 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    $(document).on('click', '.view-stock-modal', function() {
-        var stockId = $(this).data('id');
-        $.get('/stock/modal/' + stockId + '/', function(data) {
-            $('#stock-modal').html(data);
-            var modal = new bootstrap.Modal(document.getElementById('stock-modal'));
-            modal.show();
-        });
+    document.addEventListener('click', function(e) {
+        const button = e.target.closest('.view-stock-modal');
+        if (button) {
+            const stockId = button.getAttribute('data-id');
+            const url = `/inventory/stock/${stockId}/modal/`;
+            fetch(url)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.text();
+                })
+                .then(html => {
+                    const modalDiv = document.getElementById('stock-modal');
+                    modalDiv.innerHTML = html;
+                    const modal = new bootstrap.Modal(modalDiv);
+                    modal.show();
+                    // Clean up after modal closes
+                    modalDiv.addEventListener('hidden.bs.modal', function() {
+                        modalDiv.innerHTML = '';
+                    }, { once: true });
+                })
+                .catch(error => {
+                    console.error('Error loading stock details:', error);
+                    alert('Failed to load stock details: ' + error.message);
+                });
+        }
     });
 });
 </script>

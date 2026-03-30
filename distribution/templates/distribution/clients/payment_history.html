@@ -3,12 +3,27 @@
 {% block title %}Payment History{% endblock %}
 
 {% block content %}
-<h2 class="mb-4">Payment History</h2>
-<div class="card">
-    <div class="card-header bg-dark text-white">
-        <h5 class="mb-0"><i class="bi bi-list-ul"></i> All Payments</h5>
+
+<!-- Quick Payment Modal -->
+<div class="modal fade" id="quickPaymentModal" tabindex="-1" aria-labelledby="quickPaymentModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            {% include 'distribution/clients/partials/partial_quick_payment_form.html' %}
+        </div>
     </div>
-    <div class="card-body" style="padding: 0 0.5rem 0 0.5rem;">
+</div>
+
+<div class="card">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h5 style="margin-bottom: 0.25rem;">Payment History</h5>
+            <p style="color: var(--text-secondary)">Track all client payments and transactions</p>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#quickPaymentModal">
+            <i class="bi bi-plus-lg"></i> Create Quick Payment
+        </button>
+    </div>
+    <div class="card-body card-body-compact">
         <table class="table table-hover">
             <thead class="table-light">
                 <tr>
@@ -37,4 +52,5 @@
         </table>
     </div>
 </div>
+
 {% endblock %}
