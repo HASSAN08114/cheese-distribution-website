@@ -156,16 +156,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const formRegex = RegExp(`form-(\\d+)-`, 'g');
             newForm.innerHTML = newForm.innerHTML.replace(formRegex, function(match) {
-                return match.replace(/\\d+/, formCount);
+                return match.replace(/\d+/, formCount);
             });
 
             const inputs = newForm.querySelectorAll('input, select');
             inputs.forEach(function(input) {
                 if (input.name) {
-                    input.name = input.name.replace(/\\d+/, formCount);
+                    input.name = input.name.replace(/\d+/, formCount);
                 }
                 if (input.id) {
-                    input.id = input.id.replace(/\\d+/, formCount);
+                    input.id = input.id.replace(/\d+/, formCount);
                 }
                 if (input.type !== 'hidden' && input.type !== 'checkbox') {
                     input.value = '';
