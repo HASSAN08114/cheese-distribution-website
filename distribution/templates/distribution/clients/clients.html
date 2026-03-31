@@ -33,6 +33,9 @@
                     <td>{{ client_data.phone }}</td>
                     <td>{{ client_data.address|truncatewords:15 }}</td>
                     <td class="text-end">
+                        <button type="button" class="btn btn-sm btn-outline-success" title="Export to PDF" onclick="window.location.href='{% url 'export_client_pdf' client_data.pk %}'">
+                            <i class="bi bi-download"></i>
+                        </button>
                         <button type="button" class="btn btn-sm btn-outline-primary edit-btn" data-edit-url="{% url 'client_edit' client_data.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal">
                             <i class="bi bi-pencil"></i>
                         </button>

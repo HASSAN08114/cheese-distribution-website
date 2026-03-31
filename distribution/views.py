@@ -312,26 +312,28 @@ def get_client_analytics(request):
     """AJAX endpoint to get client analytics based on time period"""
     period = request.GET.get('period', 'all')
 
-    now = timezone.now()
+    # Use localtime to get the date in the configured timezone (Asia/Karachi)
+    now_local = timezone.localtime(timezone.now())
+    today = now_local.date()
 
     if period == 'today':
-        start_date = now.date()
-        end_date = now.date()
+        start_date = today
+        end_date = today
     elif period == 'week':
-        start_date = now.date() - timedelta(days=7)
-        end_date = now.date()
+        start_date = today - timedelta(days=7)
+        end_date = today
     elif period == 'month':
-        start_date = now.date() - timedelta(days=30)
-        end_date = now.date()
+        start_date = today - timedelta(days=30)
+        end_date = today
     elif period == 'quarter':
-        start_date = now.date() - timedelta(days=90)
-        end_date = now.date()
+        start_date = today - timedelta(days=90)
+        end_date = today
     elif period == '6months':
-        start_date = now.date() - timedelta(days=180)
-        end_date = now.date()
+        start_date = today - timedelta(days=180)
+        end_date = today
     elif period == 'year':
-        start_date = now.date() - timedelta(days=365)
-        end_date = now.date()
+        start_date = today - timedelta(days=365)
+        end_date = today
     else:  # 'all'
         start_date = None
         end_date = None
@@ -360,11 +362,20 @@ def get_client_analytics(request):
             # Get last sale date
             last_sale_date = client_sales.order_by('-sale_date').first().sale_date.date() if client_sales.exists() else None
 
-            # DEBT IS CALCULATED FROM ALL TIME (not filtered by period)
-            all_client_sales = Sale.objects.filter(client=client)
-            total_sales_amount = all_client_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-            total_amount_paid = Payment.objects.filter(client=client).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-            client_debt = total_sales_amount - total_amount_paid
+            # DEBT IS PERIOD-BASED: Sales in period - Payments in period
+            # Filter payments by date range for period-based debt calculation
+            if start_date and end_date:
+                client_payments = Payment.objects.filter(client=client, date__date__range=[start_date, end_date])
+            else:
+                client_payments = Payment.objects.filter(client=client)
+            
+            # Calculate period-based payments
+            period_payments = client_payments.aggregate(
+                total=Sum('amount')
+            )['total'] or Decimal('0.00')
+            
+            # Debt = sales in period - payments in period
+            client_debt = total_sales - period_payments
 
             client_data.append({
                 'id': client.id,
@@ -544,26 +555,28 @@ def get_general_metrics(request):
     """AJAX endpoint to get general business metrics based on time period"""
     period = request.GET.get('period', 'all')
 
-    now = timezone.now()
+    # Use localtime to get the date in the configured timezone (Asia/Karachi)
+    now_local = timezone.localtime(timezone.now())
+    today = now_local.date()
 
     if period == 'today':
-        start_date = now.date()
-        end_date = now.date()
+        start_date = today
+        end_date = today
     elif period == 'week':
-        start_date = now.date() - timedelta(days=7)
-        end_date = now.date()
+        start_date = today - timedelta(days=7)
+        end_date = today
     elif period == 'month':
-        start_date = now.date() - timedelta(days=30)
-        end_date = now.date()
+        start_date = today - timedelta(days=30)
+        end_date = today
     elif period == 'quarter':
-        start_date = now.date() - timedelta(days=90)
-        end_date = now.date()
+        start_date = today - timedelta(days=90)
+        end_date = today
     elif period == '6months':
-        start_date = now.date() - timedelta(days=180)
-        end_date = now.date()
+        start_date = today - timedelta(days=180)
+        end_date = today
     elif period == 'year':
-        start_date = now.date() - timedelta(days=365)
-        end_date = now.date()
+        start_date = today - timedelta(days=365)
+        end_date = today
     else:  # 'all'
         start_date = None
         end_date = None
@@ -602,6 +615,12 @@ def get_general_metrics(request):
         total=Sum('quantity_packets')
     )['total'] or Decimal('0.00')
 
+    # Total Paid this period
+    if start_date and end_date:
+        total_paid_amount = Payment.objects.filter(date__date__range=[start_date, end_date]).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    else:
+        total_paid_amount = Payment.objects.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
     summary = {
         'total_revenue': float(total_revenue),
         'total_expenses': float(total_expenses),
@@ -611,6 +630,7 @@ def get_general_metrics(request):
         'avg_sale_value': avg_sale_value,
         'clients_this_period': clients_this_period,
         'total_items_sold': float(total_items_sold),
+        'total_paid_amount': float(total_paid_amount),
     }
 
     return JsonResponse({
@@ -1255,6 +1275,131 @@ def client_delete(request, pk):
         messages.success(request, 'Client deleted successfully.')
         return redirect('client_list')
     return render(request, 'distribution/client_delete.html', {'client': client})
+
+
+@login_required
+def export_client_pdf(request, pk):
+    """Export client data as PDF"""
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.units import inch
+    from io import BytesIO
+    from django.http import HttpResponse
+    from decimal import Decimal
+    
+    client = get_object_or_404(Client, pk=pk)
+    
+    # Calculate client statistics
+    total_sales = Sale.objects.filter(client=client).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    total_paid = Payment.objects.filter(client=client).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    due_payment = total_sales - total_paid
+    
+    # Create PDF in memory
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18)
+    
+    # Container for PDF elements
+    elements = []
+    
+    # Define styles
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        textColor=colors.HexColor('#1a1a1a'),
+        spaceAfter=30,
+        alignment=1  # Center alignment
+    )
+    
+    heading_style = ParagraphStyle(
+        'CustomHeading',
+        parent=styles['Heading2'],
+        fontSize=14,
+        textColor=colors.HexColor('#333333'),
+        spaceAfter=12,
+        spaceBefore=12
+    )
+    
+    normal_style = ParagraphStyle(
+        'CustomNormal',
+        parent=styles['Normal'],
+        fontSize=11,
+        spaceAfter=6
+    )
+    
+    # Add title
+    title = Paragraph(f"Client Report: {client.name}", title_style)
+    elements.append(title)
+    elements.append(Spacer(1, 0.3*inch))
+    
+    # Client Information Section
+    elements.append(Paragraph("Client Information", heading_style))
+    
+    client_info_data = [
+        ['Field', 'Value'],
+        ['Name', client.name],
+        ['Phone', client.phone],
+        ['Address', client.address],
+    ]
+    
+    client_info_table = Table(client_info_data, colWidths=[2*inch, 4*inch])
+    client_info_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3498db')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('FONTSIZE', (0, 1), (-1, -1), 11),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
+    ]))
+    
+    elements.append(client_info_table)
+    elements.append(Spacer(1, 0.3*inch))
+    
+    # Financial Summary Section
+    elements.append(Paragraph("Financial Summary", heading_style))
+    
+    financial_data = [
+        ['Metric', 'Amount'],
+        ['All-Time Sales', f'Rs. {total_sales:,.2f}'],
+        ['All-Time Payments Made', f'Rs. {total_paid:,.2f}'],
+        ['Outstanding Due', f'Rs. {due_payment:,.2f}'],
+    ]
+    
+    financial_table = Table(financial_data, colWidths=[3*inch, 3*inch])
+    financial_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#27ae60')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('FONTSIZE', (0, 1), (-1, -1), 11),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
+        ('ALIGN', (1, 1), (1, -1), 'RIGHT'),
+    ]))
+    
+    elements.append(financial_table)
+    
+    # Build PDF
+    doc.build(elements)
+    
+    # Get PDF data
+    buffer.seek(0)
+    
+    # Create HTTP response
+    response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="client_{client.name.replace(" ", "_")}.pdf"'
+    
+    return response
 
 
 @login_required

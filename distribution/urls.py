@@ -36,6 +36,7 @@ urlpatterns = [
     path('clients/add/', views.client_add, name='client_add'),
     path('clients/<int:pk>/edit/', views.client_edit, name='client_edit'),
     path('clients/<int:pk>/delete/', views.client_delete, name='client_delete'),
+    path('clients/<int:pk>/export-pdf/', views.export_client_pdf, name='export_client_pdf'),
     
     path('sales/history/', views.sale_history, name='sale_history'),  # Now points to individual sale history page
     path('sales/create/', views.sale_create, name='sale_create'),

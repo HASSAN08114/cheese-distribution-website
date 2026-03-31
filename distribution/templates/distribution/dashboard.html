@@ -13,15 +13,7 @@
 
 
     <div class="row mb-4 g-3">
-        <div class="col-md-4">
-            <div class="card bg-light">
-                <div class="card-body text-center">
-                    <h6 class="card-subtitle mb-2 text-success fw-semibold">Total Paid</h6>
-                    <h3 class="card-text mb-0 text-success fw-bold" id="total-paid-amount">PKR 0.00</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
+        <div class="col-md-6">
             <div class="card bg-light">
                 <div class="card-body text-center">
                     <h6 class="card-subtitle mb-2 text-danger fw-semibold">Total Unpaid Debt</h6>
@@ -29,7 +21,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-6">
             <div class="card bg-light">
                 <div class="card-body text-center">
                     <h6 class="card-subtitle mb-2 text-muted fw-semibold">Stock Value</h6>
@@ -69,6 +61,14 @@
 
     <!-- Period-Based Metrics Section -->
     <div class="row mb-4 g-3" id="period-metrics-cards">
+        <div class="col-md-2">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle mb-2 text-success fw-semibold">Total Paid</h6>
+                    <h3 class="card-text mb-0 text-success fw-bold" id="total-paid-amount">PKR 0.00</h3>
+                </div>
+            </div>
+        </div>
         <div class="col-md-3">
             <div class="card bg-light">
                 <div class="card-body text-center">
@@ -85,7 +85,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <div class="card bg-light">
                 <div class="card-body text-center">
                     <h6 class="card-subtitle mb-2 text-muted fw-semibold">Total Expenses</h6>
@@ -93,7 +93,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <div class="card bg-light">
                 <div class="card-body text-center">
                     <h6 class="card-subtitle mb-2 text-muted fw-semibold">Net Profit</h6>
@@ -191,7 +191,7 @@
                                 <th>Transactions</th>
                                 <th>Avg Sale</th>
                                 <th>Last Sale</th>
-                                <th>Debt (All-time)</th>
+                                <th id="debt-column-header">Debt (All-time)</th>
                             </tr>
                         </thead>
                         <tbody id="client-table-body">
@@ -301,12 +301,17 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentPeriod = 'all';
     let allClientData = [];
     let allProductData = [];
+    let clientAnalyticsRefreshInterval = null;
 
     // Load initial data
     loadDashboardOverview();
     loadGeneralMetrics('all');
+    updateDebtColumnHeader('all');
     loadClientAnalytics('all');
     loadProductAnalytics('all');
+
+    // Start auto-refresh for client analytics
+    startClientAnalyticsRefresh();
 
     // Time period filter buttons
     document.querySelectorAll('[data-period]').forEach(button => {
@@ -327,6 +332,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Load data for selected period
             currentPeriod = this.dataset.period;
+            updateDebtColumnHeader(currentPeriod);
             loadGeneralMetrics(currentPeriod);
             loadClientAnalytics(currentPeriod);
             loadProductAnalytics(currentPeriod);
@@ -355,6 +361,20 @@ document.addEventListener('DOMContentLoaded', function() {
         const searchTerm = this.value.toLowerCase();
         filterProducts(searchTerm);
     });
+
+    function startClientAnalyticsRefresh() {
+        // Refresh client analytics every 10 seconds
+        clientAnalyticsRefreshInterval = setInterval(function() {
+            loadClientAnalytics(currentPeriod);
+        }, 10000);
+    }
+
+    function stopClientAnalyticsRefresh() {
+        if (clientAnalyticsRefreshInterval) {
+            clearInterval(clientAnalyticsRefreshInterval);
+            clientAnalyticsRefreshInterval = null;
+        }
+    }
 
     function loadGeneralMetrics(period) {
         fetch(`/api/general-metrics/?period=${period}`, {
@@ -426,15 +446,29 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
+    function updateDebtColumnHeader(period) {
+        // Update debt column header based on selected period
+        const periodNames = {
+            'today': 'Debt (Today)',
+            'week': 'Debt (Last 7 Days)',
+            'month': 'Debt (Last 30 Days)',
+            'quarter': 'Debt (Last 90 Days)',
+            '6months': 'Debt (Last 6 Months)',
+            'year': 'Debt (Last Year)',
+            'all': 'Debt (All-time)'
+        };
+        document.getElementById('debt-column-header').textContent = periodNames[period] || 'Debt';
+    }
+
     function updateDashboardOverviewCards(summary) {
         document.getElementById('total-clients-overview').textContent = summary.total_clients;
         document.getElementById('total-products-overview').textContent = summary.total_products;
         document.getElementById('total-stock-value').textContent = `PKR ${summary.total_stock_value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-        document.getElementById('total-paid-amount').textContent = `PKR ${summary.total_paid_amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         document.getElementById('total-unpaid-amount').textContent = `PKR ${summary.total_unpaid_amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     }
 
     function updateGeneralMetricsCards(summary) {
+        document.getElementById('total-paid-amount').textContent = `PKR ${summary.total_paid_amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         document.getElementById('total-revenue').textContent = `PKR ${summary.total_revenue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         document.getElementById('total-profit').textContent = `PKR ${summary.total_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         document.getElementById('total-expenses').textContent = `PKR ${summary.total_expenses.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
