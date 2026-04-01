@@ -1389,16 +1389,91 @@ def export_client_pdf(request, pk):
     
     elements.append(financial_table)
     
+    # Get time period from query params
+    from datetime import datetime
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+    sales_filter = {'client': client}
+    payments_filter = {'client': client}
+    if start_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+            sales_filter['sale_date__date__gte'] = start_date
+            payments_filter['date__date__gte'] = start_date
+        except Exception:
+            pass
+    if end_date_str:
+        try:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+            sales_filter['sale_date__date__lte'] = end_date
+            payments_filter['date__date__lte'] = end_date
+        except Exception:
+            pass
+
+    # Sales History Section
+    elements.append(Spacer(1, 0.4*inch))
+    elements.append(Paragraph("Sales History", heading_style))
+    sales = Sale.objects.filter(**sales_filter).order_by('-sale_date')
+    sales_data = [["Date", "Amount (Rs.)"]]
+    for sale in sales:
+        sales_data.append([
+            sale.sale_date.strftime('%Y-%m-%d'),
+            f"{sale.total_amount:,.2f}"
+        ])
+    sales_table = Table(sales_data, colWidths=[3*inch, 3*inch])
+    sales_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2980b9')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('FONTSIZE', (0, 1), (-1, -1), 11),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
+        ('ALIGN', (1, 1), (1, -1), 'RIGHT'),
+    ]))
+    elements.append(sales_table)
+
+    # Payments History Section
+    elements.append(Spacer(1, 0.4*inch))
+    elements.append(Paragraph("Payments History", heading_style))
+    payments = Payment.objects.filter(**payments_filter).order_by('-date')
+    payments_data = [["Date", "Amount (Rs.)", "Mode", "Bank"]]
+    for payment in payments:
+        payments_data.append([
+            payment.date.strftime('%Y-%m-%d'),
+            f"{payment.amount:,.2f}",
+            payment.get_mode_display(),
+            payment.bank or "-"
+        ])
+    payments_table = Table(payments_data, colWidths=[1.5*inch, 1.5*inch, 1.5*inch, 1.5*inch])
+    payments_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#8e44ad')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('FONTSIZE', (0, 1), (-1, -1), 11),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
+        ('ALIGN', (1, 1), (1, -1), 'RIGHT'),
+    ]))
+    elements.append(payments_table)
+
     # Build PDF
     doc.build(elements)
-    
+
     # Get PDF data
     buffer.seek(0)
-    
+
     # Create HTTP response
     response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="client_{client.name.replace(" ", "_")}.pdf"'
-    
+
     return response
 
 

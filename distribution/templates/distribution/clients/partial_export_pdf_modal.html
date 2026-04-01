@@ -1,0 +1,56 @@
+<!-- Modal for selecting time period for PDF export -->
+<div class="modal fade" id="exportPdfModal" tabindex="-1" aria-labelledby="exportPdfModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="exportPdfModalLabel">Select Time Period for Report</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="exportPdfForm">
+          <div class="mb-3">
+            <label for="startDate" class="form-label">Start Date</label>
+            <input type="date" class="form-control" id="startDate" name="start_date">
+          </div>
+          <div class="mb-3">
+            <label for="endDate" class="form-label">End Date</label>
+            <input type="date" class="form-control" id="endDate" name="end_date">
+          </div>
+          <input type="hidden" id="exportClientId" name="client_id">
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success" id="exportPdfSubmit">Export PDF</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Open modal and set client id
+function openExportPdfModal(clientId) {
+  document.getElementById('exportClientId').value = clientId;
+  document.getElementById('startDate').value = '';
+  document.getElementById('endDate').value = '';
+  var modal = new bootstrap.Modal(document.getElementById('exportPdfModal'));
+  modal.show();
+}
+
+// Handle export button click
+function handleExportPdf() {
+  const clientId = document.getElementById('exportClientId').value;
+  const startDate = document.getElementById('startDate').value;
+  const endDate = document.getElementById('endDate').value;
+  let url = `/clients/${clientId}/export-pdf/`;
+  const params = [];
+  if (startDate) params.push(`start_date=${startDate}`);
+  if (endDate) params.push(`end_date=${endDate}`);
+  if (params.length > 0) url += '?' + params.join('&');
+  window.location.href = url;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('exportPdfSubmit').addEventListener('click', handleExportPdf);
+});
+</script>
