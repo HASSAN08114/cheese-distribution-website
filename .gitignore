@@ -86,3 +86,4 @@ local_settings.py
 
 *.log
 
+.env.example
