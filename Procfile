@@ -1,1 +1,1 @@
-web: python manage.py migrate && gunicorn cheese_distribution.wsgi
+web: python manage.py migrate && python manage.py collectstatic --noinput && gunicorn cheese_distribution.wsgi:application
