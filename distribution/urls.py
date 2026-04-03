@@ -14,6 +14,8 @@ urlpatterns = [
     path('api/stock-history/', views.get_stock_history, name='get_stock_history'),
     path('api/payment-history/', views.get_payment_history, name='get_payment_history'),
     path('api/product-stock/<int:product_id>/', views.get_product_stock, name='get_product_stock'),
+    path('api/manufacturer/<int:manufacturer_id>/', views.get_manufacturer_details, name='get_manufacturer_details'),
+    path('api/filtered-products/', views.get_filtered_products, name='get_filtered_products'),
     
     # Merged inventory management (manufacturers + cheese)
     path('inventory/', views.inventory_management, name='inventory_management'),
@@ -34,6 +36,7 @@ urlpatterns = [
 
     path('clients/', views.client_list, name='client_list'),
     path('clients/add/', views.client_add, name='client_add'),
+    path('clients/export-all-pdf/', views.export_all_clients_pdf, name='export_all_clients_pdf'),
     path('clients/<int:pk>/edit/', views.client_edit, name='client_edit'),
     path('clients/<int:pk>/delete/', views.client_delete, name='client_delete'),
     path('clients/<int:pk>/export-pdf/', views.export_client_pdf, name='export_client_pdf'),

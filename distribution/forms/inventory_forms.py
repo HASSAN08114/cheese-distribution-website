@@ -12,6 +12,11 @@ class ManufacturerForm(forms.ModelForm):
             'contact_info': forms.TextInput(attrs={'class': 'form-control'}),
             'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['contact_info'].required = False
+        self.fields['address'].required = False
 
 
 class CheeseTypeForm(forms.ModelForm):

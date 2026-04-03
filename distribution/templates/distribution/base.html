@@ -117,6 +117,121 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
+    <!-- AJAX Form Submission Utility -->
+    <script>
+        // Global storage for tracking form submissions to prevent duplicates
+        const submittingForms = new Set();
+        
+        /**
+         * Handle AJAX form submission with deduplication and loading state
+         * @param {HTMLFormElement} form - The form element
+         * @returns {Promise}
+         */
+        function submitFormAjax(form) {
+            const formId = form.id || form.name || 'form-' + Math.random();
+            
+            // Prevent duplicate submissions
+            if (submittingForms.has(formId)) {
+                return Promise.reject(new Error('Form is already being submitted'));
+            }
+            
+            // Mark form as submitting
+            submittingForms.add(formId);
+            
+            // Disable all submit buttons in the form
+            const submitButtons = form.querySelectorAll('button[type="submit"]');
+            const originalButtonStates = [];
+            
+            submitButtons.forEach(btn => {
+                originalButtonStates.push({
+                    button: btn,
+                    originalText: btn.innerHTML,
+                    originalDisabled: btn.disabled
+                });
+                btn.disabled = true;
+                // Enhanced loading bar with animated progress
+                btn.innerHTML = `
+                    <div class="d-inline-flex align-items-center gap-2">
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        <span>Submitting...</span>
+                    </div>
+                `;
+                btn.style.minWidth = btn.offsetWidth + 'px'; // Prevent button width change
+            });
+            
+            // Prepare form data
+            const formData = new FormData(form);
+            const csrfToken = form.querySelector('[name=csrfmiddlewaretoken]')?.value || 
+                             document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+            
+            // Send AJAX request
+            const fetchPromise = fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Re-enable submit buttons
+                submitButtons.forEach(btn => {
+                    btn.disabled = btn.originalDisabled || false;
+                    btn.innerHTML = btn.originalText;
+                });
+                
+                // Mark form as no longer submitting
+                submittingForms.delete(formId);
+                
+                return data;
+            })
+            .catch(error => {
+                console.error('Form submission error:', error);
+                
+                // Re-enable submit buttons on error
+                submitButtons.forEach(btn => {
+                    btn.disabled = btn.originalDisabled || false;
+                    btn.innerHTML = btn.originalText;
+                });
+                
+                // Mark form as no longer submitting
+                submittingForms.delete(formId);
+                
+                throw error;
+            });
+            
+            return fetchPromise;
+        }
+        
+        /**
+         * Setup AJAX form handler for auto-submission
+         * @param {HTMLFormElement} form - The form element
+         * @param {Function} onSuccess - Callback on success
+         * @param {Function} onError - Callback on error
+         */
+        function setupAjaxForm(form, onSuccess, onError) {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                submitFormAjax(this)
+                    .then(data => {
+                        if (data.success) {
+                            if (onSuccess) onSuccess(data);
+                        } else {
+                            showToast(data.error || 'An error occurred', 'danger');
+                            if (onError) onError(data);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        showToast(error.message || 'An error occurred while submitting the form.', 'danger');
+                        if (onError) onError(error);
+                    });
+            });
+        }
+    </script>
+    
     <!-- Toast Notification Script -->
     <script>
         function showToast(message, type = 'success') {

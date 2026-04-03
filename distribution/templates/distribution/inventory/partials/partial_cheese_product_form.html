@@ -1,4 +1,44 @@
 <form id="cheeseProductForm" method="post" action="{% url 'cheese_add' %}">
     {% csrf_token %}
-    {{ cheese_product_form.as_p }}
+    <div class="mb-3">
+        <label for="{{ cheese_product_form.manufacturer.id_for_label }}" class="form-label">Manufacturer</label>
+        {{ cheese_product_form.manufacturer }}
+        {% if cheese_product_form.manufacturer.errors %}
+            <div class="text-danger">{{ cheese_product_form.manufacturer.errors }}</div>
+        {% endif %}
+    </div>
+    
+    <div class="mb-3">
+        <label for="{{ cheese_product_form.type.id_for_label }}" class="form-label">Type</label>
+        {{ cheese_product_form.type }}
+        {% if cheese_product_form.type.errors %}
+            <div class="text-danger">{{ cheese_product_form.type.errors }}</div>
+        {% endif %}
+    </div>
+    
+    <div class="mb-3">
+        <label for="{{ cheese_product_form.packet_size.id_for_label }}" class="form-label">Packet Size (KG)</label>
+        {{ cheese_product_form.packet_size }}
+        {% if cheese_product_form.packet_size.errors %}
+            <div class="text-danger">{{ cheese_product_form.packet_size.errors }}</div>
+        {% endif %}
+    </div>
+    
+    <div class="mb-3">
+        <label for="{{ cheese_product_form.purchase_price_per_packet.id_for_label }}" class="form-label">Purchase Price (PKR/Packet)</label>
+        {{ cheese_product_form.purchase_price_per_packet }}
+        {% if cheese_product_form.purchase_price_per_packet.errors %}
+            <div class="text-danger">{{ cheese_product_form.purchase_price_per_packet.errors }}</div>
+        {% endif %}
+    </div>
+    
+    <div class="mb-3">
+        <label for="{{ cheese_product_form.available_quantity_packets.id_for_label }}" class="form-label">Available Quantity (Packets)</label>
+        {{ cheese_product_form.available_quantity_packets }}
+        {% if cheese_product_form.available_quantity_packets.errors %}
+            <div class="text-danger">{{ cheese_product_form.available_quantity_packets.errors }}</div>
+        {% endif %}
+    </div>
 </form>
+
+

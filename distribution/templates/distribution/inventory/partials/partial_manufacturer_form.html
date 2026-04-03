@@ -1,4 +1,26 @@
 <form id="manufacturerForm" method="post" action="{% url 'manufacturer_add' %}">
     {% csrf_token %}
-    {{ manufacturer_form.as_p }}
+    <div class="mb-3">
+        <label for="{{ manufacturer_form.name.id_for_label }}" class="form-label">Name</label>
+        {{ manufacturer_form.name }}
+        {% if manufacturer_form.name.errors %}
+            <div class="text-danger">{{ manufacturer_form.name.errors }}</div>
+        {% endif %}
+    </div>
+    
+    <div class="mb-3">
+        <label for="{{ manufacturer_form.contact_info.id_for_label }}" class="form-label">Phone</label>
+        {{ manufacturer_form.contact_info }}
+        {% if manufacturer_form.contact_info.errors %}
+            <div class="text-danger">{{ manufacturer_form.contact_info.errors }}</div>
+        {% endif %}
+    </div>
+    
+    <div class="mb-3">
+        <label for="{{ manufacturer_form.address.id_for_label }}" class="form-label">Address</label>
+        {{ manufacturer_form.address }}
+        {% if manufacturer_form.address.errors %}
+            <div class="text-danger">{{ manufacturer_form.address.errors }}</div>
+        {% endif %}
+    </div>
 </form>

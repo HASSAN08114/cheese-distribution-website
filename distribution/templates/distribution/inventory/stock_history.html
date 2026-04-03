@@ -12,6 +12,42 @@
             <p style="color: var(--text-secondary)">View all stock additions and modifications</p>
         </div>
     </div>
+    
+    <!-- Filter Controls -->
+    <div class="card-body" style="background-color: #f8f9fa;">
+        <div style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 180px;">
+                <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">From Date</label>
+                <input type="date" id="stockFilterFromDate" class="form-control form-control-sm">
+            </div>
+            <div style="flex: 1; min-width: 180px;">
+                <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">To Date</label>
+                <input type="date" id="stockFilterToDate" class="form-control form-control-sm">
+            </div>
+            <div style="flex: 1; min-width: 180px;">
+                <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">Manufacturer</label>
+                <select id="stockFilterManufacturer" class="form-control form-control-sm">
+                    <option value="">-- All Manufacturers --</option>
+                </select>
+            </div>
+            <div style="flex: 1; min-width: 180px;">
+                <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">Type</label>
+                <select id="stockFilterType" class="form-control form-control-sm">
+                    <option value="">-- All Types --</option>
+                </select>
+            </div>
+            <div style="flex: 1; min-width: 180px;">
+                <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">Product</label>
+                <select id="stockFilterProduct" class="form-control form-control-sm">
+                    <option value="">-- All Products --</option>
+                </select>
+            </div>
+            <button class="btn btn-sm btn-secondary" onclick="resetStockFilters()" style="height: fit-content;" title="Reset filters">
+                Reset
+            </button>
+        </div>
+    </div>
+    
     <div class="card-body card-body-compact">
         <div class="table-responsive">
             <table class="table table-hover">
@@ -19,8 +55,6 @@
                     <tr>
                         <th>Products</th>
                         <th>Operation Type</th>
-                        <th>Price/Unit (PKR)</th>
-                        <th>Total Value (PKR)</th>
                         <th>Added By</th>
                         <th>Date</th>
                     </tr>
@@ -60,24 +94,6 @@
                                 <span class="badge bg-info">Price Change</span>
                             {% endif %}
                         </td>
-                        <td>
-                            {% with first_item=addition.stockadditionitem_set.first %}
-                                {% if first_item %}
-                                    PKR {{ first_item.cheese_product.purchase_price_per_packet|floatformat:2 }}
-                                {% else %}
-                                    —
-                                {% endif %}
-                            {% endwith %}
-                        </td>
-                        <td>
-                            {% with first_item=addition.stockadditionitem_set.first %}
-                                {% if first_item %}
-                                    PKR {{ addition.total_value|floatformat:2 }}
-                                {% else %}
-                                    —
-                                {% endif %}
-                            {% endwith %}
-                        </td>
                         <td>{% if addition.added_by %}{{ addition.added_by.user.username }}{% else %}N/A{% endif %}</td>
                         <td>{{ addition.date_last_updated|date:"M d, Y H:i" }}</td>
                     </tr>
@@ -94,4 +110,265 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Stock History Filtering with Dependent Dropdowns
+let stockData = {
+    products: [],  // Array of {manufacturer, type, packetSize, display}
+};
+
+function applyStockFilters() {
+    const fromDate = document.getElementById('stockFilterFromDate').value;
+    const toDate = document.getElementById('stockFilterToDate').value;
+    const filterType = document.getElementById('stockFilterType').value;
+    const filterProduct = document.getElementById('stockFilterProduct').value;
+    const filterManufacturer = document.getElementById('stockFilterManufacturer').value;
+    
+    const rows = document.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+        if (row.querySelector('td:nth-child(2)')) {  // Check if it's not an empty message row
+            const productElement = row.querySelector('td small.text-muted');
+            if (!productElement) return;
+            
+            const dateText = row.querySelector('td:last-child').textContent;
+            const stockDate = new Date(dateText);
+            
+            const fromDateObj = fromDate ? new Date(fromDate) : null;
+            const toDateObj = toDate ? new Date(toDate + 'T23:59:59') : null;
+            
+            let show = true;
+            
+            // Apply date filter
+            if (fromDateObj && stockDate < fromDateObj) show = false;
+            if (toDateObj && stockDate > toDateObj) show = false;
+            
+            // Parse product info from row by checking child nodes
+            const productLines = [];
+            productElement.childNodes.forEach(node => {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    const line = node.textContent.trim();
+                    if (line) productLines.push(line);
+                } else if (node.tagName === 'BR') {
+                    // br tags separate products
+                }
+            });
+            
+            let matchesFilters = productLines.some(line => {
+                const parts = line.split(' - ');
+                const mfg = parts[0]?.trim() || '';
+                const rest = parts[1]?.trim() || '';
+                const typeMatch = rest.match(/^(.+?)\s+[\d.]+kg$/i);
+                const type = typeMatch ? typeMatch[1].trim() : '';
+                const fullDisplay = `${mfg} - ${rest}`;
+                
+                let matches = true;
+                if (filterManufacturer && mfg !== filterManufacturer) matches = false;
+                if (filterType && type !== filterType) matches = false;
+                if (filterProduct && fullDisplay !== filterProduct) matches = false;
+                
+                return matches;
+            });
+            
+            if (!matchesFilters && (filterManufacturer || filterType || filterProduct)) {
+                show = false;
+            }
+            
+            row.style.display = show ? '' : 'none';
+        }
+    });
+}
+
+function updateProductDropdown() {
+    const filterManufacturer = document.getElementById('stockFilterManufacturer').value;
+    const filterType = document.getElementById('stockFilterType').value;
+    const productSelect = document.getElementById('stockFilterProduct');
+    const currentValue = productSelect.value;
+    
+    // Clear products except first option
+    while (productSelect.options.length > 1) {
+        productSelect.remove(1);
+    }
+    
+    // Get products that match selected manufacturer and type
+    const matchingProducts = new Set();
+    stockData.products.forEach(product => {
+        let matches = true;
+        if (filterManufacturer && product.manufacturer !== filterManufacturer) matches = false;
+        if (filterType && product.type !== filterType) matches = false;
+        if (matches) {
+            matchingProducts.add(product.display);
+        }
+    });
+    
+    // Add matching products to dropdown
+    Array.from(matchingProducts).sort().forEach(product => {
+        const option = document.createElement('option');
+        option.value = product;
+        option.textContent = product;
+        productSelect.appendChild(option);
+    });
+    
+    // Keep previous selection if still valid, otherwise reset
+    if (Array.from(productSelect.options).some(opt => opt.value === currentValue)) {
+        productSelect.value = currentValue;
+    } else {
+        productSelect.value = '';
+    }
+    
+    applyStockFilters();
+}
+
+function updateTypeDropdown() {
+    const filterManufacturer = document.getElementById('stockFilterManufacturer').value;
+    const typeSelect = document.getElementById('stockFilterType');
+    const currentValue = typeSelect.value;
+    
+    // Clear types except first option
+    while (typeSelect.options.length > 1) {
+        typeSelect.remove(1);
+    }
+    
+    // Get types that match selected manufacturer
+    const matchingTypes = new Set();
+    stockData.products.forEach(product => {
+        if (!filterManufacturer || product.manufacturer === filterManufacturer) {
+            matchingTypes.add(product.type);
+        }
+    });
+    
+    // Add matching types to dropdown
+    Array.from(matchingTypes).sort().forEach(type => {
+        const option = document.createElement('option');
+        option.value = type;
+        option.textContent = type;
+        typeSelect.appendChild(option);
+    });
+    
+    // Keep previous selection if still valid, otherwise reset
+    if (Array.from(typeSelect.options).some(opt => opt.value === currentValue)) {
+        typeSelect.value = currentValue;
+    } else {
+        typeSelect.value = '';
+    }
+    
+    updateProductDropdown();
+}
+
+function resetStockFilters() {
+    document.getElementById('stockFilterFromDate').value = '';
+    document.getElementById('stockFilterToDate').value = '';
+    document.getElementById('stockFilterType').value = '';
+    document.getElementById('stockFilterProduct').value = '';
+    document.getElementById('stockFilterManufacturer').value = '';
+    
+    updateTypeDropdown();
+    
+    const rows = document.querySelectorAll('tbody tr');
+    rows.forEach(row => row.style.display = '');
+}
+
+// Attach filter event listeners and populate dropdowns
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Initializing stock filters...');
+    
+    // Parse product data from table
+    const rows = document.querySelectorAll('tbody tr');
+    const manufacturerSet = new Set();
+    
+    console.log('Found ' + rows.length + ' rows');
+    
+    rows.forEach((row, rowIndex) => {
+        const productElement = row.querySelector('td small.text-muted');
+        if (!productElement) {
+            console.log('Row ' + rowIndex + ': no product element found');
+            return;
+        }
+        
+        // Parse child nodes properly to handle <br> tags
+        const productLines = [];
+        let currentLine = '';
+        
+        productElement.childNodes.forEach(node => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                const text = node.textContent.trim();
+                if (text) {
+                    currentLine += (currentLine ? ' ' : '') + text;
+                }
+            } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'BR') {
+                if (currentLine) {
+                    productLines.push(currentLine);
+                    currentLine = '';
+                }
+            }
+        });
+        
+        if (currentLine) {
+            productLines.push(currentLine);
+        }
+        
+        console.log('Row ' + rowIndex + ' lines: ', productLines);
+        
+        productLines.forEach(line => {
+            if (!line.trim()) return;
+            
+            const parts = line.split(' - ');
+            const manufacturer = parts[0]?.trim() || '';
+            const rest = parts[1]?.trim() || '';
+            
+            console.log('Parsing line: "' + line + '" -> mfg="' + manufacturer + '" rest="' + rest + '"');
+            
+            // Extract type from "Type PacketSize" format
+            const typeMatch = rest.match(/^(.+?)\s+([\d.]+kg)$/i);
+            if (typeMatch && manufacturer && rest) {
+                const type = typeMatch[1].trim();
+                const packetSize = typeMatch[2].trim();
+                const display = `${manufacturer} - ${rest}`;
+                
+                console.log('  -> Valid product: type="' + type + '" packetSize="' + packetSize + '" display="' + display + '"');
+                
+                stockData.products.push({
+                    manufacturer,
+                    type,
+                    packetSize,
+                    display
+                });
+                
+                manufacturerSet.add(manufacturer);
+            } else {
+                console.log('  -> Not matched by regex');
+            }
+        });
+    });
+    
+    console.log('Total products loaded:', stockData.products.length);
+    console.log('Manufacturers:', Array.from(manufacturerSet));
+    
+    // Add manufacturers to dropdown
+    const manufacturerSelect = document.getElementById('stockFilterManufacturer');
+    Array.from(manufacturerSet).sort().forEach(mfg => {
+        const option = document.createElement('option');
+        option.value = mfg;
+        option.textContent = mfg;
+        manufacturerSelect.appendChild(option);
+    });
+    
+    console.log('Manufacturer dropdown populated with ' + (manufacturerSet.size) + ' options');
+    
+    // Add event listeners
+    document.getElementById('stockFilterFromDate').addEventListener('change', applyStockFilters);
+    document.getElementById('stockFilterToDate').addEventListener('change', applyStockFilters);
+    document.getElementById('stockFilterManufacturer').addEventListener('change', updateTypeDropdown);
+    document.getElementById('stockFilterType').addEventListener('change', updateProductDropdown);
+    document.getElementById('stockFilterProduct').addEventListener('change', applyStockFilters);
+    
+    console.log('Event listeners attached');
+    
+    // Initialize type and product dropdowns
+    updateTypeDropdown();
+    
+    console.log('Stock filters initialized');
+});
+</script>
 {% endblock %}

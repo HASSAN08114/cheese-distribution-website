@@ -22,7 +22,7 @@
         <div class="card bg-light">
             <div class="card-body text-center">
                 <h6 class="card-subtitle mb-2 text-muted fw-semibold">Total Stock Quantity</h6>
-                <h3 class="card-text mb-0 text-info fw-bold">{{ inventory_summary.total_stock_quantity|floatformat:2 }} packets</h3>
+                <h3 class="card-text mb-0 text-info fw-bold total-stock-quantity">{{ inventory_summary.total_stock_quantity|stringformat:"0g" }} packets</h3>
             </div>
         </div>
     </div>
@@ -80,7 +80,7 @@
             </div>
             <div class="card-body card-body-compact flex-grow-1 d-flex flex-column">
                 <div class="table-responsive flex-grow-1">
-                    <table class="table table-sm table-hover mb-0">
+                    <table id="manufacturerTable" class="table table-sm table-hover mb-0">
                         <thead class="table-light">
                             <tr>
                                 <th>Name</th>
@@ -90,7 +90,12 @@
                         <tbody>
                             {% for manufacturer in manufacturers %}
                             <tr>
-                                <td>{{ manufacturer.name }}</td>
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span>{{ manufacturer.name }}</span>
+                                        <button type="button" class="btn btn-xs btn-outline-info manufacturer-info-btn" data-manufacturer-id="{{ manufacturer.pk }}" title="View details"><i class="bi bi-info-circle"></i></button>
+                                    </div>
+                                </td>
                                 <td class="text-end">
                                     <button type="button" class="btn btn-xs btn-outline-warning edit-btn" data-edit-url="{% url 'manufacturer_edit' manufacturer.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal"><i class="bi bi-pencil"></i></button>
                                     {% if user_is_owner %}
@@ -118,7 +123,7 @@
             </div>
             <div class="card-body card-body-compact flex-grow-1 d-flex flex-column">
                 <div class="table-responsive flex-grow-1">
-                    <table class="table table-sm table-hover mb-0">
+                    <table id="cheeseTypeTable" class="table table-sm table-hover mb-0">
                         <thead class="table-light">
                             <tr>
                                 <th>Name</th>
@@ -174,19 +179,21 @@
                 </thead>
                 <tbody>
                     {% for item in products_with_value %}
-                    <tr class="{% if item.product.available_quantity_packets > 10 %}table-success{% elif item.product.available_quantity_packets > 0 %}table-warning{% else %}table-danger{% endif %}">
+                    <tr class="{% if item.product.available_quantity_packets > 10 %}table-success{% elif item.product.available_quantity_packets > 0 %}table-warning{% else %}table-danger{% endif %}" data-product-id="{{ item.product.id }}">
                         <td>{{ item.product.manufacturer.name }}</td>
                         <td>{{ item.product.type.name }}</td>
                         <td>{{ item.product.packet_size }} KG</td>
                         <td>
                             <div class="d-flex align-items-center gap-2">
                                 <span>PKR {{ item.product.purchase_price_per_packet|floatformat:2 }}</span>
+                                {% if user_is_owner %}
                                 <button type="button" class="btn btn-xs btn-outline-info change-price-btn" data-product-id="{{ item.product.id }}" title="Change Price">
                                     <i class="bi bi-pencil-square"></i>
                                 </button>
+                                {% endif %}
                             </div>
                         </td>
-                        <td>
+                        <td data-quantity="{{ item.product.available_quantity_packets }}">
                             <div class="d-flex align-items-center gap-2">
                                 <button type="button" class="btn btn-xs btn-outline-danger remove-stock-btn" data-product-id="{{ item.product.id }}" data-product-name="{{ item.product.manufacturer.name }} - {{ item.product.type.name }} {{ item.product.packet_size }}KG" title="Remove Stock">
                                     <i class="bi bi-dash-circle"></i>
@@ -199,8 +206,7 @@
                         </td>
                         <td class="text-end">
                             <div class="btn-group" role="group">
-                                <button type="button" class="btn btn-xs btn-outline-warning
-                                 edit-btn" data-edit-url="{% url 'cheese_edit' item.product.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal" title="Edit">
+                                <button type="button" class="btn btn-xs btn-outline-warning edit-btn" data-edit-url="{% url 'cheese_edit' item.product.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal" title="Edit">
                                     <i class="bi bi-pencil"></i>
                                 </button>
                                 {% if user_is_owner %}
@@ -501,72 +507,6 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
-    // Handle Add Stock Form Submission (AJAX)
-    const addStockForm = document.getElementById('addStockForm');
-    if (addStockForm) {
-        addStockForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const formData = new FormData(this);
-            fetch(this.action, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-CSRFToken': this.querySelector('[name=csrfmiddlewaretoken]').value,
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showToast(data.message || 'Stock added successfully!', 'success');
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('addStockModal'));
-                    if (modal) modal.hide();
-                    addStockForm.reset();
-                    setTimeout(() => location.reload(), 1500);
-                } else {
-                    showToast(data.error || 'An error occurred while adding stock.', 'danger');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showToast('An error occurred while adding stock.', 'danger');
-            });
-        });
-    }
-
-    // Handle Remove Stock Form Submission (AJAX)
-    const removeStockForm = document.getElementById('removeStockForm');
-    if (removeStockForm) {
-        removeStockForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const formData = new FormData(this);
-            fetch(this.action, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-CSRFToken': this.querySelector('[name=csrfmiddlewaretoken]').value,
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showToast(data.message || 'Stock removed successfully!', 'success');
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('removeStockModal'));
-                    if (modal) modal.hide();
-                    removeStockForm.reset();
-                    setTimeout(() => location.reload(), 1500);
-                } else {
-                    showToast(data.error || 'An error occurred while removing stock.', 'danger');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showToast('An error occurred while removing stock.', 'danger');
-            });
-        });
-    }
-
     // Live search for cheese products
     const searchInput = document.getElementById('cheeseProductSearch');
     const cheeseTable = document.getElementById('cheeseProductTable');
@@ -580,42 +520,6 @@ document.addEventListener("DOMContentLoaded", function () {
             });
         });
     }
-
-    // Handle Manufacturer Modal (AJAX add)
-    function attachManufacturerHandler() {
-        const manufacturerForm = document.getElementById('manufacturerForm');
-        if (manufacturerForm) {
-            manufacturerForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const form = e.target;
-                const formData = new FormData(form);
-                fetch('{% url "manufacturer_add" %}', {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value,
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showToast('Manufacturer added successfully!', 'success');
-                        const modal = bootstrap.Modal.getInstance(document.getElementById('manufacturerModal'));
-                        if (modal) modal.hide();
-                        setTimeout(() => location.reload(), 1500);
-                    } else {
-                        showToast(data.error || 'Manufacturer already exists', 'danger');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    showToast('Failed to add manufacturer', 'danger');
-                });
-            });
-        }
-    }
-    attachManufacturerHandler();
 
     // Phone number formatting (0304-9907031 format): XXX-XXXXXXXX
     function formatPhoneNumber(phone) {
@@ -672,100 +576,63 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
-    // Handle Cheese Type Modal (AJAX add)
-    function attachCheeseTypeHandler() {
-        const cheeseTypeForm = document.getElementById('cheeseTypeForm');
-        if (cheeseTypeForm) {
-            cheeseTypeForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const form = e.target;
-                const formData = new FormData(form);
-                fetch('{% url "cheese_type_add" %}', {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value,
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showToast('Cheese type added successfully!', 'success');
-                        const modal = bootstrap.Modal.getInstance(document.getElementById('cheeseTypeModal'));
-                        if (modal) modal.hide();
-                        setTimeout(() => location.reload(), 1500);
-                    } else {
-                        showToast(data.error || 'Cheese type already exists', 'danger');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    showToast('Failed to add cheese type', 'danger');
-                });
-            });
-        }
+    // Manufacturer Info Modal Handler
+    function createManufacturerInfoModal() {
+        const modalHtml = `
+            <div class="modal fade" id="manufacturerInfoModal" tabindex="-1" aria-labelledby="manufacturerInfoModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="manufacturerInfoModalLabel">Manufacturer Details</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body" id="manufacturerInfoContent">
+                            <!-- Content will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        const div = document.createElement('div');
+        div.innerHTML = modalHtml;
+        document.body.appendChild(div.firstElementChild);
+        return document.getElementById('manufacturerInfoModal');
     }
-    attachCheeseTypeHandler();
 
-    // Handle Cheese Product Modal (AJAX add)
-    function attachCheeseProductHandler() {
-        const cheeseProductForm = document.getElementById('cheeseProductForm');
-        if (cheeseProductForm) {
-            cheeseProductForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const form = e.target;
-                const formData = new FormData(form);
-                fetch('{% url "cheese_add" %}', {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value,
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showToast('Cheese product added successfully!', 'success');
-                        const modal = bootstrap.Modal.getInstance(document.getElementById('cheeseProductModal'));
-                        if (modal) modal.hide();
-                        setTimeout(() => location.reload(), 1500);
-                    } else {
-                        showToast(data.error || 'Failed to add cheese product', 'danger');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    showToast('Failed to add cheese product', 'danger');
-                });
-            });
-        }
+    // Ensure modal exists
+    if (!document.getElementById('manufacturerInfoModal')) {
+        createManufacturerInfoModal();
     }
-    attachCheeseProductHandler();
 
-    // Dynamic Edit Modal (AJAX load for edit forms)
-    document.querySelectorAll('.edit-btn, .edit-cheese-type-btn').forEach(btn => {
-        btn.addEventListener('click', function(e) {
-            const url = btn.getAttribute('data-edit-url');
-            const modal = document.getElementById('dynamicEditModal');
-            const modalContent = modal.querySelector('.modal-content, #dynamicEditModalContent');
-            if (modalContent) {
-                modalContent.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary" role="status"></div></div>';
+    // Handle manufacturer info button clicks
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.manufacturer-info-btn');
+        if (btn) {
+            const manufacturerId = btn.getAttribute('data-manufacturer-id');
+            if (manufacturerId) {
+                fetch(`/api/manufacturer/${manufacturerId}/`)
+                    .then(response => response.json())
+                    .then(data => {
+                        const content = document.getElementById('manufacturerInfoContent');
+                        content.innerHTML = `
+                            <div class="card border-0">
+                                <div class="card-body">
+                                    <h6 class="card-title">${data.name}</h6>
+                                    <p class="mb-2"><strong>Phone:</strong> ${data.contact_info || 'Not provided'}</p>
+                                    <p class="mb-0"><strong>Address:</strong> ${data.address || 'Not provided'}</p>
+                                </div>
+                            </div>
+                        `;
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('manufacturerInfoModal')) || 
+                                     new bootstrap.Modal(document.getElementById('manufacturerInfoModal'));
+                        modal.show();
+                    })
+                    .catch(error => {
+                        console.error('Error fetching manufacturer details:', error);
+                        showToast('Error loading manufacturer details', 'danger');
+                    });
             }
-            fetch(url, {
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (modalContent) modalContent.innerHTML = data.html;
-            })
-            .catch(() => {
-                if (modalContent) modalContent.innerHTML = '<div class="alert alert-danger m-3">Failed to load form.</div>';
-            });
-        });
+        }
     });
 
     // Delete Modal (set form action and item name)
@@ -792,6 +659,12 @@ document.addEventListener("DOMContentLoaded", function () {
             
             const formData = new FormData(this);
             const modal = bootstrap.Modal.getInstance(document.getElementById('addSaleModal'));
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalBtnText = submitBtn.innerHTML;
+            
+            // Show loading state on button
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Creating Sale...';
             
             fetch(this.action, {
                 method: 'POST',
@@ -804,20 +677,265 @@ document.addEventListener("DOMContentLoaded", function () {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
+                    // Manually update quantities for sold products
+                    if (data.sold_items) {
+                        data.sold_items.forEach(item => {
+                            const productRow = document.querySelector(`tr[data-product-id="${item.product_id}"]`);
+                            if (productRow) {
+                                const quantityCell = productRow.querySelector('[data-quantity]');
+                                if (quantityCell) {
+                                    const currentQuantity = parseInt(quantityCell.getAttribute('data-quantity'));
+                                    quantityCell.setAttribute('data-quantity', currentQuantity - item.quantity);
+                                    quantityCell.querySelector('span').textContent = (currentQuantity - item.quantity) + ' packets';
+                                }
+                            }
+                        });
+                    }
+                    
+                    // Update total stock quantity
+                    if (data.total_sold_quantity) {
+                        const totalStockEl = document.querySelector('.total-stock-quantity');
+                        if (totalStockEl) {
+                            const currentTotal = parseInt(totalStockEl.textContent);
+                            totalStockEl.textContent = (currentTotal - data.total_sold_quantity) + ' packets';
+                        }
+                    }
+                    
                     showToast(data.message || 'Sale created successfully!', 'success');
                     modal.hide();
                     addSaleForm.reset();
-                    setTimeout(() => location.reload(), 1500);
                 } else {
                     showToast(data.error || 'Failed to create sale', 'danger');
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('An error occurred while creating the sale.');
+                showToast('An error occurred while creating the sale.', 'danger');
+            })
+            .finally(() => {
+                // Restore button state
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnText;
             });
         });
     }
+
+    // Handle Change Price Form Submission (AJAX)
+    const changePriceForm = document.getElementById('changePriceForm');
+    if (changePriceForm) {
+        changePriceForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            
+            fetch(this.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': this.querySelector('[name=csrfmiddlewaretoken]').value,
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message || 'Price updated successfully!', 'success');
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('changePriceModal'));
+                    if (modal) modal.hide();
+                    changePriceForm.reset();
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showToast(data.error || 'Failed to update price', 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('An error occurred while updating the price.', 'danger');
+            });
+        });
+    }
+
+    // Handle Add Stock Form Submission (AJAX)
+    const addStockForm = document.getElementById('addStockForm');
+    if (addStockForm) {
+        addStockForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            const productId = document.getElementById('addStockProductId').value;
+            const quantityToAdd = parseInt(document.querySelector('#addStockForm input[name="quantity"]').value);
+            const submitBtn = document.querySelector('button[form="addStockForm"]');
+            const originalBtnText = submitBtn.innerHTML;
+            
+            // Show loading state
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Loading...';
+            
+            fetch(this.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': this.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update the quantity in the table
+                    const productRow = document.querySelector(`tr[data-product-id="${productId}"]`);
+                    if (productRow) {
+                        const quantityCell = productRow.querySelector('[data-quantity]');
+                        if (quantityCell) {
+                            const currentQuantity = parseInt(quantityCell.getAttribute('data-quantity'));
+                            quantityCell.setAttribute('data-quantity', currentQuantity + quantityToAdd);
+                            quantityCell.querySelector('span').textContent = (currentQuantity + quantityToAdd) + ' packets';
+                        }
+                    }
+                    
+                    // Update total stock quantity
+                    const totalStockEl = document.querySelector('.total-stock-quantity');
+                    if (totalStockEl) {
+                        const currentTotal = parseInt(totalStockEl.textContent);
+                        totalStockEl.textContent = (currentTotal + quantityToAdd) + ' packets';
+                    }
+                    
+                    showToast(data.message || 'Stock added successfully!', 'success');
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('addStockModal'));
+                    if (modal) modal.hide();
+                    addStockForm.reset();
+                } else {
+                    showToast(data.error || 'Failed to add stock', 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('An error occurred while adding stock.', 'danger');
+            })
+            .finally(() => {
+                // Restore button state
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnText;
+            });
+        });
+    }
+
+    // Handle Remove Stock Form Submission (AJAX)
+    const removeStockForm = document.getElementById('removeStockForm');
+    if (removeStockForm) {
+        removeStockForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            const productId = document.getElementById('removeStockProductId').value;
+            const quantityToRemove = parseInt(document.querySelector('#removeStockForm input[name="quantity"]').value);
+            const submitBtn = document.querySelector('button[form="removeStockForm"]');
+            const originalBtnText = submitBtn.innerHTML;
+            
+            // Show loading state
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Loading...';
+            
+            fetch(this.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': this.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update the quantity in the table
+                    const productRow = document.querySelector(`tr[data-product-id="${productId}"]`);
+                    if (productRow) {
+                        const quantityCell = productRow.querySelector('[data-quantity]');
+                        if (quantityCell) {
+                            const currentQuantity = parseInt(quantityCell.getAttribute('data-quantity'));
+                            quantityCell.setAttribute('data-quantity', currentQuantity - quantityToRemove);
+                            quantityCell.querySelector('span').textContent = (currentQuantity - quantityToRemove) + ' packets';
+                        }
+                    }
+                    
+                    // Update total stock quantity
+                    const totalStockEl = document.querySelector('.total-stock-quantity');
+                    if (totalStockEl) {
+                        const currentTotal = parseInt(totalStockEl.textContent);
+                        totalStockEl.textContent = (currentTotal - quantityToRemove) + ' packets';
+                    }
+                    
+                    showToast(data.message || 'Stock removed successfully!', 'success');
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('removeStockModal'));
+                    if (modal) modal.hide();
+                    removeStockForm.reset();
+                } else {
+                    showToast(data.error || 'Failed to remove stock', 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('An error occurred while removing stock.', 'danger');
+            })
+            .finally(() => {
+                // Restore button state
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnText;
+            });
+        });
+    }
+
+    // Handle Edit buttons - load form via AJAX into modal
+    document.querySelectorAll('.edit-btn, .edit-cheese-type-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const editUrl = this.getAttribute('data-edit-url');
+            if (editUrl) {
+                fetch(editUrl, {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    const modalContent = document.getElementById('dynamicEditModalContent');
+                    if (modalContent) {
+                        modalContent.innerHTML = data.html;
+                        
+                        // Handle form submission
+                        const form = modalContent.querySelector('form');
+                        if (form) {
+                            form.addEventListener('submit', function(e) {
+                                e.preventDefault();
+                                const formData = new FormData(this);
+                                fetch(form.action, {
+                                    method: 'POST',
+                                    body: formData,
+                                    headers: {
+                                        'X-Requested-With': 'XMLHttpRequest',
+                                        'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value
+                                    }
+                                })
+                                .then(response => response.json())
+                                .then(data => {
+                                    showToast('Item updated successfully!', 'success');
+                                    const modal = bootstrap.Modal.getInstance(document.getElementById('dynamicEditModal'));
+                                    if (modal) modal.hide();
+                                    setTimeout(() => location.reload(), 1500);
+                                })
+                                .catch(error => {
+                                    console.error('Error:', error);
+                                    showToast('An error occurred while updating the item.', 'danger');
+                                });
+                            });
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('Error loading edit form', 'danger');
+                });
+            }
+        });
+    });
 });
 </script>
 {% endblock %}

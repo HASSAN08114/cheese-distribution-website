@@ -6,14 +6,19 @@
 
 <!-- All Clients Table -->
 <div class="card">
-    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
         <div>
             <h5>Client Management</h5>
             <p style="color: var(--text-secondary)">Manage your clients and their contact information</p>
         </div>
-        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#clientModal">
-            <i class="bi bi-plus-lg"></i> Add Client
-        </button>
+        <div style="display: flex; gap: 0.5rem;">
+            <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#unifiedExportPdfModal" title="Export client reports to PDF">
+                <i class="bi bi-download"></i> Download Report
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#clientModal">
+                <i class="bi bi-plus-lg"></i> Add Client
+            </button>
+        </div>
     </div>
     <div class="card-body card-body-compact">
         <div class="table-responsive">
@@ -30,13 +35,9 @@
                 {% for client_data in clients %}
                 <tr>
                     <td><strong>{{ client_data.name }}</strong></td>
-                    <td>{{ client_data.phone }}</td>
-                    <td>{{ client_data.address|truncatewords:15 }}</td>
+                    <td>{{ client_data.phone|default:"None" }}</td>
+                    <td>{{ client_data.address|default:"None"|truncatewords:15 }}</td>
                     <td class="text-end">
-                        <button type="button" class="btn btn-sm btn-outline-success" title="Export to PDF" onclick="openExportPdfModal({{ client_data.pk }})">
-                            <i class="bi bi-download"></i>
-                        </button>
-                        {% include 'distribution/clients/partial_export_pdf_modal.html' %}
                         <button type="button" class="btn btn-sm btn-outline-primary edit-btn" data-edit-url="{% url 'client_edit' client_data.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal">
                             <i class="bi bi-pencil"></i>
                         </button>
@@ -84,6 +85,46 @@
 {% endblock %}
 
 {% block modals %}
+<!-- Unified Export PDF Modal -->
+<div class="modal fade" id="unifiedExportPdfModal" tabindex="-1" aria-labelledby="unifiedExportPdfModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="unifiedExportPdfModalLabel">Export Client Report</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="unifiedExportForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="exportClientSelect" class="form-label">Select Client</label>
+                        <select id="exportClientSelect" class="form-control" required>
+                            <option value="">-- Select a client --</option>
+                            <option value="all">All Clients (Combined Report)</option>
+                            <optgroup label="Individual Clients">
+                                {% for client_data in clients %}
+                                    <option value="{{ client_data.pk }}">{{ client_data.name }}</option>
+                                {% endfor %}
+                            </optgroup>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="exportStartDate" class="form-label">Start Date (Optional)</label>
+                        <input type="date" id="exportStartDate" class="form-control">
+                    </div>
+                    <div class="mb-3">
+                        <label for="exportEndDate" class="form-label">End Date (Optional)</label>
+                        <input type="date" id="exportEndDate" class="form-control">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success"><i class="bi bi-download"></i> Download PDF</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Delete Modals: Rendered outside main content for proper stacking -->
 <div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -158,39 +199,6 @@ document.addEventListener("DOMContentLoaded", function () {
         modalContent.innerHTML = '';
     });
     
-    // Handle Client Form Submission (Add Client Modal)
-    const clientForm = document.getElementById('clientForm');
-    if (clientForm) {
-        clientForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const formData = new FormData(this);
-            fetch(this.action, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-CSRFToken': this.querySelector('[name=csrfmiddlewaretoken]').value,
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showToast(data.message || 'Client added successfully!', 'success');
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('clientModal'));
-                    if (modal) modal.hide();
-                    clientForm.reset();
-                    setTimeout(() => location.reload(), 1500);
-                } else {
-                    showToast(data.error || 'An error occurred while adding the client.', 'danger');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showToast('An error occurred while adding the client.', 'danger');
-            });
-        });
-    }
-
     // Phone number formatting for client phone field
     function formatPhoneNumber(phone) {
         const cleaned = phone.replace(/\D/g, '');
@@ -207,6 +215,44 @@ document.addEventListener("DOMContentLoaded", function () {
         });
         phoneField.setAttribute('maxlength', '12');
         phoneField.setAttribute('placeholder', '0304-1234567');
+    }
+
+    // Handle Unified Export PDF Form
+    const unifiedExportForm = document.getElementById('unifiedExportForm');
+    if (unifiedExportForm) {
+        unifiedExportForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const clientId = document.getElementById('exportClientSelect').value;
+            const startDate = document.getElementById('exportStartDate').value;
+            const endDate = document.getElementById('exportEndDate').value;
+
+            if (!clientId) {
+                showToast('Please select a client', 'warning');
+                return;
+            }
+
+            let url;
+            const params = [];
+            
+            if (clientId === 'all') {
+                url = '/clients/export-all-pdf/';
+                if (startDate) params.push(`start_date=${startDate}`);
+                if (endDate) params.push(`end_date=${endDate}`);
+            } else {
+                url = `/clients/${clientId}/export-pdf/`;
+                if (startDate) params.push(`start_date=${startDate}`);
+                if (endDate) params.push(`end_date=${endDate}`);
+            }
+
+            if (params.length > 0) url += '?' + params.join('&');
+            
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('unifiedExportPdfModal'));
+            if (modal) modal.hide();
+
+            // Trigger download
+            window.location.href = url;
+        });
     }
 });
 </script>

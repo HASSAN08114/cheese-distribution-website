@@ -83,26 +83,46 @@
             <i class="bi bi-plus-lg"></i> Create Quick Sale
         </button>
     </div>
+    
+    <!-- Filter Controls -->
+    <div class="card-body" style="background-color: #f8f9fa;">
+        <div style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 200px;">
+                <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">From Date</label>
+                <input type="date" id="filtFromDate" class="form-control form-control-sm">
+            </div>
+            <div style="flex: 1; min-width: 200px;">
+                <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">To Date</label>
+                <input type="date" id="filterToDate" class="form-control form-control-sm">
+            </div>
+            <div style="flex: 1; min-width: 200px;">
+                <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">Client</label>
+                <select id="filterClient" class="form-control form-control-sm">
+                    <option value="">-- All Clients --</option>
+                </select>
+            </div>
+            <button class="btn btn-sm btn-secondary" onclick="resetSalesFilters()" style="height: fit-content;" title="Reset filters">
+                Reset
+            </button>
+        </div>
+    </div>
+    
     <div class="card-body-compact">
         <table class="table table-hover">
             <thead>
                 <tr>
-                    <th>Sale ID</th>
                     <th>Client</th>
-                    <th>Date</th>
                     <th>Total</th>
-                    {% if user_is_owner %}<th>Profit</th>{% endif %}
+                    <th>Date</th>                    
                     <th class="text-end">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item in sales_data %}
                 <tr>
-                    <td>#{{ item.sale.id }}</td>
                     <td>{{ item.sale.client.name }}</td>
-                    <td>{{ item.sale.sale_date|date:"M d, Y H:i" }}</td>
                     <td>PKR {{ item.sale.total_amount|floatformat:2 }}</td>
-                    {% if user_is_owner %}<td>PKR {{ item.total_profit|floatformat:2 }}</td>{% endif %}
+                    <td>{{ item.sale.sale_date|date:"M d, Y H:i" }}</td>
                     <td class="text-end">
                         <button class="btn btn-sm btn-outline-secondary view-sale-modal"
                                 data-id="{{ item.sale.id }}">
@@ -112,7 +132,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="{% if user_is_owner %}6{% else %}5{% endif %}" class="text-center text-muted">
+                    <td colspan="4" class="text-center text-muted">
                         No sales yet
                     </td>
                 </tr>
@@ -123,10 +143,102 @@
 </div>
 
 <div id="sale-modal" class="modal" tabindex="-1"></div>
+
+<!-- Return Item Modal -->
+<div class="modal fade" id="returnItemModal" tabindex="-1" aria-hidden="true" style="z-index: 1070;">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Return Item</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p><strong>Product:</strong> <span id="returnProductName"></span></p>
+                <div class="mb-3">
+                    <label class="form-label">Quantity to Return</label>
+                    <input type="number" id="returnQuantity" class="form-control" min="1" step="1">
+                    <small class="text-muted">Max: <span id="returnMaxQty"></span> packets</small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Reason (Optional)</label>
+                    <textarea id="returnReason" class="form-control" rows="3" placeholder="Enter return reason..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmReturnBtn">Confirm Return</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Return All Modal -->
+<div class="modal fade" id="returnAllModal" tabindex="-1" aria-hidden="true" style="z-index: 1070;">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Return All Items</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Return all remaining items from this sale?</p>
+                <div id="returnAllItemsList" class="mb-3">
+                    <!-- List of items to be returned will be populated here -->
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Reason (Optional)</label>
+                    <textarea id="returnAllReason" class="form-control" rows="3" placeholder="Enter return reason..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmReturnAllBtn">Confirm Return All</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+// Setup z-index for return modals to ensure they appear on top
+document.addEventListener('DOMContentLoaded', function() {
+    const returnItemModal = document.getElementById('returnItemModal');
+    const returnAllModal = document.getElementById('returnAllModal');
+    
+    // Handle return item modal z-index
+    if (returnItemModal) {
+        returnItemModal.addEventListener('shown.bs.modal', function() {
+            returnItemModal.style.zIndex = '1070';
+            // Find the backdrop for this modal and adjust it
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            if (backdrops.length > 0) {
+                backdrops[backdrops.length - 1].style.zIndex = '1069';
+            }
+        });
+        
+        returnItemModal.addEventListener('hidden.bs.modal', function() {
+            returnItemModal.style.zIndex = '1070';
+        });
+    }
+    
+    // Handle return all modal z-index
+    if (returnAllModal) {
+        returnAllModal.addEventListener('shown.bs.modal', function() {
+            returnAllModal.style.zIndex = '1070';
+            // Find the backdrop for this modal and adjust it
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            if (backdrops.length > 0) {
+                backdrops[backdrops.length - 1].style.zIndex = '1069';
+            }
+        });
+        
+        returnAllModal.addEventListener('hidden.bs.modal', function() {
+            returnAllModal.style.zIndex = '1070';
+        });
+    }
+});
+
 // Sale History: Add/Remove Item logic + Modal handlers
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOMContentLoaded event fired - setting up handlers');
@@ -184,64 +296,44 @@ document.addEventListener('DOMContentLoaded', function() {
 
     updateRemoveButtons();
 
-    // Quick Sale Form Submission Handler
+    // Quick Sale Form Submission Handler with deduplication
     const quickSaleForm = document.getElementById('quickSaleForm');
     
     if (quickSaleForm) {
-        quickSaleForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(this);
-            
-            fetch(this.action, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-CSRFToken': this.querySelector('[name=csrfmiddlewaretoken]').value,
-                    'X-Requested-With': 'XMLHttpRequest'
+        setupAjaxForm(quickSaleForm,
+            function(data) {
+                showToast(data.message || 'Sale has been created successfully.', 'success');
+                const modal = bootstrap.Modal.getInstance(document.getElementById('quickSaleModal'));
+                if (modal) modal.hide();
+                quickSaleForm.reset();
+                
+                // Reset the formset
+                const container = document.getElementById('formset-container');
+                const totalForms = document.getElementById('id_form-TOTAL_FORMS');
+                const minForms = parseInt(document.getElementById('id_form-MIN_NUM_FORMS').value);
+                
+                // Keep at least minimum forms
+                let rowsToKeep = minForms || 1;
+                const rows = container.querySelectorAll('.formset-row');
+                
+                // Remove extra rows
+                for (let i = rows.length - 1; i >= rowsToKeep; i--) {
+                    rows[i].remove();
                 }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showToast(data.message || 'Sale has been created successfully.', 'success');
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('quickSaleModal'));
-                    if (modal) modal.hide();
-                    quickSaleForm.reset();
-                    
-                    // Reset the formset
-                    const container = document.getElementById('formset-container');
-                    const totalForms = document.getElementById('id_form-TOTAL_FORMS');
-                    const minForms = parseInt(document.getElementById('id_form-MIN_NUM_FORMS').value);
-                    
-                    // Keep at least minimum forms
-                    let rowsToKeep = minForms || 1;
-                    const rows = container.querySelectorAll('.formset-row');
-                    
-                    // Remove extra rows
-                    for (let i = rows.length - 1; i >= rowsToKeep; i--) {
-                        rows[i].remove();
+                
+                totalForms.value = rowsToKeep;
+                
+                // Clear inputs in remaining rows
+                container.querySelectorAll('input, select').forEach(input => {
+                    if (input.type !== 'hidden') {
+                        input.value = '';
                     }
-                    
-                    totalForms.value = rowsToKeep;
-                    
-                    // Clear inputs in remaining rows
-                    container.querySelectorAll('input, select').forEach(input => {
-                        if (input.type !== 'hidden') {
-                            input.value = '';
-                        }
-                    });
-                    
-                    setTimeout(() => location.reload(), 1500);
-                } else {
-                    showToast(data.error || 'An error occurred while creating the sale.', 'danger');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showToast('An error occurred while creating the sale.', 'danger');
-            });
-        });
+                });
+            },
+            function(error) {
+                showToast(error.error || 'An error occurred while creating the sale.', 'danger');
+            }
+        );
     }
 
     // Sale History: View Sale Modal Handler
@@ -270,6 +362,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.body.appendChild(modalDiv);
                     const modal = new bootstrap.Modal(modalDiv);
                     modal.show();
+                    
+                    // Add return handlers to modal
+                    setupReturnHandlers(modalDiv);
+                    
                     // Clean up after modal closes
                     modalDiv.addEventListener('hidden.bs.modal', function() {
                         modalDiv.remove();
@@ -279,6 +375,261 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.error('Error loading sale details:', error);
                     alert('Failed to load sale details: ' + error.message);
                 });
+        }
+    });
+    
+    // Setup return button handlers with modal
+    function setupReturnHandlers(modalElement) {
+        let currentItemId = null;
+        let currentMaxQty = null;
+        let currentSaleId = null;
+        let currentSaleModalElement = modalElement;
+        
+        // Helper function to refresh the sale modal
+        function refreshSaleModal(saleId) {
+            const url = `/sales/${saleId}/modal/`;
+            fetch(url)
+                .then(response => response.text())
+                .then(html => {
+                    // Update the current modal with new content
+                    const newContent = document.createElement('div');
+                    newContent.innerHTML = html;
+                    const newModalDialog = newContent.querySelector('.modal-dialog');
+                    const currentModalDialog = currentSaleModalElement.querySelector('.modal-dialog');
+                    if (currentModalDialog && newModalDialog) {
+                        currentModalDialog.innerHTML = newModalDialog.innerHTML;
+                    }
+                    // Re-setup handlers for the updated modal
+                    setupReturnHandlers(currentSaleModalElement);
+                })
+                .catch(error => {
+                    console.error('Error refreshing sale modal:', error);
+                    // On error, just reload the page
+                    location.reload();
+                });
+        }
+        
+        // Return single item handler - open modal
+        const returnItemButtons = modalElement.querySelectorAll('.return-item-btn');
+        returnItemButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                currentItemId = this.getAttribute('data-id');
+                currentMaxQty = parseInt(this.getAttribute('data-max'));
+                const productName = this.getAttribute('data-product');
+                
+                // Populate return modal
+                document.getElementById('returnProductName').textContent = productName;
+                document.getElementById('returnMaxQty').textContent = currentMaxQty;
+                document.getElementById('returnQuantity').max = currentMaxQty;
+                document.getElementById('returnQuantity').value = '';
+                document.getElementById('returnReason').value = '';
+                
+                // Show modal
+                const returnModal = new bootstrap.Modal(document.getElementById('returnItemModal'));
+                returnModal.show();
+            });
+        });
+        
+        // Confirm return handler
+        const confirmReturnBtn = document.getElementById('confirmReturnBtn');
+        if (confirmReturnBtn) {
+            confirmReturnBtn.onclick = function() {
+                const quantity = parseInt(document.getElementById('returnQuantity').value);
+                const reason = document.getElementById('returnReason').value;
+                
+                if (!quantity || quantity < 1 || quantity > currentMaxQty) {
+                    showToast(`Invalid quantity. Must be between 1 and ${currentMaxQty}`, 'danger');
+                    return;
+                }
+                
+                // Send return request
+                const formData = new FormData();
+                formData.append('item_id', currentItemId);
+                formData.append('quantity', quantity);
+                formData.append('reason', reason);
+                
+                fetch('/returns/sale-item/', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast(data.message || 'Item returned successfully!', 'success');
+                        // Get the sale ID from the modal
+                        const saleIdText = currentSaleModalElement.querySelector('h5.modal-title').textContent;
+                        const saleId = saleIdText.match(/\d+/)[0];
+                        
+                        // Hide return item modal
+                        const returnItemModal = bootstrap.Modal.getInstance(document.getElementById('returnItemModal'));
+                        if (returnItemModal) returnItemModal.hide();
+                        
+                        // Refresh the sale modal after a short delay
+                        setTimeout(() => refreshSaleModal(saleId), 500);
+                    } else {
+                        showToast(data.error || 'Failed to return item', 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('Error processing return: ' + error.message, 'danger');
+                });
+            };
+        }
+        
+        // Return all items handler - open modal
+        const returnAllButtons = modalElement.querySelectorAll('.return-all-btn');
+        returnAllButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                currentSaleId = this.getAttribute('data-id');
+                
+                // Build list of items to be returned
+                const itemsList = document.getElementById('returnAllItemsList');
+                itemsList.innerHTML = '';
+                
+                const table = modalElement.querySelector('table tbody');
+                const rows = table.querySelectorAll('tr');
+                let hasItemsToReturn = false;
+                
+                rows.forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length >= 3) {
+                        const productName = cells[0].textContent.trim();
+                        const totalQtyText = cells[1].textContent.trim();
+                        const returnedQtyText = cells[2].textContent.trim();
+                        const totalQty = parseInt(totalQtyText);
+                        const returnedQty = parseInt(returnedQtyText);
+                        const availableQty = totalQty - returnedQty;
+                        
+                        if (availableQty > 0) {
+                            hasItemsToReturn = true;
+                            const itemDiv = document.createElement('div');
+                            itemDiv.className = 'alert alert-light';
+                            itemDiv.textContent = `${productName}: Will return ${availableQty} ${availableQty === 1 ? 'item' : 'items'}`;
+                            itemsList.appendChild(itemDiv);
+                        }
+                    }
+                });
+                
+                if (!hasItemsToReturn) {
+                    showToast('No items to return. All items have already been fully returned.', 'info');
+                    return;
+                }
+                
+                // Clear reason field
+                document.getElementById('returnAllReason').value = '';
+                
+                // Show modal
+                const returnAllModal = new bootstrap.Modal(document.getElementById('returnAllModal'));
+                returnAllModal.show();
+            });
+        });
+        
+        // Confirm return all handler
+        const confirmReturnAllBtn = document.getElementById('confirmReturnAllBtn');
+        if (confirmReturnAllBtn) {
+            confirmReturnAllBtn.onclick = function() {
+                const reason = document.getElementById('returnAllReason').value;
+                const formData = new FormData();
+                formData.append('sale_id', currentSaleId);
+                formData.append('reason', reason);
+                
+                fetch('/returns/sale-all/', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast(data.message || 'All items returned successfully!', 'success');
+                        
+                        // Hide return all modal
+                        const returnAllModal = bootstrap.Modal.getInstance(document.getElementById('returnAllModal'));
+                        if (returnAllModal) returnAllModal.hide();
+                        
+                        // Refresh the sale modal after a short delay
+                        setTimeout(() => refreshSaleModal(currentSaleId), 500);
+                    } else {
+                        showToast(data.error || 'Failed to return items', 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('Error processing return: ' + error.message, 'danger');
+                });
+            };
+        }
+    }
+});
+
+// Sales History Filtering
+function applySalesFilters() {
+    const fromDate = document.getElementById('filtFromDate').value;
+    const toDate = document.getElementById('filterToDate').value;
+    const filterClient = document.getElementById('filterClient').value;
+    
+    const rows = document.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+        if (row.querySelector('td:nth-child(4)')) {  // Check if it's not an empty message row
+            const clientName = row.querySelector('td:nth-child(2)').textContent.trim();
+            const dateText = row.querySelector('td:nth-child(3)').textContent;
+            const saleDate = new Date(dateText);
+            
+            const fromDateObj = fromDate ? new Date(fromDate) : null;
+            const toDateObj = toDate ? new Date(toDate + 'T23:59:59') : null;
+            
+            let show = true;
+            
+            // Apply date filter
+            if (fromDateObj && saleDate < fromDateObj) show = false;
+            if (toDateObj && saleDate > toDateObj) show = false;
+            
+            // Apply client filter
+            if (filterClient && clientName !== filterClient) show = false;
+            
+            row.style.display = show ? '' : 'none';
+        }
+    });
+}
+
+function resetSalesFilters() {
+    document.getElementById('filtFromDate').value = '';
+    document.getElementById('filterToDate').value = '';
+    document.getElementById('filterClient').value = '';
+    
+    const rows = document.querySelectorAll('tbody tr');
+    rows.forEach(row => row.style.display = '');
+}
+
+// Attach filter event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('filtFromDate').addEventListener('change', applySalesFilters);
+    document.getElementById('filterToDate').addEventListener('change', applySalesFilters);
+    document.getElementById('filterClient').addEventListener('change', applySalesFilters);
+    
+    // Populate client dropdown with unique clients from the table
+    const clientSelect = document.getElementById('filterClient');
+    const rows = document.querySelectorAll('tbody tr');
+    const seenClients = new Set();
+    
+    rows.forEach(row => {
+        if (row.querySelector('td:nth-child(4)')) {  // Not an empty message row
+            const clientName = row.querySelector('td:nth-child(2)').textContent.trim();
+            if (clientName && !seenClients.has(clientName)) {
+                seenClients.add(clientName);
+                const option = document.createElement('option');
+                option.value = clientName;
+                option.textContent = clientName;
+                clientSelect.appendChild(option);
+            }
         }
     });
 });

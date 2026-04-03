@@ -23,6 +23,34 @@
             <i class="bi bi-plus-lg"></i> Create Quick Payment
         </button>
     </div>
+    
+    <!-- Filter Controls -->
+    <div class="card-body" style="background-color: #f8f9fa;">
+        <div style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 200px;">
+                <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">From Date</label>
+                <input type="date" id="filterFromDate" class="form-control form-control-sm">
+            </div>
+            <div style="flex: 1; min-width: 200px;">
+                <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">To Date</label>
+                <input type="date" id="filterToDate" class="form-control form-control-sm">
+            </div>
+            <div style="flex: 1; min-width: 200px;">
+                <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">Client</label>
+                <select id="filterClient" class="form-control form-control-sm">
+                    <option value="">-- All Clients --</option>
+                    {% regroup payments by client as client_list %}
+                    {% for client_group in client_list %}
+                        <option value="{{ client_group.grouper.name }}">{{ client_group.grouper.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button class="btn btn-sm btn-secondary" onclick="resetPaymentFilters()" style="height: fit-content;" title="Reset filters">
+                Reset
+            </button>
+        </div>
+    </div>
+    
     <div class="card-body card-body-compact">
         <table class="table table-hover">
             <thead class="table-light">
@@ -53,4 +81,54 @@
     </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Payment History Filtering
+function applyPaymentFilters() {
+    const fromDate = document.getElementById('filterFromDate').value;
+    const toDate = document.getElementById('filterToDate').value;
+    const filterClient = document.getElementById('filterClient').value;
+    
+    const rows = document.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+        if (row.querySelector('td:nth-child(2)')) {  // Check if it's not an empty message row
+            const clientName = row.querySelector('td:first-child').textContent.trim();
+            const dateText = row.querySelector('td:last-child').textContent;
+            const paymentDate = new Date(dateText);
+            
+            const fromDateObj = fromDate ? new Date(fromDate) : null;
+            const toDateObj = toDate ? new Date(toDate + 'T23:59:59') : null;
+            
+            let show = true;
+            
+            // Apply date filter
+            if (fromDateObj && paymentDate < fromDateObj) show = false;
+            if (toDateObj && paymentDate > toDateObj) show = false;
+            
+            // Apply client filter
+            if (filterClient && clientName !== filterClient) show = false;
+            
+            row.style.display = show ? '' : 'none';
+        }
+    });
+}
+
+function resetPaymentFilters() {
+    document.getElementById('filterFromDate').value = '';
+    document.getElementById('filterToDate').value = '';
+    document.getElementById('filterClient').value = '';
+    
+    const rows = document.querySelectorAll('tbody tr');
+    rows.forEach(row => row.style.display = '');
+}
+
+// Attach filter event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('filterFromDate').addEventListener('change', applyPaymentFilters);
+    document.getElementById('filterToDate').addEventListener('change', applyPaymentFilters);
+    document.getElementById('filterClient').addEventListener('change', applyPaymentFilters);
+});
+</script>
 {% endblock %}

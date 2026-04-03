@@ -7,10 +7,14 @@
     <div class="modal-body">
         <div class="mb-3">
             <label class="form-label">Client</label>
-            <select name="client" id="client_select" class="form-control" required>
+            <div class="input-group">
+                <input type="text" id="clientSearch" class="form-control" placeholder="Type to search client...">
+                <button class="btn btn-outline-secondary" type="button" id="clearClientSearch">Clear</button>
+            </div>
+            <select name="client" id="client_select" class="form-control mt-2" required>
                 <option value="">-- Select a client --</option>
                 {% for client in clients %}
-                <option value="{{ client.pk }}">{{ client.name }}</option>
+                <option value="{{ client.pk }}" data-name="{{ client.name|lower }}">{{ client.name }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -41,6 +45,39 @@
 document.addEventListener('DOMContentLoaded', function() {
     const modeSelect = document.getElementById('mode_select');
     const bankField = document.getElementById('bank-field');
+    const clientSearch = document.getElementById('clientSearch');
+    const clientSelect = document.getElementById('client_select');
+    const clearBtn = document.getElementById('clearClientSearch');
+
+    // Make client select searchable
+    if (clientSearch && clientSelect) {
+        clientSearch.addEventListener('input', function() {
+            const searchValue = this.value.toLowerCase();
+            const options = clientSelect.querySelectorAll('option:not(:first-child)');
+            
+            options.forEach(option => {
+                const clientName = option.getAttribute('data-name');
+                if (clientName.includes(searchValue) || searchValue === '') {
+                    option.style.display = '';
+                } else {
+                    option.style.display = 'none';
+                }
+            });
+        });
+        
+        clearBtn.addEventListener('click', function() {
+            clientSearch.value = '';
+            clientSelect.value = '';
+            clientSelect.querySelectorAll('option').forEach(o => o.style.display = '');
+        });
+        
+        // Auto-select when only one option is visible
+        clientSelect.addEventListener('change', function() {
+            if (this.value) {
+                clientSearch.value = this.options[this.selectedIndex].textContent;
+            }
+        });
+    }
 
     if (modeSelect) {
         modeSelect.addEventListener('change', function() {
@@ -50,49 +87,23 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Quick Payment Form Submission Handler
+    // Quick Payment Form Submission Handler with deduplication
     const quickPaymentForm = document.getElementById('quickPaymentForm');
     
     if (quickPaymentForm) {
-        quickPaymentForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(this);
-            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-            
-            fetch(this.action, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-CSRFToken': csrfToken,
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Show success toast
-                    showToast(data.message || 'Payment has been recorded successfully.', 'success');
-                    
-                    // Close the modal
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('quickPaymentModal'));
-                    if (modal) modal.hide();
-                    
-                    // Clear the form
-                    quickPaymentForm.reset();
-                    
-                    // Reload the page after 2 seconds
-                    setTimeout(() => location.reload(), 2000);
-                } else {
-                    // Show error toast
-                    showToast(data.error || 'An error occurred while recording the payment.', 'danger');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showToast('An error occurred while recording the payment.', 'danger');
-            });
-        });
+        setupAjaxForm(quickPaymentForm,
+            function(data) {
+                showToast(data.message || 'Payment has been recorded successfully.', 'success');
+                const modal = bootstrap.Modal.getInstance(document.getElementById('quickPaymentModal'));
+                if (modal) modal.hide();
+                quickPaymentForm.reset();
+                const clientSearch = document.getElementById('clientSearch');
+                if (clientSearch) clientSearch.value = '';
+            },
+            function(error) {
+                showToast(error.error || 'An error occurred while recording the payment.', 'danger');
+            }
+        );
     }
 });
 </script>

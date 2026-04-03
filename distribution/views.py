@@ -33,143 +33,260 @@ from django.views.decorators.http import require_POST
 @login_required
 @require_POST
 def return_sale_item(request):
+    """Handle partial return of a sale item with deduplication"""
     item_id = request.POST.get('item_id')
     quantity = request.POST.get('quantity')
     reason = request.POST.get('reason', '')
-    item = get_object_or_404(SaleItem, pk=item_id)
-    quantity = Decimal(quantity)
-    if quantity > item.quantity_packets:
-        return JsonResponse({'success': False, 'error': 'Return quantity exceeds sold quantity.'})
-    Return.objects.create(sale_item=item, quantity_packets=quantity, reason=reason)
-    item.modified = True
-    item.save()
-    # Optionally, update cheese product stock
-    item.cheese_product.available_quantity_packets += quantity
-    item.cheese_product.save()
-    return JsonResponse({'success': True})
+    
+    # Deduplication check
+    dedup_key = f"return_sale_item_{item_id}_{quantity}_{int(timezone.now().timestamp())}"
+    if request.session.get(dedup_key):
+        return JsonResponse({'success': False, 'error': 'This return is already being processed.'})
+    request.session[dedup_key] = True
+    
+    try:
+        item = get_object_or_404(SaleItem, pk=item_id)
+        quantity = Decimal(quantity)
+        
+        # Check if quantity is valid
+        if quantity <= 0:
+            del request.session[dedup_key]
+            return JsonResponse({'success': False, 'error': 'Return quantity must be greater than 0.'})
+        
+        # Check if return quantity exceeds available quantity
+        available = item.quantity_packets - item.quantity_returned
+        if quantity > available:
+            del request.session[dedup_key]
+            return JsonResponse({'success': False, 'error': f'Cannot return {quantity} packets. Only {available} available to return.'})
+        
+        # Create return record
+        Return.objects.create(sale_item=item, quantity_packets=quantity, reason=reason)
+        
+        # Update SaleItem quantity_returned
+        item.quantity_returned += quantity
+        item.modified = True
+        item.save()
+        
+        # Update cheese product stock
+        item.cheese_product.available_quantity_packets += quantity
+        item.cheese_product.save()
+        
+        SiteActivity.update_activity(f'Returned {quantity} packets of {item.cheese_product} from Sale #{item.sale.id}')
+        
+        # Clean up dedup key after 2 seconds
+        request.session[dedup_key] = False
+        
+        return JsonResponse({'success': True, 'message': f'Successfully returned {quantity} packets.'})
+    except Exception as e:
+        if dedup_key in request.session:
+            del request.session[dedup_key]
+        return JsonResponse({'success': False, 'error': str(e)})
 
 # AJAX endpoint to process return for all sale items in a sale
 @login_required
 @require_POST
 def return_all_sale_items(request):
+    """Handle return of all items in a sale with deduplication"""
     sale_id = request.POST.get('sale_id')
     reason = request.POST.get('reason', '')
-    sale = get_object_or_404(Sale, pk=sale_id)
-    for item in sale.saleitem_set.all():
-        Return.objects.create(sale_item=item, quantity_packets=item.quantity_packets, reason=reason)
-        item.modified = True
-        item.cheese_product.available_quantity_packets += item.quantity_packets
-        item.cheese_product.save()
-        item.save()
-    return JsonResponse({'success': True})
+    
+    # Deduplication check
+    dedup_key = f"return_all_sale_items_{sale_id}_{int(timezone.now().timestamp())}"
+    if request.session.get(dedup_key):
+        return JsonResponse({'success': False, 'error': 'This return is already being processed.'})
+    request.session[dedup_key] = True
+    
+    try:
+        sale = get_object_or_404(Sale, pk=sale_id)
+        
+        for item in sale.saleitem_set.all():
+            # Only return items that haven't been fully returned
+            if item.quantity_returned < item.quantity_packets:
+                quantity_to_return = item.quantity_packets - item.quantity_returned
+                
+                # Create return record
+                Return.objects.create(sale_item=item, quantity_packets=quantity_to_return, reason=reason)
+                
+                # Update SaleItem
+                item.quantity_returned = item.quantity_packets
+                item.modified = True
+                item.save()
+                
+                # Update cheese product stock
+                item.cheese_product.available_quantity_packets += quantity_to_return
+                item.cheese_product.save()
+        
+        SiteActivity.update_activity(f'All items returned from Sale #{sale.id}')
+        
+        # Clean up dedup key after 2 seconds
+        request.session[dedup_key] = False
+        
+        return JsonResponse({'success': True, 'message': 'All items have been returned.'})
+    except Exception as e:
+        if dedup_key in request.session:
+            del request.session[dedup_key]
+        return JsonResponse({'success': False, 'error': str(e)})
 
 # AJAX endpoint to add stock to a product
 @login_required
 @require_POST
 def add_stock_quantity(request):
+    """Add stock with deduplication to prevent double requests"""
     from .models import StockAdditionItem
     product_id = request.POST.get('product_id')
     quantity = request.POST.get('quantity')
     
-    product = get_object_or_404(CheeseProduct, pk=product_id)
-    quantity = int(quantity)
+    # Deduplication check
+    dedup_key = f"add_stock_{product_id}_{quantity}_{int(timezone.now().timestamp())}"
+    if request.session.get(dedup_key):
+        return JsonResponse({'success': False, 'error': 'This request is already being processed.'})
+    request.session[dedup_key] = True
     
-    if quantity <= 0:
-        return JsonResponse({'success': False, 'error': 'Quantity must be greater than 0'})
-    
-    # Create stock addition event
-    stock_addition = StockAdditionHistory.objects.create(
-        operation_type='add',
-        added_by=request.user.userprofile
-    )
-    
-    # Create stock item
-    StockAdditionItem.objects.create(
-        stock_addition=stock_addition,
-        cheese_product=product,
-        quantity_packets=quantity
-    )
-    
-    # Update product stock
-    product.available_quantity_packets += quantity
-    product.save()
-    
-    SiteActivity.update_activity(f'Added {quantity} packets to {product}')
-    return JsonResponse({'success': True, 'message': f'Added {quantity} packets to {product}'})
+    try:
+        product = get_object_or_404(CheeseProduct, pk=product_id)
+        quantity = int(quantity)
+        
+        if quantity <= 0:
+            del request.session[dedup_key]
+            return JsonResponse({'success': False, 'error': 'Quantity must be greater than 0'})
+        
+        # Create stock addition event
+        stock_addition = StockAdditionHistory.objects.create(
+            operation_type='add',
+            added_by=request.user.userprofile
+        )
+        
+        # Create stock item
+        StockAdditionItem.objects.create(
+            stock_addition=stock_addition,
+            cheese_product=product,
+            quantity_packets=quantity
+        )
+        
+        # Update product stock
+        product.available_quantity_packets += quantity
+        product.save()
+        
+        SiteActivity.update_activity(f'Added {quantity} packets to {product}')
+        
+        # Clean up dedup key
+        del request.session[dedup_key]
+        
+        return JsonResponse({'success': True, 'message': f'Added {quantity} packets to {product}'})
+    except Exception as e:
+        if dedup_key in request.session:
+            del request.session[dedup_key]
+        return JsonResponse({'success': False, 'error': str(e)})
 
 # AJAX endpoint to remove stock from a product
 @login_required
 @require_POST
 def remove_stock_quantity(request):
+    """Remove stock with deduplication to prevent double requests"""
     from .models import StockAdditionItem
     product_id = request.POST.get('product_id')
     quantity = request.POST.get('quantity')
     
-    product = get_object_or_404(CheeseProduct, pk=product_id)
-    quantity = int(quantity)
+    # Deduplication check
+    dedup_key = f"remove_stock_{product_id}_{quantity}_{int(timezone.now().timestamp())}"
+    if request.session.get(dedup_key):
+        return JsonResponse({'success': False, 'error': 'This request is already being processed.'})
+    request.session[dedup_key] = True
     
-    if quantity <= 0:
-        return JsonResponse({'success': False, 'error': 'Quantity must be greater than 0'})
-    
-    if product.available_quantity_packets < quantity:
-        return JsonResponse({'success': False, 'error': f'Insufficient stock. Available: {product.available_quantity_packets}'})
-    
-    # Create stock removal event
-    stock_addition = StockAdditionHistory.objects.create(
-        operation_type='remove',
-        added_by=request.user.userprofile
-    )
-    
-    # Create stock item (negative quantity for removal)
-    StockAdditionItem.objects.create(
-        stock_addition=stock_addition,
-        cheese_product=product,
-        quantity_packets=-quantity
-    )
-    
-    # Update product stock
-    product.available_quantity_packets -= quantity
-    product.save()
-    
-    SiteActivity.update_activity(f'Removed {quantity} packets from {product}')
-    return JsonResponse({'success': True, 'message': f'Removed {quantity} packets from {product}'})
+    try:
+        product = get_object_or_404(CheeseProduct, pk=product_id)
+        quantity = int(quantity)
+        
+        if quantity <= 0:
+            del request.session[dedup_key]
+            return JsonResponse({'success': False, 'error': 'Quantity must be greater than 0'})
+        
+        if product.available_quantity_packets < quantity:
+            del request.session[dedup_key]
+            return JsonResponse({'success': False, 'error': f'Insufficient stock. Available: {product.available_quantity_packets}'})
+        
+        # Create stock removal event
+        stock_addition = StockAdditionHistory.objects.create(
+            operation_type='remove',
+            added_by=request.user.userprofile
+        )
+        
+        # Create stock item (negative quantity for removal)
+        StockAdditionItem.objects.create(
+            stock_addition=stock_addition,
+            cheese_product=product,
+            quantity_packets=-quantity
+        )
+        
+        # Update product stock
+        product.available_quantity_packets -= quantity
+        product.save()
+        
+        SiteActivity.update_activity(f'Removed {quantity} packets from {product}')
+        
+        # Clean up dedup key
+        del request.session[dedup_key]
+        
+        return JsonResponse({'success': True, 'message': f'Removed {quantity} packets from {product}'})
+    except Exception as e:
+        if dedup_key in request.session:
+            del request.session[dedup_key]
+        return JsonResponse({'success': False, 'error': str(e)})
 
 # AJAX endpoint to change product price
 @login_required
+@owner_required
 @require_POST
 def change_stock_price(request):
+    """Change stock price with deduplication to prevent double requests"""
     from .models import StockAdditionItem
     product_id = request.POST.get('product_id')
     new_price = request.POST.get('new_price')
     
-    product = get_object_or_404(CheeseProduct, pk=product_id)
-    old_price = product.purchase_price_per_packet
-    new_price = Decimal(new_price)
+    # Deduplication check
+    dedup_key = f"change_stock_price_{product_id}_{new_price}_{int(timezone.now().timestamp())}"
+    if request.session.get(dedup_key):
+        return JsonResponse({'success': False, 'error': 'This request is already being processed.'})
+    request.session[dedup_key] = True
     
-    if new_price <= 0:
-        return JsonResponse({'success': False, 'error': 'Price must be greater than 0'})
-    
-    # Create price change event
-    stock_addition = StockAdditionHistory.objects.create(
-        operation_type='price_change',
-        added_by=request.user.userprofile
-    )
-    
-    # Create stock item with price info
-    StockAdditionItem.objects.create(
-        stock_addition=stock_addition,
-        cheese_product=product,
-        quantity_packets=0,  # No quantity change for price updates
-        old_price=old_price,
-        new_price=new_price
-    )
-    
-    # Update product price
-    product.purchase_price_per_packet = new_price
-    product.save()
-    
-    SiteActivity.update_activity(f'Changed price of {product}: {old_price} → {new_price}')
-    return JsonResponse({'success': True, 'message': f'Price updated from {old_price} to {new_price}'})
+    try:
+        product = get_object_or_404(CheeseProduct, pk=product_id)
+        old_price = product.purchase_price_per_packet
+        new_price = Decimal(new_price)
+        
+        if new_price <= 0:
+            del request.session[dedup_key]
+            return JsonResponse({'success': False, 'error': 'Price must be greater than 0'})
+        
+        # Create price change event
+        stock_addition = StockAdditionHistory.objects.create(
+            operation_type='price_change',
+            added_by=request.user.userprofile
+        )
+        
+        # Create stock item with price info
+        StockAdditionItem.objects.create(
+            stock_addition=stock_addition,
+            cheese_product=product,
+            quantity_packets=0,  # No quantity change for price updates
+            old_price=old_price,
+            new_price=new_price
+        )
+        
+        # Update product price
+        product.purchase_price_per_packet = new_price
+        product.save()
+        
+        SiteActivity.update_activity(f'Changed price of {product}: {old_price} → {new_price}')
+        
+        # Clean up dedup key
+        del request.session[dedup_key]
+        
+        return JsonResponse({'success': True, 'message': f'Price updated from {old_price} to {new_price}'})
+    except Exception as e:
+        if dedup_key in request.session:
+            del request.session[dedup_key]
+        return JsonResponse({'success': False, 'error': str(e)})
 
 from django.views.decorators.http import require_GET
 
@@ -178,6 +295,11 @@ from django.views.decorators.http import require_GET
 def sale_modal_details(request, pk):
     sale = get_object_or_404(Sale, pk=pk)
     sale_items = sale.saleitem_set.select_related('cheese_product').all()
+    
+    # Add total price for each item
+    for item in sale_items:
+        item.item_total = item.quantity_packets * item.selling_price_per_packet
+    
     total_profit = sale.calculate_total_profit()
     return render(request, 'distribution/sales/partials/partial_sale_modal_details.html', {
         'sale': sale,
@@ -221,42 +343,36 @@ def stock_history(request):
 
 @login_required
 def cheese_type_add(request):
+    """Add a new cheese type - accessible to employees"""
     if request.method == 'POST':
         form = CheeseTypeForm(request.POST)
         if form.is_valid():
-            form.save()
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return JsonResponse({'success': True})
+            cheese_type = form.save()
             messages.success(request, 'Cheese type added successfully.')
             return redirect('inventory_management')
-        else:
-            # Extract error message
-            error_msg = ''
-            if 'name' in form.errors:
-                error_msg = form.errors['name'][0]
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                html = render_to_string('distribution/inventory/partials/partial_edit_cheese_type_form.html', {'form': form}, request=request)
-                return JsonResponse({'success': False, 'html': html, 'error': error_msg})
     else:
         form = CheeseTypeForm()
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        html = render_to_string('distribution/inventory/partials/partial_edit_cheese_type_form.html', {'form': form}, request=request)
-        return JsonResponse({'success': False, 'html': html})
     return render(request, 'distribution/cheese_type_form.html', {'form': form})
 
 @login_required
 def cheese_type_edit(request, pk):
+    """Edit cheese type - accessible to employees"""
     cheese_type = CheeseType.objects.get(pk=pk)
     if request.method == 'POST':
         form = CheeseTypeForm(request.POST, instance=cheese_type)
         if form.is_valid():
             form.save()
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({'success': True, 'message': 'Cheese type updated successfully.'})
             messages.success(request, 'Cheese type updated successfully.')
             return redirect('inventory_management')
     else:
         form = CheeseTypeForm(instance=cheese_type)
-    html = render_to_string('distribution/inventory/partials/partial_edit_cheese_type_form.html', {'form': form, 'cheese_type': cheese_type}, request=request)
-    return JsonResponse({'html': html})
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        html = render_to_string('distribution/inventory/partials/partial_edit_cheese_type_form.html', {'form': form, 'cheese_type': cheese_type}, request=request)
+        return JsonResponse({'html': html})
+    # Non-AJAX GET requests should not hit this, but fallback to form page
+    return render(request, 'distribution/cheese_type_form.html', {'form': form, 'title': 'Edit Cheese Type'})
 
 @login_required
 def cheese_type_delete(request, pk):
@@ -874,6 +990,55 @@ def get_product_stock(request, product_id):
         return JsonResponse({'error': 'Product not found'}, status=404)
 
 @login_required
+def get_manufacturer_details(request, manufacturer_id):
+    """API endpoint to get manufacturer contact details"""
+    try:
+        manufacturer = Manufacturer.objects.get(pk=manufacturer_id)
+        return JsonResponse({
+            'id': manufacturer.id,
+            'name': manufacturer.name,
+            'contact_info': manufacturer.contact_info or 'N/A',
+            'address': manufacturer.address or 'N/A',
+        })
+    except Manufacturer.DoesNotExist:
+        return JsonResponse({'error': 'Manufacturer not found'}, status=404)
+
+@login_required
+def get_filtered_products(request):
+    """API endpoint to get products filtered by type and/or manufacturer"""
+    type_id = request.GET.get('type_id')
+    manufacturer_id = request.GET.get('manufacturer_id')
+    
+    products = CheeseProduct.objects.select_related('manufacturer', 'type').all()
+    
+    if type_id:
+        try:
+            products = products.filter(type_id=int(type_id))
+        except (ValueError, TypeError):
+            pass
+    
+    if manufacturer_id:
+        try:
+            products = products.filter(manufacturer_id=int(manufacturer_id))
+        except (ValueError, TypeError):
+            pass
+    
+    product_list = [
+        {
+            'id': p.id,
+            'name': f"{p.manufacturer.name} - {p.type.name} ({p.packet_size}KG)",
+            'manufacturer_id': p.manufacturer_id,
+            'type_id': p.type_id,
+            'packet_size': float(p.packet_size),
+            'purchase_price': float(p.purchase_price_per_packet),
+            'available_quantity': float(p.available_quantity_packets),
+        }
+        for p in products
+    ]
+    
+    return JsonResponse({'products': product_list})
+
+@login_required
 def inventory_management(request):
     """Merged page for manufacturers and cheese inventory"""
     manufacturers = Manufacturer.objects.all()
@@ -881,7 +1046,7 @@ def inventory_management(request):
     cheese_types = CheeseType.objects.all()
     # Calculate stock value for each product
     products_with_value = []
-    total_stock_quantity = Decimal('0.00')
+    total_stock_quantity = 0
     low_stock_products = []
     
     for product in products:
@@ -934,33 +1099,20 @@ def inventory_management(request):
     })
 
 
-@owner_required
+@login_required
 def manufacturer_add(request):
     if request.method == 'POST':
         form = ManufacturerForm(request.POST)
         if form.is_valid():
-            form.save()
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return JsonResponse({'success': True})
+            manufacturer = form.save()
             messages.success(request, 'Manufacturer added successfully.')
             return redirect('inventory_management')
-        else:
-            # Extract error message
-            error_msg = ''
-            if 'name' in form.errors:
-                error_msg = form.errors['name'][0]
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                html = render_to_string('distribution/inventory/partials/partial_edit_manufacturer_form.html', {'form': form}, request=request)
-                return JsonResponse({'success': False, 'html': html, 'error': error_msg})
     else:
         form = ManufacturerForm()
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        html = render_to_string('distribution/inventory/partials/partial_edit_manufacturer_form.html', {'form': form}, request=request)
-        return JsonResponse({'success': False, 'html': html})
     return render(request, 'distribution/manufacturer_form.html', {'form': form, 'title': 'Add Manufacturer'})
 
 
-@owner_required
+@login_required
 def manufacturer_edit(request, pk):
     manufacturer = get_object_or_404(Manufacturer, pk=pk)
     if request.method == 'POST':
@@ -969,11 +1121,12 @@ def manufacturer_edit(request, pk):
             form.save()
             SiteActivity.update_activity(f'Manufacturer updated: {manufacturer.name}')
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return render(request, 'distribution/shared/partial_edit_success.html', {'object': manufacturer, 'type': 'manufacturer'})
+                return JsonResponse({'success': True, 'message': 'Manufacturer updated successfully.'})
             messages.success(request, 'Manufacturer updated successfully.')
             return redirect('inventory_management')
     else:
         form = ManufacturerForm(instance=manufacturer)
+    # Return partial form for AJAX requests
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
         html = render_to_string('distribution/inventory/partials/partial_edit_manufacturer_form.html', {'form': form, 'manufacturer': manufacturer}, request=request)
         return JsonResponse({'html': html})
@@ -992,7 +1145,7 @@ def manufacturer_delete(request, pk):
     return render(request, 'distribution/manufacturer_delete.html', {'manufacturer': manufacturer})
 
 
-@owner_required
+@login_required
 def cheese_add(request):
     if request.method == 'POST':
         form = CheeseProductForm(request.POST)
@@ -1011,26 +1164,14 @@ def cheese_add(request):
                     cheese_product=cheese_product,
                     quantity_packets=int(initial_quantity)
                 )
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return JsonResponse({'success': True})
             messages.success(request, 'Cheese product added successfully.')
             return redirect('inventory_management')
-        else:
-            # Extract error messages
-            error_msg = ''
-            if form.errors:
-                error_msg = list(form.errors.values())[0][0]
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return JsonResponse({'success': False, 'error': error_msg})
     else:
         form = CheeseProductForm()
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        html = render_to_string('distribution/inventory/partials/partial_edit_cheese_form.html', {'form': form}, request=request)
-        return JsonResponse({'success': False, 'html': html})
     return render(request, 'distribution/cheese_form.html', {'form': form, 'title': 'Add Cheese Product'})
 
 
-@owner_required
+@login_required
 def cheese_edit(request, pk):
     product = get_object_or_404(CheeseProduct, pk=pk)
     if request.method == 'POST':
@@ -1038,7 +1179,7 @@ def cheese_edit(request, pk):
         if form.is_valid():
             form.save()
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return render(request, 'distribution/shared/partial_edit_success.html', {'object': product, 'type': 'cheese'})
+                return JsonResponse({'success': True, 'message': 'Cheese product updated successfully.'})
             messages.success(request, 'Cheese product updated successfully.')
             return redirect('inventory_management')
     else:
@@ -1171,7 +1312,21 @@ def quick_sale_create(request):
                 SiteActivity.update_activity(f'Sale created for {client.name}')
 
                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                    return JsonResponse({'success': True, 'message': 'Sale created successfully.'})
+                    # Return sold items details for manual page update
+                    sold_items = [
+                        {
+                            'product_id': item.cheese_product.id,
+                            'quantity': item.quantity_packets
+                        }
+                        for item in sale.saleitem_set.all()
+                    ]
+                    total_sold = sum(item.quantity_packets for item in sale.saleitem_set.all())
+                    return JsonResponse({
+                        'success': True,
+                        'message': 'Sale created successfully.',
+                        'sold_items': sold_items,
+                        'total_sold_quantity': total_sold
+                    })
                 
                 messages.success(request, 'Sale created successfully.')
                 return redirect('sale_history')
@@ -1227,7 +1382,16 @@ def client_add(request):
             SiteActivity.update_activity(f'Client added: {client.name}')
             
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return JsonResponse({'success': True, 'message': 'Client added successfully.'})
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Client added successfully.',
+                    'object': {
+                        'id': client.id,
+                        'name': client.name,
+                        'phone': client.phone or '',
+                        'address': client.address or ''
+                    }
+                })
             
             messages.success(request, 'Client added successfully.')
             return redirect('client_list')
@@ -1478,6 +1642,129 @@ def export_client_pdf(request, pk):
 
 
 @login_required
+def export_all_clients_pdf(request):
+    """Export all clients' data as combined PDF"""
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+    from reportlab.lib.units import inch
+    from io import BytesIO
+    from django.http import HttpResponse
+    from decimal import Decimal
+    
+    clients = Client.objects.all().order_by('name')
+    
+    # Create PDF in memory
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18)
+    
+    # Container for PDF elements
+    elements = []
+    
+    # Define styles
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        textColor=colors.HexColor('#1a1a1a'),
+        spaceAfter=30,
+        alignment=1
+    )
+    
+    heading_style = ParagraphStyle(
+        'CustomHeading',
+        parent=styles['Heading2'],
+        fontSize=14,
+        textColor=colors.HexColor('#333333'),
+        spaceAfter=12,
+        spaceBefore=12
+    )
+    
+    # Add main title
+    title = Paragraph("All Clients Report", title_style)
+    elements.append(title)
+    elements.append(Spacer(1, 0.3*inch))
+    
+    # Add each client's data on a separate page
+    for idx, client in enumerate(clients):
+        if idx > 0:
+            elements.append(PageBreak())
+        
+        # Client title
+        client_title = Paragraph(f"Client: {client.name}", heading_style)
+        elements.append(client_title)
+        
+        # Client Information
+        elements.append(Paragraph("Information", ParagraphStyle('ClientHeading', parent=styles['Heading3'], fontSize=11, spaceAfter=8)))
+        
+        client_info_data = [
+            ['Field', 'Value'],
+            ['Name', client.name],
+            ['Phone', client.phone],
+            ['Address', client.address],
+        ]
+        
+        client_info_table = Table(client_info_data, colWidths=[1.5*inch, 4.5*inch])
+        client_info_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3498db')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#ecf0f1')),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+        ]))
+        elements.append(client_info_table)
+        elements.append(Spacer(1, 0.2*inch))
+        
+        # Financial Summary
+        total_sales = Sale.objects.filter(client=client).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+        total_paid = Payment.objects.filter(client=client).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        due_payment = total_sales - total_paid
+        
+        elements.append(Paragraph("Financial Summary", ParagraphStyle('ClientHeading', parent=styles['Heading3'], fontSize=11, spaceAfter=8)))
+        
+        financial_data = [
+            ['Metric', 'Amount'],
+            ['All-Time Sales', f'Rs. {total_sales:,.2f}'],
+            ['All-Time Payments', f'Rs. {total_paid:,.2f}'],
+            ['Outstanding Due', f'Rs. {due_payment:,.2f}'],
+        ]
+        
+        financial_table = Table(financial_data, colWidths=[2.5*inch, 3.5*inch])
+        financial_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#27ae60')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#ecf0f1')),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('ALIGN', (1, 1), (1, -1), 'RIGHT'),
+        ]))
+        elements.append(financial_table)
+        elements.append(Spacer(1, 0.2*inch))
+    
+    # Build PDF
+    doc.build(elements)
+    
+    # Get PDF data
+    buffer.seek(0)
+    
+    # Create HTTP response
+    response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+    response['Content-Disposition'] = 'attachment; filename="all_clients_report.pdf"'
+    
+    return response
+
+
+@login_required
 def sale_create(request):
     if request.method == 'POST':
         client_id = request.POST.get('client')
@@ -1691,7 +1978,19 @@ def employee_management(request):
             
             # Check if AJAX request
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return JsonResponse({'success': True, 'message': message})
+                return JsonResponse({
+                    'success': True,
+                    'message': message,
+                    'object': {
+                        'id': employee.id,
+                        'name': employee.name,
+                        'id_card': employee.id_card,
+                        'joining_date': employee.joining_date.strftime('%Y-%m-%d'),
+                        'route_from': employee.route_from or '',
+                        'route_to': employee.route_to or '',
+                        'phone': employee.phone or ''
+                    }
+                })
             
             messages.success(request, message)
             return redirect('employee_management')
@@ -1774,7 +2073,22 @@ def expense_management(request):
             
             # Check if AJAX request
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return JsonResponse({'success': True, 'message': message})
+                return JsonResponse({
+                    'success': True,
+                    'message': message,
+                    'object': {
+                        'id': expense.id,
+                        'expense_date': expense.expense_date.strftime('%Y-%m-%d'),
+                        'employee': {
+                            'id': expense.employee.id,
+                            'name': expense.employee.name
+                        },
+                        'expense_type': expense.expense_type,
+                        'expense_type_display': expense.get_expense_type_display(),
+                        'amount': float(expense.amount),
+                        'note': expense.note or ''
+                    }
+                })
             
             messages.success(request, message)
             return redirect('expense_management')

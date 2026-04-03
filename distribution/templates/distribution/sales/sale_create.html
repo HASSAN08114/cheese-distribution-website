@@ -46,7 +46,7 @@
                         {% endif %}
                     </div>
                     <div class="col-md-2">
-                        <label class="form-label">Selling Price (PKR/Packet) <span class="purchase-price-label font-size-helper"></span></label>
+                        <label class="form-label">Selling Price (PKR/Packet)</label>
                         {{ form.selling_price_per_packet }}
                         {% if form.selling_price_per_packet.errors %}
                             <div class="text-danger">{{ form.selling_price_per_packet.errors }}</div>
@@ -83,33 +83,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const productSelect = row.querySelector('select[name*="cheese_product"]');
         if (productSelect) {
             productSelect.addEventListener('change', function() {
-                const productId = this.value;
-                const priceLabel = row.querySelector('.purchase-price-label');
-                
-                if (productId) {
-                    // Fetch product price
-                    fetch(`/api/product-stock/${productId}/`, {credentials: 'include'})
-                        .then(response => {
-                            if (!response.ok) {
-                                throw new Error(`HTTP error! status: ${response.status}`);
-                            }
-                            return response.json();
-                        })
-                        .then(data => {
-                            console.log('API Response:', data);
-                            if (data.purchase_price !== null && data.purchase_price !== undefined) {
-                                priceLabel.textContent = `(Purchase: PKR ${parseFloat(data.purchase_price).toFixed(2)})`;
-                            } else {
-                                priceLabel.textContent = '(No price set)';
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error fetching product price:', error);
-                            priceLabel.textContent = '(Error loading price)';
-                        });
-                } else {
-                    priceLabel.textContent = '';
-                }
+                // Purchase price display removed per user request
             });
         }
     }

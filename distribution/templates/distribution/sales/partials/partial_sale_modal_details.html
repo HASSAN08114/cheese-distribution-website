@@ -1,14 +1,13 @@
-<div class="modal-dialog">
+<div class="modal-dialog modal-lg">
     <div class="modal-content">
         <div class="modal-header">
             <h5 class="modal-title">Sale #{{ sale.id }}</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
-        <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
             <p><strong>Client:</strong> {{ sale.client.name }}</p>
             <p><strong>Date:</strong> {{ sale.sale_date|date:"M d, Y H:i" }}</p>
             <p><strong>Total Amount:</strong> PKR {{ sale.total_amount|floatformat:2 }}</p>
-            <p><strong>Total Profit:</strong> PKR {{ total_profit|floatformat:2 }}</p>
             <hr>
             <h6>Products in Sale</h6>
             <div class="table-responsive">
@@ -17,20 +16,29 @@
                         <tr>
                             <th>Product</th>
                             <th>Qty</th>
-                            <th>Price</th>
-                            <th>Profit</th>
+                            <th>Returned</th>
+                            <th>Packet Price</th>
+                            <th>Total</th>
                             <th class="text-center">Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in sale_items %}
-                        <tr class="{% if item.modified %}table-warning{% endif %}">
+                        <tr class="{% if item.quantity_returned == item.quantity_packets %}table-danger{% elif item.quantity_returned > 0 %}table-warning{% endif %}">
                             <td><small>{{ item.cheese_product }}</small></td>
                             <td><small>{{ item.quantity_packets }}</small></td>
-                            <td><small>{{ item.selling_price_per_packet }}</small></td>
-                            <td><small>{{ item.get_total_profit|floatformat:2 }}</small></td>
+                            <td><small>{{ item.quantity_returned }}</small></td>
+                            <td><small>PKR {{ item.selling_price_per_packet|floatformat:2 }}</small></td>
+                            <td><small>PKR {{ item.item_total|floatformat:2 }}</small></td>
                             <td class="text-center">
-                                <button class="btn btn-sm btn-outline-danger return-item" data-id="{{ item.id }}">Return</button>
+                                {% if item.quantity_available > 0 %}
+                                <button class="btn btn-sm btn-outline-danger return-item-btn" 
+                                        data-id="{{ item.id }}" 
+                                        data-product="{{ item.cheese_product }}"
+                                        data-max="{{ item.quantity_available }}">Return</button>
+                                {% else %}
+                                <span class="badge bg-danger">Fully Returned</span>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}
@@ -39,7 +47,7 @@
             </div>
             <div class="row justify-content-end mt-2">
                 <div class="col-auto">
-                    <button class="btn btn-sm btn-outline-danger return-all" data-id="{{ sale.id }}">Return All</button>
+                    <button class="btn btn-sm btn-outline-danger return-all-btn" data-id="{{ sale.id }}">Return All</button>
                 </div>
             </div>
         </div>

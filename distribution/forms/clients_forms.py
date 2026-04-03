@@ -5,12 +5,18 @@ from ..models import Client, Payment
 class ClientForm(forms.ModelForm):
     class Meta:
         model = Client
-        fields = ['name', 'phone', 'address']
+        fields = ['name', 'phone', 'address', 'previous_debt']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'phone': forms.TextInput(attrs={'class': 'form-control'}),
             'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'previous_debt': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0', 'placeholder': 'Enter previous debt amount (if any)'}),
         }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['phone'].required = False
+        self.fields['address'].required = False
 
 
 class PaymentForm(forms.ModelForm):

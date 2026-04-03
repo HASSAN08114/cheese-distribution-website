@@ -30,43 +30,7 @@
 </form>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const quickStockForm = document.getElementById('quickStockForm');
-    
-    if (quickStockForm) {
-        quickStockForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(this);
-            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-            
-            fetch(this.action, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-CSRFToken': csrfToken,
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showToast(data.message || 'Stock has been added successfully.', 'success');
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('quickStockModal'));
-                    if (modal) modal.hide();
-                    quickStockForm.reset();
-                    setTimeout(() => location.reload(), 1500);
-                } else {
-                    showToast(data.error || 'An error occurred while adding stock.', 'danger');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showToast('An error occurred while adding stock.', 'danger');
-            });
-        });
-    }
-});
+// Quick Stock Form - Form submission will reload the page
 </script>
                     main.insertBefore(alertDiv, main.firstChild);
                 }

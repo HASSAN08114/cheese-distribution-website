@@ -25,8 +25,8 @@ class UserProfile(models.Model):
 
 class Manufacturer(models.Model):
     name = models.CharField(max_length=200, unique=True)
-    contact_info = models.CharField(max_length=200)
-    address = models.TextField()
+    contact_info = models.CharField(max_length=200, blank=True, null=True, default='')
+    address = models.TextField(blank=True, null=True, default='')
 
     def __str__(self):
         return self.name
@@ -58,10 +58,9 @@ class CheeseProduct(models.Model):
         decimal_places=2,
         validators=[MinValueValidator(Decimal('0.01'))]
     )
-    available_quantity_packets = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        validators=[MinValueValidator(Decimal('0.00'))]
+    available_quantity_packets = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0)]
     )
     date_added = models.DateTimeField(auto_now_add=True)
 
@@ -75,19 +74,38 @@ class CheeseProduct(models.Model):
 
 class Client(models.Model):
     name = models.CharField(max_length=200)
-    phone = models.CharField(max_length=20)
-    address = models.TextField()
+    phone = models.CharField(max_length=20, blank=True, null=True, default='')
+    address = models.TextField(blank=True, null=True, default='')
+    previous_debt = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Initial debt brought forward from before system implementation"
+    )
 
     def __str__(self):
         return self.name
 
     @property
     def amount_owed(self):
-        # Total sales minus total payments (from Payment model)
-        from django.db.models import Sum
+        # Calculate total sales minus returned value, minus total payments, plus previous debt
+        from django.db.models import Sum, F, DecimalField
+        from django.db.models.functions import Coalesce
+        
+        # Get total sale amount
         total_sales = self.sale_set.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+        
+        # Get total returned value (price per packet × quantity returned for each item)
+        total_returned = Decimal('0.00')
+        for sale in self.sale_set.all():
+            for item in sale.saleitem_set.all():
+                total_returned += item.selling_price_per_packet * item.quantity_returned
+        
+        # Get total paid
         total_paid = self.payment_set.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        return total_sales - total_paid
+        
+        # Calculate: (total sales - returned value) - total paid + previous debt
+        return total_sales - total_returned - total_paid + self.previous_debt
 
     class Meta:
         ordering = ['name']
@@ -135,10 +153,12 @@ class Sale(models.Model):
 class SaleItem(models.Model):
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE)
     cheese_product = models.ForeignKey(CheeseProduct, on_delete=models.CASCADE)
-    quantity_packets = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        validators=[MinValueValidator(Decimal('0.01'))]
+    quantity_packets = models.IntegerField(
+        validators=[MinValueValidator(1)]
+    )
+    quantity_returned = models.IntegerField(
+        default=0,
+        help_text="Quantity that has been returned"
     )
     selling_price_per_packet = models.DecimalField(
         max_digits=10,
@@ -158,6 +178,11 @@ class SaleItem(models.Model):
 
     def get_total_profit(self):
         return self.profit_per_packet * self.quantity_packets
+    
+    @property
+    def quantity_available(self):
+        """Get available quantity (sold - returned)"""
+        return self.quantity_packets - self.quantity_returned
 
     def __str__(self):
         return f"{self.cheese_product.name} - {self.quantity_packets} packets"
@@ -216,7 +241,7 @@ class StockAdditionItem(models.Model):
 class Return(models.Model):
     sale_item = models.ForeignKey(SaleItem, on_delete=models.CASCADE, null=True, blank=True)
     stock_addition = models.ForeignKey(StockAdditionHistory, on_delete=models.CASCADE, null=True, blank=True)
-    quantity_packets = models.DecimalField(max_digits=10, decimal_places=2)
+    quantity_packets = models.IntegerField()
     date_returned = models.DateTimeField(auto_now_add=True)
     reason = models.TextField(blank=True)
 
