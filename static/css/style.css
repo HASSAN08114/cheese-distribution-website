@@ -170,6 +170,58 @@ body {
     border-radius: 0 0 8px 8px;
 }
 
+/* Page section headings */
+.section-title-tight {
+    margin-bottom: 0.25rem;
+}
+
+.section-subtitle-muted {
+    color: var(--text-secondary);
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.card-header-flex {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.card-header-flex-wrap {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.action-row-sm {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.text-xs-muted {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.page-intro {
+    margin-bottom: 2rem;
+}
+
+.page-title-lg {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.section-heading-muted {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 0.75rem;
+}
+
 /* Header Variants */
 .card-header-primary {
     background: var(--primary);
@@ -444,6 +496,34 @@ body {
     color: var(--text-primary);
     margin-bottom: 0.5rem;
     font-size: 0.9rem;
+}
+
+.form-label-sm-muted {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+}
+
+.filter-panel {
+    background-color: #f8f9fa;
+}
+
+.filter-row {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.filter-field {
+    flex: 1;
+    min-width: 200px;
+}
+
+.filter-field-sm {
+    flex: 1;
+    min-width: 180px;
 }
 
 .form-control,
@@ -870,6 +950,123 @@ body {
 
 .table-actions .btn {
     margin: 0;
+}
+
+.btn-fit-content {
+    height: fit-content;
+}
+
+/* Sale history layout */
+.sales-history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sales-filter-panel {
+    background-color: #f8f9fa;
+}
+
+.sales-filter-row {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.sales-filter-field {
+    flex: 1;
+    min-width: 200px;
+}
+
+/* Sale edit modal sizing */
+.edit-sale-modal-dialog {
+    max-width: 800px;
+}
+
+.add-sale-modal-dialog {
+    max-width: 700px;
+}
+
+.edit-sale-modal-body {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.modal-body-scroll-70 {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.modal-z-top {
+    z-index: 1070;
+}
+
+.stock-product-display {
+    padding: 0.5rem;
+    background-color: #f8f9fa;
+    border-radius: 0.25rem;
+    border-left: 3px solid var(--primary);
+}
+
+.stock-product-display-add {
+    border-left-color: #0d6efd;
+}
+
+.stock-product-display-remove {
+    border-left-color: #dc3545;
+}
+
+.login-brand-title {
+    color: var(--primary);
+    font-weight: 600;
+}
+
+/* Dashboard layout */
+.dashboard-shell {
+    padding: 1.5rem 0;
+}
+
+.dashboard-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.dashboard-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    margin: 0.5rem 0 0 0;
+}
+
+.dashboard-period-filter-card {
+    background: var(--white);
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.dashboard-period-filter-row {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.dashboard-period-filter-label {
+    color: var(--text-secondary);
+    font-weight: 600;
+    margin-right: 1rem;
+}
+
+.custom-date-range {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+    flex-wrap: wrap;
 }
 
 /* ===== TOAST NOTIFICATIONS ===== */

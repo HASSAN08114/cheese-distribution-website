@@ -2,26 +2,34 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
+from django.conf import settings
 from django.db import models
 from django.db.models import Sum, Q
-from django.db import transaction
+from django.db import transaction, connections
 from django.utils import timezone
 from datetime import datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
+import shutil
+import tempfile
+import sqlite3
+import os
+import json
+from django.core.management import call_command
 from .models import (
     Manufacturer, CheeseProduct, Client, Sale, SaleItem, UserProfile, Payment,
     DeliveryEmployee, DeliveryExpense, SiteActivity,
 )
 from .forms import (
     ManufacturerForm, CheeseProductForm, ClientForm,
-    SaleItemForm, SaleItemFormSet, UserForm, UserRoleForm, AddStockForm, AddStockFormSet,
+    SaleItemForm, SaleItemFormSet, UserForm, UserRoleForm,
     PaymentForm, DeliveryEmployeeForm, DeliveryExpenseForm,
 )
 from .forms import CheeseTypeForm
 from .decorators import owner_required, is_owner
 
 
-from django.http import JsonResponse
+from django.http import JsonResponse, FileResponse
 from django.template.loader import render_to_string
 from django.shortcuts import render
 from .forms import CheeseTypeForm
@@ -29,6 +37,68 @@ from .models import CheeseType
 
 # AJAX endpoint to process return for sale item
 from django.views.decorators.http import require_POST
+
+
+def _resolve_sale_datetime(sale_date_str):
+    """Parse submitted sale datetime; fallback to current time if missing/invalid."""
+    if not sale_date_str:
+        return timezone.now()
+
+    try:
+        parsed = datetime.fromisoformat(sale_date_str)
+        return timezone.make_aware(parsed) if timezone.is_naive(parsed) else parsed
+    except ValueError:
+        return timezone.now()
+
+
+def _validate_sale_date_not_before_client_creation(client, sale_datetime):
+    """Return an error message if sale datetime is before client creation; otherwise None."""
+    if not client.date_added:
+        return None
+
+    client_created = client.date_added
+    if timezone.is_naive(client_created):
+        client_created = timezone.make_aware(client_created)
+
+    if sale_datetime < client_created:
+        return (
+            f"Sale date cannot be earlier than client creation date "
+            f"({timezone.localtime(client_created).strftime('%d/%m/%Y %H:%M')})."
+        )
+
+    return None
+
+
+def _parse_custom_datetime_range(from_value, to_value):
+    """Parse custom range from query params and return aware datetimes (start, end)."""
+    if not from_value or not to_value:
+        return None, None
+
+    def parse_single(value, is_end=False):
+        value = value.strip()
+
+        try:
+            parsed = datetime.fromisoformat(value)
+        except ValueError:
+            try:
+                parsed = datetime.strptime(value, '%Y-%m-%d')
+                if is_end:
+                    parsed = parsed.replace(hour=23, minute=59, second=59, microsecond=999999)
+            except ValueError:
+                return None
+
+        if timezone.is_naive(parsed):
+            parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
+
+        return parsed
+
+    start_dt = parse_single(from_value, is_end=False)
+    end_dt = parse_single(to_value, is_end=True)
+
+    if not start_dt or not end_dt or end_dt < start_dt:
+        return None, None
+
+    return start_dt, end_dt
 
 @login_required
 @require_POST
@@ -337,7 +407,6 @@ def stock_history(request):
     
     return render(request, 'distribution/inventory/stock_history.html', {
         'stock_additions': stock_additions,
-        'add_stock_formset': AddStockFormSet(),
         'products_with_value': products_with_value,
     })
 
@@ -434,9 +503,16 @@ def get_client_analytics(request):
     now_local = timezone.localtime(timezone.now())
     today = now_local.date()
 
+    custom_start_dt = None
+    custom_end_dt = None
+
     if period == 'custom' and from_date_str and to_date_str:
-        start_date = datetime.strptime(from_date_str, '%Y-%m-%d').date()
-        end_date = datetime.strptime(to_date_str, '%Y-%m-%d').date()
+        custom_start_dt, custom_end_dt = _parse_custom_datetime_range(from_date_str, to_date_str)
+        if not custom_start_dt or not custom_end_dt:
+            return JsonResponse({'error': 'Invalid custom date/time range.'}, status=400)
+
+        start_date = None
+        end_date = None
     elif period == 'today':
         start_date = today
         end_date = today
@@ -465,7 +541,9 @@ def get_client_analytics(request):
 
     for client in clients:
         # Filter sales by date range for period-based metrics
-        if start_date and end_date:
+        if custom_start_dt and custom_end_dt:
+            client_sales = Sale.objects.filter(client=client, sale_date__range=[custom_start_dt, custom_end_dt])
+        elif start_date and end_date:
             client_sales = Sale.objects.filter(client=client, sale_date__date__range=[start_date, end_date])
         else:
             client_sales = Sale.objects.filter(client=client)
@@ -486,7 +564,9 @@ def get_client_analytics(request):
 
             # DEBT IS PERIOD-BASED: Sales in period - Payments in period
             # Filter payments by date range for period-based debt calculation
-            if start_date and end_date:
+            if custom_start_dt and custom_end_dt:
+                client_payments = Payment.objects.filter(client=client, date__range=[custom_start_dt, custom_end_dt])
+            elif start_date and end_date:
                 client_payments = Payment.objects.filter(client=client, date__date__range=[start_date, end_date])
             else:
                 client_payments = Payment.objects.filter(client=client)
@@ -557,9 +637,16 @@ def get_product_analytics(request):
 
     now = timezone.now()
 
+    custom_start_dt = None
+    custom_end_dt = None
+
     if period == 'custom' and from_date_str and to_date_str:
-        start_date = datetime.strptime(from_date_str, '%Y-%m-%d').date()
-        end_date = datetime.strptime(to_date_str, '%Y-%m-%d').date()
+        custom_start_dt, custom_end_dt = _parse_custom_datetime_range(from_date_str, to_date_str)
+        if not custom_start_dt or not custom_end_dt:
+            return JsonResponse({'error': 'Invalid custom date/time range.'}, status=400)
+
+        start_date = None
+        end_date = None
     elif period == 'today':
         start_date = now.date()
         end_date = now.date()
@@ -588,7 +675,12 @@ def get_product_analytics(request):
 
     for product in products:
         # Filter sale items by date range
-        if start_date and end_date:
+        if custom_start_dt and custom_end_dt:
+            product_sales = SaleItem.objects.filter(
+                cheese_product=product,
+                sale__sale_date__range=[custom_start_dt, custom_end_dt]
+            )
+        elif start_date and end_date:
             product_sales = SaleItem.objects.filter(
                 cheese_product=product,
                 sale__sale_date__date__range=[start_date, end_date]
@@ -687,9 +779,16 @@ def get_general_metrics(request):
     now_local = timezone.localtime(timezone.now())
     today = now_local.date()
 
+    custom_start_dt = None
+    custom_end_dt = None
+
     if period == 'custom' and from_date_str and to_date_str:
-        start_date = datetime.strptime(from_date_str, '%Y-%m-%d').date()
-        end_date = datetime.strptime(to_date_str, '%Y-%m-%d').date()
+        custom_start_dt, custom_end_dt = _parse_custom_datetime_range(from_date_str, to_date_str)
+        if not custom_start_dt or not custom_end_dt:
+            return JsonResponse({'error': 'Invalid custom date/time range.'}, status=400)
+
+        start_date = None
+        end_date = None
     elif period == 'today':
         start_date = today
         end_date = today
@@ -713,7 +812,12 @@ def get_general_metrics(request):
         end_date = None
 
     # Get general metrics
-    if start_date and end_date:
+    if custom_start_dt and custom_end_dt:
+        sales_queryset = Sale.objects.filter(sale_date__range=[custom_start_dt, custom_end_dt])
+        expenses_queryset = DeliveryExpense.objects.filter(
+            expense_date__range=[custom_start_dt.date(), custom_end_dt.date()]
+        )
+    elif start_date and end_date:
         sales_queryset = Sale.objects.filter(sale_date__date__range=[start_date, end_date])
         expenses_queryset = DeliveryExpense.objects.filter(expense_date__range=[start_date, end_date])
     else:
@@ -747,7 +851,9 @@ def get_general_metrics(request):
     )['total'] or Decimal('0.00')
 
     # Total Paid this period
-    if start_date and end_date:
+    if custom_start_dt and custom_end_dt:
+        total_paid_amount = Payment.objects.filter(date__range=[custom_start_dt, custom_end_dt]).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    elif start_date and end_date:
         total_paid_amount = Payment.objects.filter(date__date__range=[start_date, end_date]).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
     else:
         total_paid_amount = Payment.objects.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
@@ -1086,7 +1192,6 @@ def inventory_management(request):
     manufacturer_form = ManufacturerForm()
     cheese_product_form = CheeseProductForm()
     cheese_type_form = CheeseTypeForm()
-    add_stock_formset = AddStockFormSet()
     sale_item_formset = SaleItemFormSet()
     
     inventory_summary = {
@@ -1104,7 +1209,6 @@ def inventory_management(request):
         'manufacturer_form': manufacturer_form,
         'cheese_product_form': cheese_product_form,
         'cheese_type_form': cheese_type_form,
-        'add_stock_formset': add_stock_formset,
         'formset': sale_item_formset,
         'cheese_types': cheese_types,
         'low_stock_products': low_stock_products,
@@ -1214,53 +1318,6 @@ def cheese_delete(request, pk):
         return redirect('inventory_management')
     return render(request, 'distribution/cheese_delete.html', {'product': product})
 
-
-@login_required
-def add_stock(request):
-    from .models import StockAdditionItem
-    if request.method == 'POST':
-        formset = AddStockFormSet(request.POST)
-        if formset.is_valid():
-            valid_forms = [f for f in formset if f.cleaned_data]
-
-            if not valid_forms:
-                return JsonResponse({'success': False, 'error': 'Please add at least one stock item.'})
-
-            # Create a single stock addition event
-            stock_addition = StockAdditionHistory.objects.create(
-                operation_type='add',
-                added_by=request.user.userprofile
-            )
-            
-            stock_added = []
-            for form in valid_forms:
-                cheese_product = form.cleaned_data['cheese_product']
-                quantity_packets = form.cleaned_data['quantity_packets']
-
-                cheese_product.available_quantity_packets += quantity_packets
-                cheese_product.save()
-
-                # Create stock addition item
-                StockAdditionItem.objects.create(
-                    stock_addition=stock_addition,
-                    cheese_product=cheese_product,
-                    quantity_packets=quantity_packets
-                )
-
-                stock_added.append(f"{quantity_packets} packets to {cheese_product}")
-
-            SiteActivity.update_activity(f'Stock added: {len(stock_added)} product(s)')
-            messages.success(request, f'Successfully added stock: {", ".join(stock_added)}.')
-            return JsonResponse({'success': True})
-        else:
-            return JsonResponse({'success': False, 'error': 'Please correct the errors below.'})
-    else:
-        formset = AddStockFormSet()
-
-    html = render_to_string('distribution/inventory/partials/partial_add_stock_form.html', {'formset': formset}, request=request)
-    return JsonResponse({'html': html})
-
-
 @login_required
 def quick_sale_create(request):
     """Quick sale creation from inventory page - same logic as sale_create"""
@@ -1272,14 +1329,18 @@ def quick_sale_create(request):
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return JsonResponse({'success': False, 'error': 'Please select a client.'})
             messages.error(request, 'Please select a client.')
-            formset = SaleItemFormSet()
-            return render(request, 'distribution/sales/partials/partial_quick_sale_form.html', {
-                'formset': formset,
-                'clients': Client.objects.all()
-            })
+            return redirect('sale_history')
 
         client = get_object_or_404(Client, pk=client_id)
         formset = SaleItemFormSet(request.POST)
+        sale_datetime = _resolve_sale_datetime(sale_date_str)
+        sale_date_error = _validate_sale_date_not_before_client_creation(client, sale_datetime)
+
+        if sale_date_error:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': sale_date_error})
+            messages.error(request, sale_date_error)
+            return redirect('sale_history')
 
         if formset.is_valid():
             valid_forms = [f for f in formset if f.cleaned_data and not f.cleaned_data.get('DELETE', False)]
@@ -1288,21 +1349,14 @@ def quick_sale_create(request):
                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                     return JsonResponse({'success': False, 'error': 'Please add at least one item to the sale.'})
                 messages.error(request, 'Please add at least one item to the sale.')
-                return render(request, 'distribution/sales/partials/partial_quick_sale_form.html', {
-                    'formset': formset,
-                    'clients': Client.objects.all()
-                })
+                return redirect('sale_history')
 
             with transaction.atomic():
-                sale = Sale.objects.create(client=client, total_amount=Decimal('0.00'))
-                
-                # Update sale_date if custom date was provided
-                if sale_date_str:
-                    try:
-                        sale_date = datetime.fromisoformat(sale_date_str)
-                        sale.sale_date = timezone.make_aware(sale_date) if sale_date.tzinfo is None else sale_date
-                    except ValueError:
-                        pass  # Keep the default current time if parsing fails
+                sale = Sale.objects.create(
+                    client=client,
+                    total_amount=Decimal('0.00'),
+                    sale_date=sale_datetime,
+                )
                 
                 total_amount = Decimal('0.00')
 
@@ -1316,10 +1370,7 @@ def quick_sale_create(request):
                         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                             return JsonResponse({'success': False, 'error': f'Insufficient stock for {cheese_product.name}.'})
                         messages.error(request, f'Insufficient stock for {cheese_product.name}.')
-                        return render(request, 'distribution/sales/partials/partial_quick_sale_form.html', {
-                            'formset': formset,
-                            'clients': Client.objects.all()
-                        })
+                        return redirect('sale_history')
 
                     sale_item = SaleItem.objects.create(
                         sale=sale,
@@ -1370,14 +1421,11 @@ def quick_sale_create(request):
                 return JsonResponse({'success': False, 'error': error_msg})
             
             messages.error(request, error_msg)
-            return render(request, 'distribution/sales/partials/partial_quick_sale_form.html', {
-                'formset': formset,
-                'clients': Client.objects.all()
-            })
+            return redirect('sale_history')
     else:
         formset = SaleItemFormSet()
 
-    html = render_to_string('distribution/sales/partials/partial_quick_sale_form.html', {
+    html = render_to_string('distribution/sales/partials/partial_add_sale_modal.html', {
         'formset': formset,
         'clients': Client.objects.all()
     }, request=request)
@@ -1525,6 +1573,39 @@ def export_client_pdf(request, pk):
     elements.append(title)
     elements.append(Spacer(1, 0.3*inch))
     
+    # Get time period from query params
+    from datetime import datetime
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+    
+    # Add Report Period Section
+    period_text = "Full Report (All-Time)"
+    if start_date_str or end_date_str:
+        try:
+            if start_date_str and end_date_str:
+                start_dt = datetime.strptime(start_date_str, '%Y-%m-%d')
+                end_dt = datetime.strptime(end_date_str, '%Y-%m-%d')
+                period_text = f"Report Period: {start_dt.strftime('%B %d, %Y')} to {end_dt.strftime('%B %d, %Y')}"
+            elif start_date_str:
+                start_dt = datetime.strptime(start_date_str, '%Y-%m-%d')
+                period_text = f"Report Period: From {start_dt.strftime('%B %d, %Y')}"
+            elif end_date_str:
+                end_dt = datetime.strptime(end_date_str, '%Y-%m-%d')
+                period_text = f"Report Period: Until {end_dt.strftime('%B %d, %Y')}"
+        except Exception:
+            pass
+    
+    period_style = ParagraphStyle(
+        'PeriodStyle',
+        parent=styles['Normal'],
+        fontSize=10,
+        textColor=colors.HexColor('#666666'),
+        spaceAfter=12,
+        alignment=1  # Center alignment
+    )
+    elements.append(Paragraph(period_text, period_style))
+    elements.append(Spacer(1, 0.2*inch))
+    
     # Client Information Section
     elements.append(Paragraph("Client Information", heading_style))
     
@@ -1578,11 +1659,9 @@ def export_client_pdf(request, pk):
     ]))
     
     elements.append(financial_table)
+    elements.append(Spacer(1, 0.3*inch))
     
-    # Get time period from query params
-    from datetime import datetime
-    start_date_str = request.GET.get('start_date')
-    end_date_str = request.GET.get('end_date')
+    # Prepare filters for sales and payments
     sales_filter = {'client': client}
     payments_filter = {'client': client}
     if start_date_str:
@@ -1809,6 +1888,18 @@ def sale_create(request):
 
         client = get_object_or_404(Client, pk=client_id)
         formset = SaleItemFormSet(request.POST)
+        sale_datetime = _resolve_sale_datetime(sale_date_str)
+        sale_date_error = _validate_sale_date_not_before_client_creation(client, sale_datetime)
+
+        if sale_date_error:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': sale_date_error})
+            messages.error(request, sale_date_error)
+            return render(request, 'distribution/sales/sale_create.html', {
+                'formset': formset,
+                'clients': Client.objects.all(),
+                'selected_client_id': int(client_id)
+            })
 
         if formset.is_valid():
             valid_forms = [f for f in formset if f.cleaned_data and not f.cleaned_data.get('DELETE', False)]
@@ -1825,15 +1916,11 @@ def sale_create(request):
 
             with transaction.atomic():
                 # Create sale (initially with current time)
-                sale = Sale.objects.create(client=client, total_amount=Decimal('0.00'))
-                
-                # Update sale_date if custom date was provided
-                if sale_date_str:
-                    try:
-                        sale_date = datetime.fromisoformat(sale_date_str)
-                        sale.sale_date = timezone.make_aware(sale_date) if sale_date.tzinfo is None else sale_date
-                    except ValueError:
-                        pass  # Keep the default current time if parsing fails
+                sale = Sale.objects.create(
+                    client=client,
+                    total_amount=Decimal('0.00'),
+                    sale_date=sale_datetime,
+                )
                 
                 total_amount = Decimal('0.00')
 
@@ -1874,7 +1961,13 @@ def sale_create(request):
                     return JsonResponse({'success': True, 'message': 'Sale created successfully.'})
                 
                 messages.success(request, 'Sale created successfully.')
-                return redirect('sale_history')
+                # Reset formset for same-page submission
+                formset = SaleItemFormSet()
+                return render(request, 'distribution/sales/sale_create.html', {
+                    'formset': formset,
+                    'clients': Client.objects.all(),
+                    'selected_client_id': None
+                })
         else:
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 # Get first error from formset
@@ -1931,14 +2024,8 @@ def add_payment(request):
     if request.method == 'POST':
         form = PaymentForm(request.POST)
         if form.is_valid():
-            client = form.cleaned_data['client']
-            amount = form.cleaned_data['amount']
-            mode = form.cleaned_data['mode']
-            bank = form.cleaned_data.get('bank') or ''
-
-            # Record payment - debt is calculated at query time
-            Payment.objects.create(client=client, amount=amount, mode=mode, bank=bank)
-            SiteActivity.update_activity(f'Payment of PKR {amount} recorded for {client.name}')
+            payment = form.save()
+            SiteActivity.update_activity(f'Payment of PKR {payment.amount} recorded for {payment.client.name}')
             
             # Handle AJAX requests
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -1963,7 +2050,54 @@ def add_payment(request):
 def payment_history(request):
     payments = Payment.objects.select_related('client').all().order_by('-date')
     clients = Client.objects.all()
-    return render(request, 'distribution/clients/payment_history.html', {'payments': payments, 'clients': clients})
+    return render(request, 'distribution/clients/payment_history.html', {
+        'payments': payments,
+        'clients': clients,
+        'user_is_owner': is_owner(request.user),
+    })
+
+
+@login_required
+def payment_edit(request, pk):
+    payment = get_object_or_404(Payment, pk=pk)
+
+    if request.method == 'POST':
+        form = PaymentForm(request.POST, instance=payment)
+        if form.is_valid():
+            updated_payment = form.save()
+            SiteActivity.update_activity(f'Payment updated for {updated_payment.client.name}')
+
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': True, 'message': 'Payment updated successfully.'})
+
+            messages.success(request, 'Payment updated successfully.')
+            return redirect('payment_history')
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            html = render_to_string('distribution/clients/partials/partial_edit_payment_form.html', {
+                'payment': payment,
+                'form': form,
+            }, request=request)
+            return JsonResponse({'success': False, 'html': html})
+    else:
+        form = PaymentForm(instance=payment)
+
+    return render(request, 'distribution/clients/partials/partial_edit_payment_form.html', {
+        'payment': payment,
+        'form': form,
+    })
+
+
+@owner_required
+@require_POST
+def payment_delete(request, pk):
+    payment = get_object_or_404(Payment, pk=pk)
+    client_name = payment.client.name
+    amount = payment.amount
+    payment.delete()
+    SiteActivity.update_activity(f'Payment deleted for {client_name} (PKR {amount})')
+    messages.success(request, 'Payment deleted successfully.')
+    return redirect('payment_history')
 
 
 @login_required
@@ -2250,6 +2384,14 @@ def sale_edit(request, pk):
             return redirect('sale_history')
         
         client = get_object_or_404(Client, pk=client_id)
+        sale_datetime = _resolve_sale_datetime(sale_date_str) if sale_date_str else sale.sale_date
+        sale_date_error = _validate_sale_date_not_before_client_creation(client, sale_datetime)
+        if sale_date_error:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': sale_date_error})
+            messages.error(request, sale_date_error)
+            return redirect('sale_history')
+
         
         # Validate formset
         if formset.is_valid():
@@ -2273,11 +2415,8 @@ def sale_edit(request, pk):
                     quantity_packets = form.cleaned_data['quantity_packets']
                     
                     if quantity_packets > cheese_product.available_quantity_packets:
-                        # Restore all previously modified stock before failing
-                        for orig_item in original_items:
-                            if orig_item.cheese_product.id != cheese_product.id:
-                                orig_item.cheese_product.available_quantity_packets += orig_item.quantity_packets
-                                orig_item.cheese_product.save()
+                        # Roll back the atomic transaction so restored stock changes are not committed.
+                        transaction.set_rollback(True)
                         
                         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                             return JsonResponse({'success': False, 'error': f'Insufficient stock for {cheese_product}. Requested: {quantity_packets}, available: {cheese_product.available_quantity_packets}.'})
@@ -2309,12 +2448,7 @@ def sale_edit(request, pk):
                 
                 # Step 5: Update sale with new client, date, and total
                 sale.client = client
-                if sale_date_str:
-                    try:
-                        sale_date = datetime.fromisoformat(sale_date_str)
-                        sale.sale_date = timezone.make_aware(sale_date) if sale_date.tzinfo is None else sale_date
-                    except ValueError:
-                        pass  # Keep existing date if parsing fails
+                sale.sale_date = sale_datetime
                 
                 sale.total_amount = total_amount
                 sale.save()
@@ -2346,6 +2480,7 @@ def sale_edit(request, pk):
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return JsonResponse({'success': False, 'error': error_msg})
             messages.error(request, error_msg)
+            return redirect('sale_history')
 
 
 @login_required
@@ -2365,6 +2500,211 @@ def sale_delete(request, pk):
         return redirect('sale_history')
     
     return render(request, 'distribution/sales/sale_confirm_delete.html', {'sale': sale})
+
+
+@owner_required
+def database_management(request):
+    """Owner-only database backup and restore page (SQLite and PostgreSQL)."""
+    db_settings = settings.DATABASES.get('default', {})
+    engine = db_settings.get('ENGINE', '')
+    db_name = db_settings.get('NAME', '')
+    is_sqlite = 'sqlite3' in engine
+    is_postgres = 'postgresql' in engine
+
+    if not (is_sqlite or is_postgres):
+        messages.error(request, 'Database backup/restore is supported only for SQLite and PostgreSQL.')
+        return redirect('dashboard')
+
+    db_path = None
+    if is_sqlite:
+        db_path = Path(str(db_name))
+        if not db_path.is_absolute():
+            db_path = settings.BASE_DIR / db_path
+
+        if not db_path.exists():
+            messages.error(request, 'Database file was not found on disk.')
+            return redirect('dashboard')
+
+    backup_dir = settings.BASE_DIR / 'db_backups'
+    backup_dir.mkdir(parents=True, exist_ok=True)
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'backup':
+            timestamp = timezone.localtime().strftime('%Y%m%d_%H%M%S')
+
+            if is_sqlite:
+                backup_name = f'backup_{timestamp}.sqlite3'
+                backup_path = backup_dir / backup_name
+                connections.close_all()
+                shutil.copy2(db_path, backup_path)
+                SiteActivity.update_activity(f'SQLite database backup downloaded by {request.user.username}')
+                return FileResponse(open(backup_path, 'rb'), as_attachment=True, filename=backup_name)
+
+            # PostgreSQL logical backup via Django fixture serialization.
+            backup_name = f'backup_{timestamp}.json'
+            backup_path = backup_dir / backup_name
+            try:
+                with open(backup_path, 'w', encoding='utf-8') as backup_file:
+                    call_command(
+                        'dumpdata',
+                        natural_foreign=True,
+                        natural_primary=True,
+                        indent=2,
+                        stdout=backup_file,
+                    )
+                SiteActivity.update_activity(f'PostgreSQL fixture backup downloaded by {request.user.username}')
+                return FileResponse(open(backup_path, 'rb'), as_attachment=True, filename=backup_name)
+            except Exception as exc:
+                messages.error(request, f'Backup generation failed: {exc}')
+                return redirect('database_management')
+
+        if action == 'restore':
+            uploaded_file = request.FILES.get('database_file')
+            confirm_restore = request.POST.get('confirm_restore') == 'on'
+
+            if not uploaded_file:
+                messages.error(request, 'Please choose a database file to restore.')
+                return redirect('database_management')
+
+            if not confirm_restore:
+                messages.error(request, 'Please confirm restore before continuing.')
+                return redirect('database_management')
+
+            if is_sqlite:
+                allowed_suffixes = ('.sqlite3', '.db', '.sqlite', '.backup')
+                if not uploaded_file.name.lower().endswith(allowed_suffixes):
+                    messages.error(request, 'Invalid file type. Upload a SQLite database file.')
+                    return redirect('database_management')
+
+                temp_fd, temp_path = tempfile.mkstemp(suffix='.sqlite3')
+                os.close(temp_fd)
+                try:
+                    with open(temp_path, 'wb') as destination:
+                        for chunk in uploaded_file.chunks():
+                            destination.write(chunk)
+
+                    # Basic SQLite integrity check.
+                    with sqlite3.connect(temp_path) as conn:
+                        cursor = conn.cursor()
+                        cursor.execute("PRAGMA integrity_check;")
+                        integrity_result = cursor.fetchone()
+                        if not integrity_result or integrity_result[0] != 'ok':
+                            messages.error(request, 'Uploaded file failed SQLite integrity check.')
+                            return redirect('database_management')
+
+                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='django_migrations';")
+                        if cursor.fetchone() is None:
+                            messages.error(request, 'Uploaded file is not a valid Django database backup.')
+                            return redirect('database_management')
+
+                    backup_name = f'pre_restore_{timezone.localtime().strftime("%Y%m%d_%H%M%S")}.sqlite3'
+                    backup_path = backup_dir / backup_name
+
+                    connections.close_all()
+                    shutil.copy2(db_path, backup_path)
+                    shutil.copy2(temp_path, db_path)
+
+                    SiteActivity.update_activity(
+                        f'SQLite database restored by {request.user.username}; previous DB saved as {backup_name}'
+                    )
+                    messages.success(
+                        request,
+                        f'Database restored successfully. A safety backup was saved to db_backups/{backup_name}.'
+                    )
+                    return redirect('database_management')
+                except sqlite3.Error:
+                    messages.error(request, 'Uploaded file is not a valid SQLite database.')
+                    return redirect('database_management')
+                except Exception as exc:
+                    messages.error(request, f'Database restore failed: {exc}')
+                    return redirect('database_management')
+                finally:
+                    try:
+                        Path(temp_path).unlink(missing_ok=True)
+                    except OSError:
+                        pass
+
+            # PostgreSQL restore from JSON fixture.
+            if not uploaded_file.name.lower().endswith('.json'):
+                messages.error(request, 'Invalid file type. Upload a JSON fixture backup file.')
+                return redirect('database_management')
+
+            temp_fd, temp_path = tempfile.mkstemp(suffix='.json')
+            os.close(temp_fd)
+            try:
+                with open(temp_path, 'wb') as destination:
+                    for chunk in uploaded_file.chunks():
+                        destination.write(chunk)
+
+                # Validate JSON before any destructive operation.
+                with open(temp_path, 'r', encoding='utf-8') as source_file:
+                    data = json.load(source_file)
+                    if not isinstance(data, list):
+                        messages.error(request, 'Invalid fixture format: expected a JSON list.')
+                        return redirect('database_management')
+
+                # Create safety backup before restore.
+                safety_backup_name = f'pre_restore_{timezone.localtime().strftime("%Y%m%d_%H%M%S")}.json'
+                safety_backup_path = backup_dir / safety_backup_name
+                with open(safety_backup_path, 'w', encoding='utf-8') as safety_file:
+                    call_command(
+                        'dumpdata',
+                        natural_foreign=True,
+                        natural_primary=True,
+                        indent=2,
+                        stdout=safety_file,
+                    )
+
+                # Reset data and load uploaded fixture.
+                with transaction.atomic():
+                    call_command('flush', verbosity=0, interactive=False)
+                    call_command('loaddata', temp_path, verbosity=0)
+
+                SiteActivity.update_activity(
+                    f'PostgreSQL database restored by {request.user.username}; previous data saved as {safety_backup_name}'
+                )
+                messages.success(
+                    request,
+                    f'Database restored successfully. A safety backup was saved to db_backups/{safety_backup_name}.'
+                )
+                return redirect('database_management')
+            except json.JSONDecodeError:
+                messages.error(request, 'Uploaded file is not valid JSON.')
+                return redirect('database_management')
+            except Exception as exc:
+                messages.error(request, f'PostgreSQL restore failed: {exc}')
+                return redirect('database_management')
+            finally:
+                try:
+                    Path(temp_path).unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+    if is_sqlite:
+        recent_backups = sorted(backup_dir.glob('*.sqlite3'), reverse=True)
+        db_label = 'SQLite'
+        restore_accept = '.sqlite3,.sqlite,.db,.backup'
+        restore_label = 'SQLite backup file'
+    else:
+        recent_backups = sorted(backup_dir.glob('*.json'), reverse=True)
+        db_label = 'PostgreSQL'
+        restore_accept = '.json'
+        restore_label = 'PostgreSQL JSON fixture'
+
+    backup_names = [p.name for p in recent_backups[:10]]
+
+    return render(request, 'distribution/database_management.html', {
+        'database_name': db_path.name if db_path else db_name,
+        'database_path': str(db_path) if db_path else db_name,
+        'database_type': db_label,
+        'is_sqlite': is_sqlite,
+        'is_postgres': is_postgres,
+        'restore_accept': restore_accept,
+        'restore_label': restore_label,
+        'backup_files': backup_names,
+    })
 
 
 @owner_required

@@ -4,110 +4,44 @@
 
 {% block content %}
 
-<!-- Quick Sale Modal -->
-<div class="modal fade" id="quickSaleModal" tabindex="-1" aria-labelledby="quickSaleModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+<!-- Add Sale Modal -->
+<div class="modal fade" id="addSaleModal" tabindex="-1" aria-labelledby="addSaleModalLabel" aria-hidden="true">
+    <div class="modal-dialog add-sale-modal-dialog">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="quickSaleModalLabel">Create Quick Sale</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form id="quickSaleForm" method="post" action="{% url 'quick_sale_create' %}">
-                    {% csrf_token %}
-
-                    <div class="mb-3">
-                        <label class="form-label">Client</label>
-                        <select name="client" class="form-control" required>
-                            <option value="">Select client</option>
-                            {% for client in clients %}
-                                <option value="{{ client.pk }}">{{ client.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Sale Date & Time (Optional)</label>
-                        <input type="datetime-local" name="sale_date" class="form-control" title="Leave empty to use current date and time">
-                        <small class="text-muted">Leave empty to use current date and time</small>
-                    </div>
-
-                    <h6 class="mt-4">Sale Items</h6>
-
-                    {{ formset.management_form }}
-
-                    <div id="formset-container">
-                        {% for form in formset %}
-                        <div class="row mb-3 formset-row border-bottom pb-3">
-                            {{ form.id }}
-
-                            <div class="col-md-4">
-                                {{ form.cheese_product.label_tag }}
-                                {{ form.cheese_product }}
-                            </div>
-
-                            <div class="col-md-3">
-                                {{ form.quantity_packets.label_tag }}
-                                {{ form.quantity_packets }}
-                            </div>
-
-                            <div class="col-md-3">
-                                {{ form.selling_price_per_packet.label_tag }}
-                                {{ form.selling_price_per_packet }}
-                            </div>
-
-                            <div class="col-md-2 d-flex align-items-end">
-                                <button type="button" class="btn btn-sm btn-danger remove-item">
-                                    Remove
-                                </button>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-
-                    <div class="mt-3">
-                        <button type="button" class="btn btn-success btn-sm" id="addItemBtn">
-                            Add Item
-                        </button>
-                        <button type="submit" class="btn btn-primary ms-2">
-                            Create Sale
-                        </button>
-                    </div>
-                </form>
-            </div>
+            {% include 'distribution/sales/partials/partial_add_sale_modal.html' %}
         </div>
     </div>
 </div>
 
 <div class="card shadow-sm">
-    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+    <div class="card-header sales-history-header">
         <div>
-            <h5 style="margin-bottom: 0.25rem;">Sale History</h5>
-            <p style="color: var(--text-secondary)">View all completed sales and transactions</p>
+            <h5 class="section-title-tight">Sale History</h5>
+            <p class="section-subtitle-muted">View all completed sales and transactions</p>
         </div>
-        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#quickSaleModal">
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addSaleModal">
             <i class="bi bi-plus-lg"></i> Create Quick Sale
         </button>
     </div>
     
     <!-- Filter Controls -->
-    <div class="card-body" style="background-color: #f8f9fa;">
-        <div style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
-            <div style="flex: 1; min-width: 200px;">
-                <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">From Date</label>
-                <input type="date" id="filtFromDate" class="form-control form-control-sm">
+    <div class="card-body sales-filter-panel">
+        <div class="sales-filter-row">
+            <div class="sales-filter-field">
+                <label class="form-label form-label-sm-muted">From Date</label>
+                <input type="text" id="filtFromDate" class="form-control form-control-sm js-date-picker" placeholder="DD/MM/YYYY">
             </div>
-            <div style="flex: 1; min-width: 200px;">
-                <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">To Date</label>
-                <input type="date" id="filterToDate" class="form-control form-control-sm">
+            <div class="sales-filter-field">
+                <label class="form-label form-label-sm-muted">To Date</label>
+                <input type="text" id="filterToDate" class="form-control form-control-sm js-date-picker" placeholder="DD/MM/YYYY">
             </div>
-            <div style="flex: 1; min-width: 200px;">
-                <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">Client</label>
+            <div class="sales-filter-field">
+                <label class="form-label form-label-sm-muted">Client</label>
                 <select id="filterClient" class="form-control form-control-sm">
                     <option value="">-- All Clients --</option>
                 </select>
             </div>
-            <button class="btn btn-sm btn-secondary" onclick="resetSalesFilters()" style="height: fit-content;" title="Reset filters">
+            <button class="btn btn-sm btn-secondary btn-fit-content" onclick="resetSalesFilters()" title="Reset filters">
                 Reset
             </button>
         </div>
@@ -128,8 +62,8 @@
                 <tr>
                     <td>{{ item.sale.client.name }}</td>
                     <td>PKR {{ item.sale.total_amount|floatformat:2 }}</td>
-                    <td>{{ item.sale.sale_date|date:"M d, Y H:i" }}</td>
-                    <td class="text-end" style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <td data-iso-date="{{ item.sale.sale_date|date:'c' }}">{{ item.sale.sale_date|date:"d/m/Y H:i" }}</td>
+                    <td class="text-end table-actions">
                         <button class="btn btn-sm btn-outline-secondary view-sale-modal"
                                 data-id="{{ item.sale.id }}"
                                 title="View details">
@@ -166,7 +100,7 @@
 <div id="sale-modal" class="modal" tabindex="-1"></div>
 
 <!-- Return Item Modal -->
-<div class="modal fade" id="returnItemModal" tabindex="-1" aria-hidden="true" style="z-index: 1070;">
+<div class="modal fade modal-z-top" id="returnItemModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
@@ -194,7 +128,7 @@
 </div>
 
 <!-- Return All Modal -->
-<div class="modal fade" id="returnAllModal" tabindex="-1" aria-hidden="true" style="z-index: 1070;">
+<div class="modal fade modal-z-top" id="returnAllModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
@@ -221,13 +155,13 @@
 
 <!-- Edit Sale Modal -->
 <div class="modal fade" id="editSaleModal" tabindex="-1" aria-labelledby="editSaleModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg" style="max-width: 800px;">
+    <div class="modal-dialog modal-lg edit-sale-modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="editSaleModalLabel">Edit Sale</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+            <div class="modal-body edit-sale-modal-body">
                 <form id="editSaleForm">
                     {% csrf_token %}
                     <input type="hidden" id="editSaleId" name="sale_id">
@@ -240,8 +174,9 @@
                     </div>
                     
                     <div class="mb-3">
-                        <label for="editSaleDate" class="form-label">Sale Date & Time</label>
-                        <input type="datetime-local" id="editSaleDate" name="sale_date" class="form-control" required>
+                        <label for="editSaleDateDisplay" class="form-label">Sale Date & Time (DD/MM/YYYY HH:MM)</label>
+                        <input type="text" id="editSaleDateDisplay" class="form-control js-datetime-picker" placeholder="DD/MM/YYYY HH:MM" required>
+                        <input type="hidden" id="editSaleDate" name="sale_date">
                     </div>
                     
                     <div class="border-top pt-3 mt-3">
@@ -330,12 +265,14 @@ document.addEventListener('DOMContentLoaded', function() {
 // Sale History: Add/Remove Item logic + Modal handlers
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOMContentLoaded event fired - setting up handlers');
-    const addButton = document.getElementById('addItemBtn');
-    const container = document.getElementById('formset-container');
+    const addButton = document.getElementById('addSaleAddItemBtn');
+    const container = document.getElementById('addSaleFormsetContainer');
     const totalForms = document.getElementById('id_form-TOTAL_FORMS');
-    let formCount = parseInt(totalForms.value);
+
+    let formCount = totalForms ? parseInt(totalForms.value) : 0;
 
     function updateRemoveButtons() {
+        if (!container || !totalForms) return;
         container.querySelectorAll('.remove-item').forEach(function(btn) {
             btn.onclick = function() {
                 const row = btn.closest('.formset-row');
@@ -348,7 +285,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    if (addButton) {
+    if (addButton && container && totalForms) {
         addButton.addEventListener('click', function() {
             const rows = container.querySelectorAll('.formset-row');
             const lastRow = rows[rows.length - 1];
@@ -384,44 +321,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     updateRemoveButtons();
 
-    // Quick Sale Form Submission Handler with deduplication
-    const quickSaleForm = document.getElementById('quickSaleForm');
+    // Add Sale Form Submission Handler (standard form post)
+    const addSaleForm = document.getElementById('addSaleForm');
     
-    if (quickSaleForm) {
-        setupAjaxForm(quickSaleForm,
-            function(data) {
-                showToast(data.message || 'Sale has been created successfully.', 'success');
-                const modal = bootstrap.Modal.getInstance(document.getElementById('quickSaleModal'));
-                if (modal) modal.hide();
-                quickSaleForm.reset();
-                
-                // Reset the formset
-                const container = document.getElementById('formset-container');
-                const totalForms = document.getElementById('id_form-TOTAL_FORMS');
-                const minForms = parseInt(document.getElementById('id_form-MIN_NUM_FORMS').value);
-                
-                // Keep at least minimum forms
-                let rowsToKeep = minForms || 1;
-                const rows = container.querySelectorAll('.formset-row');
-                
-                // Remove extra rows
-                for (let i = rows.length - 1; i >= rowsToKeep; i--) {
-                    rows[i].remove();
-                }
-                
-                totalForms.value = rowsToKeep;
-                
-                // Clear inputs in remaining rows
-                container.querySelectorAll('input, select').forEach(input => {
-                    if (input.type !== 'hidden') {
-                        input.value = '';
-                    }
-                });
-            },
-            function(error) {
-                showToast(error.error || 'An error occurred while creating the sale.', 'danger');
+    if (addSaleForm) {
+        addSaleForm.addEventListener('submit', function() {
+            const submitBtn = addSaleForm.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Creating...';
             }
-        );
+        });
     }
 
     // Sale History: View Sale Modal Handler
@@ -659,6 +569,27 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Sales History Filtering
+function parseDdMmDate(value) {
+    if (!value) return null;
+    const match = value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!match) return null;
+
+    const day = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10);
+    const year = parseInt(match[3], 10);
+    const parsed = new Date(year, month - 1, day);
+
+    if (
+        parsed.getFullYear() !== year ||
+        parsed.getMonth() !== month - 1 ||
+        parsed.getDate() !== day
+    ) {
+        return null;
+    }
+
+    return parsed;
+}
+
 function applySalesFilters() {
     const fromDate = document.getElementById('filtFromDate').value;
     const toDate = document.getElementById('filterToDate').value;
@@ -667,12 +598,15 @@ function applySalesFilters() {
     const rows = document.querySelectorAll('tbody tr');
     rows.forEach(row => {
         if (row.querySelector('td:nth-child(4)')) {  // Check if it's not an empty message row
-            const clientName = row.querySelector('td:nth-child(2)').textContent.trim();
-            const dateText = row.querySelector('td:nth-child(3)').textContent;
-            const saleDate = new Date(dateText);
+            const clientName = row.querySelector('td:nth-child(1)').textContent.trim();
+            const dateIso = row.querySelector('td:nth-child(3)').getAttribute('data-iso-date');
+            const saleDate = new Date(dateIso);
             
-            const fromDateObj = fromDate ? new Date(fromDate) : null;
-            const toDateObj = toDate ? new Date(toDate + 'T23:59:59') : null;
+            const fromDateObj = parseDdMmDate(fromDate);
+            const toDateObj = parseDdMmDate(toDate);
+            if (toDateObj) {
+                toDateObj.setHours(23, 59, 59, 999);
+            }
             
             let show = true;
             
@@ -690,6 +624,32 @@ function applySalesFilters() {
 
     // Store products globally for reuse
     let editModalProducts = [];
+
+    function formatIsoToDdMmDateTime(isoValue) {
+        if (!isoValue) return '';
+        const parsed = new Date(isoValue);
+        if (Number.isNaN(parsed.getTime())) return '';
+
+        const day = String(parsed.getDate()).padStart(2, '0');
+        const month = String(parsed.getMonth() + 1).padStart(2, '0');
+        const year = parsed.getFullYear();
+        const hours = String(parsed.getHours()).padStart(2, '0');
+        const minutes = String(parsed.getMinutes()).padStart(2, '0');
+        return `${day}/${month}/${year} ${hours}:${minutes}`;
+    }
+
+    function parseDdMmDateTimeToIso(value) {
+        if (!value) return null;
+        const match = value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})$/);
+        if (!match) return null;
+
+        const day = match[1];
+        const month = match[2];
+        const year = match[3];
+        const hours = match[4];
+        const minutes = match[5];
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
     
     // Edit Sale Handler - Load sale data and populate formset
     document.addEventListener('click', function(e) {
@@ -719,6 +679,7 @@ function applySalesFilters() {
                         
                         // Populate sale date
                         document.getElementById('editSaleDate').value = data.sale.sale_date_iso;
+                        document.getElementById('editSaleDateDisplay').value = formatIsoToDdMmDateTime(data.sale.sale_date_iso);
                         document.getElementById('editSaleId').value = saleId;
                         
                         // Populate items formset
@@ -863,16 +824,19 @@ function applySalesFilters() {
     document.getElementById('saveEditSaleBtn').addEventListener('click', function() {
         const saleId = document.getElementById('editSaleId').value;
         const clientId = document.getElementById('editSaleClient').value;
-        const saleDateValue = document.getElementById('editSaleDate').value;
+        const saleDateDisplayValue = document.getElementById('editSaleDateDisplay').value;
+        const saleDateValue = parseDdMmDateTimeToIso(saleDateDisplayValue);
         
         if (!clientId) {
             showToast('Please select a client', 'warning');
             return;
         }
         if (!saleDateValue) {
-            showToast('Please select a date and time', 'warning');
+            showToast('Please enter date/time as DD/MM/YYYY HH:MM', 'warning');
             return;
         }
+
+        document.getElementById('editSaleDate').value = saleDateValue;
         
         const items = [];
         let errorMsg = '';
@@ -1024,8 +988,8 @@ function resetSalesFilters() {
 
 // Attach filter event listeners
 document.addEventListener('DOMContentLoaded', function() {
-    document.getElementById('filtFromDate').addEventListener('change', applySalesFilters);
-    document.getElementById('filterToDate').addEventListener('change', applySalesFilters);
+    document.getElementById('filtFromDate').addEventListener('input', applySalesFilters);
+    document.getElementById('filterToDate').addEventListener('input', applySalesFilters);
     document.getElementById('filterClient').addEventListener('change', applySalesFilters);
     
     // Populate client dropdown with unique clients from the table
@@ -1049,10 +1013,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Populate current date/time when quick sale modal is shown
 document.addEventListener('DOMContentLoaded', function() {
-    const quickSaleModal = document.getElementById('quickSaleModal');
-    if (quickSaleModal) {
-        quickSaleModal.addEventListener('shown.bs.modal', function() {
-            const saleDateInput = document.querySelector('#quickSaleForm input[name="sale_date"]');
+    const addSaleModal = document.getElementById('addSaleModal');
+    if (addSaleModal) {
+        addSaleModal.addEventListener('shown.bs.modal', function() {
+            const saleDateInput = document.querySelector('#addSaleForm input[name="sale_date"]');
             if (saleDateInput && !saleDateInput.value) {
                 const now = new Date();
                 const year = now.getFullYear();

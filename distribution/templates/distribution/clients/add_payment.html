@@ -22,6 +22,11 @@
                 {{ form.amount.errors }}
             </div>
             <div class="mb-3">
+                <label for="id_date" class="form-label">Payment Date & Time</label>
+                {{ form.date }}
+                {{ form.date.errors }}
+            </div>
+            <div class="mb-3">
                 <label for="id_mode" class="form-label">Payment Mode</label>
                 {{ form.mode }}
                 {{ form.mode.errors }}

@@ -1,0 +1,85 @@
+{% extends 'distribution/base.html' %}
+
+{% block title %}Database Management{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-1">Database Management</h5>
+        <p class="text-muted mb-0">Owner-only tools to download backups and restore the {{ database_type }} database</p>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <h6 class="mb-0">Download Backup</h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-2"><strong>Database engine:</strong> {{ database_type }}</p>
+                        <p class="mb-2"><strong>Database name:</strong> {{ database_name }}</p>
+                        <p class="text-muted mb-3">Connection target: {{ database_path }}</p>
+                        <form method="post" action="{% url 'database_management' %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="backup">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-download"></i> Download Backup
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card h-100 border-danger">
+                    <div class="card-header bg-danger text-white">
+                        <h6 class="mb-0">Restore Database</h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-danger fw-semibold mb-2">Warning: This replaces the current database.</p>
+                        {% if is_postgres %}
+                            <p class="text-muted">For PostgreSQL, restore expects a JSON fixture backup generated from this page. A safety fixture backup is created in <strong>db_backups</strong> before restore.</p>
+                        {% else %}
+                            <p class="text-muted">For SQLite, a safety copy of the current DB file is saved in <strong>db_backups</strong> before restore.</p>
+                        {% endif %}
+                        <form method="post" action="{% url 'database_management' %}" enctype="multipart/form-data">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="restore">
+                            <div class="mb-3">
+                                <label for="database_file" class="form-label">{{ restore_label }}</label>
+                                <input type="file" name="database_file" id="database_file" class="form-control" accept="{{ restore_accept }}" required>
+                            </div>
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" value="on" id="confirm_restore" name="confirm_restore" required>
+                                <label class="form-check-label" for="confirm_restore">
+                                    I understand this will overwrite the current database.
+                                </label>
+                            </div>
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-upload"></i> Restore Database
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h6 class="mb-0">Recent Safety Backups</h6>
+    </div>
+    <div class="card-body">
+        {% if backup_files %}
+            <ul class="mb-0">
+                {% for backup_file in backup_files %}
+                    <li>{{ backup_file }}</li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-muted mb-0">No safety backups found yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

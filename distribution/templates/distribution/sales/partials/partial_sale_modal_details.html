@@ -4,9 +4,9 @@
             <h5 class="modal-title">Sale #{{ sale.id }}</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
-        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+        <div class="modal-body modal-body-scroll-70">
             <p><strong>Client:</strong> {{ sale.client.name }}</p>
-            <p><strong>Date:</strong> {{ sale.sale_date|date:"M d, Y H:i" }}</p>
+            <p><strong>Date:</strong> {{ sale.sale_date|date:"d/m/Y H:i" }}</p>
             <p><strong>Total Amount:</strong> PKR {{ sale.total_amount|floatformat:2 }}</p>
             <hr>
             <h6>Products in Sale</h6>

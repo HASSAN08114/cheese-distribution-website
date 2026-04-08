@@ -3,8 +3,6 @@ from .inventory_forms import (
     ManufacturerForm,
     CheeseTypeForm,
     CheeseProductForm,
-    AddStockForm,
-    AddStockFormSet,
 )
 from .sales_forms import (
     SaleItemForm,
@@ -27,8 +25,6 @@ __all__ = [
     'ManufacturerForm',
     'CheeseTypeForm',
     'CheeseProductForm',
-    'AddStockForm',
-    'AddStockFormSet',
     'SaleItemForm',
     'SaleItemFormSet',
     'ClientForm',

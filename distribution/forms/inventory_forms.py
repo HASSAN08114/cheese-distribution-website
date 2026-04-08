@@ -1,6 +1,5 @@
 from django import forms
 from ..models import Manufacturer, CheeseProduct, CheeseType
-from decimal import Decimal
 
 
 class ManufacturerForm(forms.ModelForm):
@@ -40,27 +39,3 @@ class CheeseProductForm(forms.ModelForm):
             'available_quantity_packets': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
         }
 
-
-class AddStockForm(forms.Form):
-    cheese_product = forms.ModelChoiceField(
-        queryset=CheeseProduct.objects.all(),
-        widget=forms.Select(attrs={'class': 'form-control'}),
-        label="Select Product"
-    )
-    quantity_packets = forms.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        min_value=0.01,
-        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
-        label="Quantity to Add (Packets)"
-    )
-    purchase_price_per_packet = forms.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        min_value=0.01,
-        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
-        label="Purchase Price (PKR/Packet)"
-    )
-
-
-AddStockFormSet = forms.formset_factory(AddStockForm, extra=1, can_delete=True)

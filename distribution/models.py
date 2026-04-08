@@ -82,6 +82,7 @@ class Client(models.Model):
         default=Decimal('0.00'),
         help_text="Initial debt brought forward from before system implementation"
     )
+    date_added = models.DateTimeField(default=timezone.now, null=True)
 
     def __str__(self):
         return self.name
@@ -119,7 +120,7 @@ class Payment(models.Model):
     ]
     client = models.ForeignKey(Client, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
-    date = models.DateTimeField(auto_now_add=True)
+    date = models.DateTimeField(default=timezone.now)
     mode = models.CharField(max_length=10, choices=PAYMENT_MODES)
     bank = models.CharField(max_length=100, blank=True, help_text="Required if mode is online")
 
@@ -185,7 +186,7 @@ class SaleItem(models.Model):
         return self.quantity_packets - self.quantity_returned
 
     def __str__(self):
-        return f"{self.cheese_product.name} - {self.quantity_packets} packets"
+        return f"{self.cheese_product} - {self.quantity_packets} packets"
 
     class Meta:
         ordering = ['id']

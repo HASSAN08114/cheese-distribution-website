@@ -6,8 +6,8 @@
 <div class="card">
     <div class="card-header">
         <div>
-            <h5 style="margin-bottom: 0.25rem;">Create New Sale</h5>
-            <p style="color: var(--text-secondary); margin: 0; font-size: 0.95rem;">Record a new cheese sale transaction</p>
+            <h5 class="section-title-tight">Create New Sale</h5>
+            <p class="section-subtitle-muted">Record a new cheese sale transaction</p>
         </div>
     </div>
     <div class="card-body">
@@ -67,9 +67,8 @@
 
             <button type="button" class="btn btn-secondary mb-3" id="add-item"><i class="bi bi-plus-lg"></i> Add Item</button>
             </div>
-            <div class="d-flex gap-2 mt-4">
-                <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-check-lg"></i> Create Sale</button>
-                <a href="{% url 'sale_history' %}" class="btn btn-outline-secondary btn-lg"><i class="bi bi-arrow-left"></i> Cancel</a>
+            <div class="mt-4">
+                <button type="submit" class="btn btn-primary" form="saleForm"><i class="bi bi-check-lg"></i> Create Sale</button>
             </div>
         </form>
     </div>

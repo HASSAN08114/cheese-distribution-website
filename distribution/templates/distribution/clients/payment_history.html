@@ -14,10 +14,10 @@
 </div>
 
 <div class="card">
-    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+    <div class="card-header card-header-flex">
         <div>
-            <h5 style="margin-bottom: 0.25rem;">Payment History</h5>
-            <p style="color: var(--text-secondary)">Track all client payments and transactions</p>
+            <h5 class="section-title-tight">Payment History</h5>
+            <p class="section-subtitle-muted">Track all client payments and transactions</p>
         </div>
         <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#quickPaymentModal">
             <i class="bi bi-plus-lg"></i> Create Quick Payment
@@ -25,18 +25,18 @@
     </div>
     
     <!-- Filter Controls -->
-    <div class="card-body" style="background-color: #f8f9fa;">
-        <div style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
-            <div style="flex: 1; min-width: 200px;">
-                <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">From Date</label>
-                <input type="date" id="filterFromDate" class="form-control form-control-sm">
+    <div class="card-body filter-panel">
+        <div class="filter-row">
+            <div class="filter-field">
+                <label class="form-label form-label-sm-muted">From Date</label>
+                <input type="text" id="filterFromDate" class="form-control form-control-sm js-date-picker" placeholder="DD/MM/YYYY">
             </div>
-            <div style="flex: 1; min-width: 200px;">
-                <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">To Date</label>
-                <input type="date" id="filterToDate" class="form-control form-control-sm">
+            <div class="filter-field">
+                <label class="form-label form-label-sm-muted">To Date</label>
+                <input type="text" id="filterToDate" class="form-control form-control-sm js-date-picker" placeholder="DD/MM/YYYY">
             </div>
-            <div style="flex: 1; min-width: 200px;">
-                <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">Client</label>
+            <div class="filter-field">
+                <label class="form-label form-label-sm-muted">Client</label>
                 <select id="filterClient" class="form-control form-control-sm">
                     <option value="">-- All Clients --</option>
                     {% regroup payments by client as client_list %}
@@ -45,7 +45,7 @@
                     {% endfor %}
                 </select>
             </div>
-            <button class="btn btn-sm btn-secondary" onclick="resetPaymentFilters()" style="height: fit-content;" title="Reset filters">
+            <button class="btn btn-sm btn-secondary btn-fit-content" onclick="resetPaymentFilters()" title="Reset filters">
                 Reset
             </button>
         </div>
@@ -60,24 +60,75 @@
                     <th>Mode</th>
                     <th>Bank/Wallet</th>
                     <th>Date</th>
+                    <th class="text-end">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {% for payment in payments %}
-                <tr>
+                <tr data-payment-row="1">
                     <td>{{ payment.client.name }}</td>
                     <td>PKR {{ payment.amount|floatformat:2 }}</td>
                     <td>{{ payment.get_mode_display }}</td>
                     <td>{% if payment.mode == 'online' %}{{ payment.bank }}{% else %}-{% endif %}</td>
-                    <td>{{ payment.date|date:"M d, Y H:i" }}</td>
+                    <td data-iso-date="{{ payment.date|date:'c' }}">{{ payment.date|date:"d/m/Y H:i" }}</td>
+                    <td class="text-end table-actions">
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-outline-primary edit-payment-btn"
+                            data-edit-url="{% url 'payment_edit' payment.pk %}"
+                            data-bs-toggle="modal"
+                            data-bs-target="#dynamicPaymentEditModal"
+                        >
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        {% if user_is_owner %}
+                        <button
+                            type="button"
+                            class="btn btn-sm btn-outline-danger delete-payment-btn"
+                            data-delete-url="{% url 'payment_delete' payment.pk %}"
+                            data-payment-name="{{ payment.client.name }} - PKR {{ payment.amount|floatformat:2 }}"
+                            data-bs-toggle="modal"
+                            data-bs-target="#deletePaymentConfirmModal"
+                        >
+                            <i class="bi bi-trash"></i>
+                        </button>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="5" class="text-center text-muted">No payments found.</td>
+                    <td colspan="6" class="text-center text-muted">No payments found.</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
+    </div>
+</div>
+
+<div class="modal fade" id="deletePaymentConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete Payment</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" id="deletePaymentForm">
+                {% csrf_token %}
+                <div class="modal-body">
+                    Are you sure you want to delete <strong id="deletePaymentTitle"></strong>?
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="dynamicPaymentEditModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content" id="dynamicPaymentEditModalContent"></div>
     </div>
 </div>
 
@@ -86,20 +137,43 @@
 {% block extra_js %}
 <script>
 // Payment History Filtering
+function parseDdMmDate(value) {
+    if (!value) return null;
+    const match = value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!match) return null;
+
+    const day = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10);
+    const year = parseInt(match[3], 10);
+    const parsed = new Date(year, month - 1, day);
+
+    if (
+        parsed.getFullYear() !== year ||
+        parsed.getMonth() !== month - 1 ||
+        parsed.getDate() !== day
+    ) {
+        return null;
+    }
+
+    return parsed;
+}
+
 function applyPaymentFilters() {
     const fromDate = document.getElementById('filterFromDate').value;
     const toDate = document.getElementById('filterToDate').value;
     const filterClient = document.getElementById('filterClient').value;
     
-    const rows = document.querySelectorAll('tbody tr');
+    const rows = document.querySelectorAll('tbody tr[data-payment-row]');
     rows.forEach(row => {
-        if (row.querySelector('td:nth-child(2)')) {  // Check if it's not an empty message row
             const clientName = row.querySelector('td:first-child').textContent.trim();
-            const dateText = row.querySelector('td:last-child').textContent;
-            const paymentDate = new Date(dateText);
+            const dateIso = row.querySelector('td:nth-child(5)').getAttribute('data-iso-date');
+            const paymentDate = new Date(dateIso);
             
-            const fromDateObj = fromDate ? new Date(fromDate) : null;
-            const toDateObj = toDate ? new Date(toDate + 'T23:59:59') : null;
+            const fromDateObj = parseDdMmDate(fromDate);
+            const toDateObj = parseDdMmDate(toDate);
+            if (toDateObj) {
+                toDateObj.setHours(23, 59, 59, 999);
+            }
             
             let show = true;
             
@@ -111,7 +185,6 @@ function applyPaymentFilters() {
             if (filterClient && clientName !== filterClient) show = false;
             
             row.style.display = show ? '' : 'none';
-        }
     });
 }
 
@@ -120,15 +193,105 @@ function resetPaymentFilters() {
     document.getElementById('filterToDate').value = '';
     document.getElementById('filterClient').value = '';
     
-    const rows = document.querySelectorAll('tbody tr');
+    const rows = document.querySelectorAll('tbody tr[data-payment-row]');
     rows.forEach(row => row.style.display = '');
 }
 
 // Attach filter event listeners
 document.addEventListener('DOMContentLoaded', function() {
-    document.getElementById('filterFromDate').addEventListener('change', applyPaymentFilters);
-    document.getElementById('filterToDate').addEventListener('change', applyPaymentFilters);
+    document.getElementById('filterFromDate').addEventListener('input', applyPaymentFilters);
+    document.getElementById('filterToDate').addEventListener('input', applyPaymentFilters);
     document.getElementById('filterClient').addEventListener('change', applyPaymentFilters);
+
+    const deleteModal = document.getElementById('deletePaymentConfirmModal');
+    const deleteForm = document.getElementById('deletePaymentForm');
+    const deleteTitle = document.getElementById('deletePaymentTitle');
+
+    if (deleteModal && deleteForm && deleteTitle) {
+        deleteModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget;
+            if (!button) return;
+            deleteForm.action = button.getAttribute('data-delete-url');
+            deleteTitle.textContent = button.getAttribute('data-payment-name') || 'this payment';
+        });
+    }
+
+    function bindPaymentEditModalForm() {
+        const container = document.getElementById('dynamicPaymentEditModalContent');
+        if (!container) return;
+
+        const form = container.querySelector('form');
+        if (!form) return;
+
+        initializeDatePickers(container);
+
+        const modeSelect = container.querySelector('select[name="mode"]');
+        const bankField = container.querySelector('#edit-bank-field');
+
+        if (modeSelect && bankField) {
+            const toggleBankField = function() {
+                if (modeSelect.value === 'online') {
+                    bankField.classList.remove('hidden-element');
+                } else {
+                    bankField.classList.add('hidden-element');
+                    const bankInput = bankField.querySelector('input[name="bank"]');
+                    if (bankInput) bankInput.value = '';
+                }
+            };
+            modeSelect.addEventListener('change', toggleBankField);
+            toggleBankField();
+        }
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const submitBtn = form.querySelector('button[type="submit"]');
+            if (submitBtn) submitBtn.disabled = true;
+
+            fetch(form.action, {
+                method: 'POST',
+                body: new FormData(form),
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value,
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('dynamicPaymentEditModal'));
+                    if (modal) modal.hide();
+                    location.reload();
+                    return;
+                }
+
+                if (data.html) {
+                    container.innerHTML = data.html;
+                    bindPaymentEditModalForm();
+                }
+            })
+            .catch(() => {
+                showToast('Failed to update payment.', 'danger');
+            })
+            .finally(() => {
+                if (submitBtn) submitBtn.disabled = false;
+            });
+        });
+    }
+
+    document.querySelectorAll('.edit-payment-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const editUrl = btn.getAttribute('data-edit-url');
+            fetch(editUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(response => response.text())
+                .then(html => {
+                    document.getElementById('dynamicPaymentEditModalContent').innerHTML = html;
+                    bindPaymentEditModalForm();
+                    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('dynamicPaymentEditModal'));
+                    modal.show();
+                });
+        });
+    });
 });
 </script>
 {% endblock %}

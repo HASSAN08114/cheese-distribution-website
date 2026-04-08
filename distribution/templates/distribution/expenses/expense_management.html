@@ -4,10 +4,10 @@
 
 {% block content %}
 <div class="card">
-  <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+  <div class="card-header card-header-flex">
     <div>
-      <h5 style="margin-bottom: 0.25rem;">Expense Management</h5>
-      <p style="color: var(--text-secondary); margin: 0; font-size: 0.95rem;">Track delivery and operational expenses</p>
+      <h5 class="section-title-tight">Expense Management</h5>
+      <p class="section-subtitle-muted">Track delivery and operational expenses</p>
     </div>
     <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addExpenseModal">
         <i class="bi bi-plus-lg"></i> Add Expense
@@ -30,7 +30,7 @@
           {% for exp in expenses %}
           <tr>
             <td>
-              <span class="badge bg-light text-dark">{{ exp.expense_date|date:"M d, Y" }}</span>
+              <span class="badge bg-light text-dark">{{ exp.expense_date|date:"d/m/Y" }}</span>
             </td>
             <td>{{ exp.employee.name|default:"N/A" }}</td>
             <td>
@@ -48,7 +48,7 @@
                 <span class="badge bg-secondary"><i class="bi bi-tag"></i> {{ exp.get_expense_type_display }}</span>
               {% endif %}
             </td>
-            <td><span class="badge bg-dark">PKR {{ exp.amount|floatformat:2 }}</span></td>
+            <td><span class="badge bg-primary">PKR {{ exp.amount|floatformat:2 }}</span></td>
             <td>{{ exp.note|default:"-"|truncatewords:12 }}</td>
             <td class="text-end">
               <button
@@ -211,65 +211,6 @@ document.addEventListener("DOMContentLoaded", function () {
         break;
       }
     }
-  }
-  
-  
-  // TODO: Add expense form submitter
-      function(data) {
-        showToast(data.message || 'Expense added successfully!', 'success');
-        const modal = bootstrap.Modal.getInstance(document.getElementById('addExpenseModal'));
-        if (modal) modal.hide();
-        
-        // Insert new row into table
-        if (data.object) {
-          const exp = data.object;
-          const tbody = document.querySelector('.table tbody');
-          if (tbody) {
-            const isOwner = {{ user_is_owner|lower }};
-            
-            // Generate badge based on expense type
-            let typeBadge = '';
-            if (exp.expense_type === 'fuel') {
-              typeBadge = '<span class="badge bg-info"><i class="bi bi-fuel-pump"></i> Fuel</span>';
-            } else if (exp.expense_type === 'bike_maintenance') {
-              typeBadge = '<span class="badge bg-primary"><i class="bi bi-tools"></i> Maintenance</span>';
-            } else if (exp.expense_type === 'food') {
-              typeBadge = '<span class="badge bg-success"><i class="bi bi-cup-hot"></i> Food</span>';
-            } else if (exp.expense_type === 'salary') {
-              typeBadge = '<span class="badge bg-warning text-dark"><i class="bi bi-cash-coin"></i> Salary</span>';
-            } else if (exp.expense_type === 'general') {
-              typeBadge = '<span class="badge bg-secondary"><i class="bi bi-tag"></i> General</span>';
-            } else {
-              typeBadge = `<span class="badge bg-secondary"><i class="bi bi-tag"></i> ${exp.expense_type_display}</span>`;
-            }
-            
-            const newRow = `
-              <tr>
-                <td><span class="badge bg-light text-dark">${exp.expense_date}</span></td>
-                <td>${exp.employee.name}</td>
-                <td>${typeBadge}</td>
-                <td><span class="badge bg-dark">PKR ${parseFloat(exp.amount).toFixed(2)}</span></td>
-                <td>${exp.note ? exp.note.substring(0, 40) : '-'}</td>
-                <td class="text-end">
-                  <button type="button" class="btn btn-sm btn-outline-primary edit-expense-btn" data-edit-url="/expenses/${exp.id}/edit/" data-bs-toggle="modal" data-bs-target="#dynamicExpenseEditModal"><i class="bi bi-pencil"></i></button>
-                  ${isOwner ? `<button type="button" class="btn btn-sm btn-outline-danger delete-expense-btn" data-delete-url="/expenses/${exp.id}/delete/" data-expense-note="${exp.expense_type_display}" data-bs-toggle="modal" data-bs-target="#deleteExpenseConfirmModal"><i class="bi bi-trash"></i></button>` : ''}
-                </td>
-              </tr>
-            `;
-            // Remove empty state row if present
-            const emptyRow = tbody.querySelector('tr:has(td[colspan])');
-            if (emptyRow) emptyRow.remove();
-            
-            tbody.insertAdjacentHTML('afterbegin', newRow);
-          }
-        }
-        
-        expenseForm.reset();
-      },
-      function(error) {
-        showToast(error.error || 'An error occurred while adding the expense.', 'danger');
-      }
-    );
   }
 });
 </script>

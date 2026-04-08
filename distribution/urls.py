@@ -32,7 +32,6 @@ urlpatterns = [
     path('inventory/cheese-type/<int:pk>/delete/', views.cheese_type_delete, name='cheese_type_delete'),
 
     path('inventory/stock/history/', views.stock_history, name='stock_history'),
-    path('inventory/stock/add/', views.add_stock, name='add_stock'),
 
     path('clients/', views.client_list, name='client_list'),
     path('clients/add/', views.client_add, name='client_add'),
@@ -60,6 +59,8 @@ urlpatterns = [
     #Payment Management
     path('payments/add/', views.add_payment, name='add_payment'),
     path('payments/history/', views.payment_history, name='payment_history'),
+    path('payments/<int:pk>/edit/', views.payment_edit, name='payment_edit'),
+    path('payments/<int:pk>/delete/', views.payment_delete, name='payment_delete'),
 
     # Delivery employee management
     path('employees/', views.employee_management, name='employee_management'),
@@ -76,5 +77,6 @@ urlpatterns = [
     path('users/add/', views.user_add, name='user_add'),
     path('users/<int:pk>/edit-role/', views.user_edit_role, name='user_edit_role'),
     path('users/<int:pk>/delete/', views.user_delete, name='user_delete'),
+    path('database/', views.database_management, name='database_management'),
 ]
 

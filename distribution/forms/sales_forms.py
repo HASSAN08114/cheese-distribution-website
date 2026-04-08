@@ -8,7 +8,7 @@ class SaleItemForm(forms.ModelForm):
         fields = ['cheese_product', 'quantity_packets', 'selling_price_per_packet']
         widgets = {
             'cheese_product': forms.Select(attrs={'class': 'form-control'}),
-            'quantity_packets': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'quantity_packets': forms.NumberInput(attrs={'class': 'form-control', 'step': '1', 'min': '1'}),
             'selling_price_per_packet': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
         }
 

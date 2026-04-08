@@ -8,41 +8,41 @@
 <div class="card">
     <div class="card-header">
         <div>
-            <h5 style="margin-bottom: 0.25rem;">Stock Addition History</h5>
-            <p style="color: var(--text-secondary)">View all stock additions and modifications</p>
+            <h5 class="section-title-tight">Stock Addition History</h5>
+            <p class="section-subtitle-muted">View all stock additions and modifications</p>
         </div>
     </div>
     
     <!-- Filter Controls -->
-    <div class="card-body" style="background-color: #f8f9fa;">
-        <div style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
-            <div style="flex: 1; min-width: 180px;">
-                <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">From Date</label>
-                <input type="date" id="stockFilterFromDate" class="form-control form-control-sm">
+    <div class="card-body filter-panel">
+        <div class="filter-row">
+            <div class="filter-field-sm">
+                <label class="form-label form-label-sm-muted">From Date</label>
+                <input type="text" id="stockFilterFromDate" class="form-control form-control-sm js-date-picker" placeholder="DD/MM/YYYY">
             </div>
-            <div style="flex: 1; min-width: 180px;">
-                <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">To Date</label>
-                <input type="date" id="stockFilterToDate" class="form-control form-control-sm">
+            <div class="filter-field-sm">
+                <label class="form-label form-label-sm-muted">To Date</label>
+                <input type="text" id="stockFilterToDate" class="form-control form-control-sm js-date-picker" placeholder="DD/MM/YYYY">
             </div>
-            <div style="flex: 1; min-width: 180px;">
-                <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">Manufacturer</label>
+            <div class="filter-field-sm">
+                <label class="form-label form-label-sm-muted">Manufacturer</label>
                 <select id="stockFilterManufacturer" class="form-control form-control-sm">
                     <option value="">-- All Manufacturers --</option>
                 </select>
             </div>
-            <div style="flex: 1; min-width: 180px;">
-                <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">Type</label>
+            <div class="filter-field-sm">
+                <label class="form-label form-label-sm-muted">Type</label>
                 <select id="stockFilterType" class="form-control form-control-sm">
                     <option value="">-- All Types --</option>
                 </select>
             </div>
-            <div style="flex: 1; min-width: 180px;">
-                <label class="form-label" style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">Product</label>
+            <div class="filter-field-sm">
+                <label class="form-label form-label-sm-muted">Product</label>
                 <select id="stockFilterProduct" class="form-control form-control-sm">
                     <option value="">-- All Products --</option>
                 </select>
             </div>
-            <button class="btn btn-sm btn-secondary" onclick="resetStockFilters()" style="height: fit-content;" title="Reset filters">
+            <button class="btn btn-sm btn-secondary btn-fit-content" onclick="resetStockFilters()" title="Reset filters">
                 Reset
             </button>
         </div>
@@ -95,7 +95,7 @@
                             {% endif %}
                         </td>
                         <td>{% if addition.added_by %}{{ addition.added_by.user.username }}{% else %}N/A{% endif %}</td>
-                        <td>{{ addition.date_last_updated|date:"M d, Y H:i" }}</td>
+                        <td data-iso-date="{{ addition.date_last_updated|date:'c' }}">{{ addition.date_last_updated|date:"d/m/Y H:i" }}</td>
                     </tr>
                     {% endfor %}
                     {% else %}
@@ -119,6 +119,27 @@ let stockData = {
     products: [],  // Array of {manufacturer, type, packetSize, display}
 };
 
+function parseDdMmDate(value) {
+    if (!value) return null;
+    const match = value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!match) return null;
+
+    const day = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10);
+    const year = parseInt(match[3], 10);
+    const parsed = new Date(year, month - 1, day);
+
+    if (
+        parsed.getFullYear() !== year ||
+        parsed.getMonth() !== month - 1 ||
+        parsed.getDate() !== day
+    ) {
+        return null;
+    }
+
+    return parsed;
+}
+
 function applyStockFilters() {
     const fromDate = document.getElementById('stockFilterFromDate').value;
     const toDate = document.getElementById('stockFilterToDate').value;
@@ -132,11 +153,14 @@ function applyStockFilters() {
             const productElement = row.querySelector('td small.text-muted');
             if (!productElement) return;
             
-            const dateText = row.querySelector('td:last-child').textContent;
-            const stockDate = new Date(dateText);
+            const dateIso = row.querySelector('td:last-child').getAttribute('data-iso-date');
+            const stockDate = new Date(dateIso);
             
-            const fromDateObj = fromDate ? new Date(fromDate) : null;
-            const toDateObj = toDate ? new Date(toDate + 'T23:59:59') : null;
+            const fromDateObj = parseDdMmDate(fromDate);
+            const toDateObj = parseDdMmDate(toDate);
+            if (toDateObj) {
+                toDateObj.setHours(23, 59, 59, 999);
+            }
             
             let show = true;
             
@@ -357,8 +381,8 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('Manufacturer dropdown populated with ' + (manufacturerSet.size) + ' options');
     
     // Add event listeners
-    document.getElementById('stockFilterFromDate').addEventListener('change', applyStockFilters);
-    document.getElementById('stockFilterToDate').addEventListener('change', applyStockFilters);
+    document.getElementById('stockFilterFromDate').addEventListener('input', applyStockFilters);
+    document.getElementById('stockFilterToDate').addEventListener('input', applyStockFilters);
     document.getElementById('stockFilterManufacturer').addEventListener('change', updateTypeDropdown);
     document.getElementById('stockFilterType').addEventListener('change', updateProductDropdown);
     document.getElementById('stockFilterProduct').addEventListener('change', applyStockFilters);

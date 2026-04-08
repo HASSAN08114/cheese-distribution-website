@@ -6,12 +6,12 @@
 
 <!-- All Clients Table -->
 <div class="card">
-    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+    <div class="card-header card-header-flex-wrap">
         <div>
             <h5>Client Management</h5>
-            <p style="color: var(--text-secondary)">Manage your clients and their contact information</p>
+            <p class="section-subtitle-muted">Manage your clients and their contact information</p>
         </div>
-        <div style="display: flex; gap: 0.5rem;">
+        <div class="action-row-sm">
             <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#unifiedExportPdfModal" title="Export client reports to PDF">
                 <i class="bi bi-download"></i> Download Report
             </button>
@@ -28,15 +28,23 @@
                     <th>Name</th>
                     <th>Phone</th>
                     <th>Address</th>
+                    <th>Date Added</th>
                     <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {% for client_data in clients %}
                 <tr>
-                    <td><strong>{{ client_data.name }}</strong></td>
+                    <td>{{ client_data.name }}</td>
                     <td>{{ client_data.phone|default:"None" }}</td>
                     <td>{{ client_data.address|default:"None"|truncatewords:15 }}</td>
+                    <td data-client-date="{% if client_data.date_added %}{{ client_data.date_added|date:'c' }}{% endif %}">
+                        {% if client_data.date_added %}
+                            {{ client_data.date_added|date:"d/m/Y H:i" }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </td>
                     <td class="text-end">
                         <button type="button" class="btn btn-sm btn-outline-primary edit-btn" data-edit-url="{% url 'client_edit' client_data.pk %}" data-bs-toggle="modal" data-bs-target="#dynamicEditModal">
                             <i class="bi bi-pencil"></i>
@@ -50,7 +58,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="9" class="text-center text-muted py-4">
+                    <td colspan="5" class="text-center text-muted py-4">
                         No clients found. Add your first client above.
                     </td>
                 </tr>
@@ -110,15 +118,17 @@
                     <div class="mb-3">
                         <label for="exportStartDate" class="form-label">Start Date (Optional)</label>
                         <input type="date" id="exportStartDate" class="form-control">
+                        <small class="text-muted">Defaults to the earliest client date in the system</small>
                     </div>
                     <div class="mb-3">
                         <label for="exportEndDate" class="form-label">End Date (Optional)</label>
                         <input type="date" id="exportEndDate" class="form-control">
+                        <small class="text-muted">Defaults to today's date</small>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success"><i class="bi bi-download"></i> Download PDF</button>
+                    <button type="submit" class="btn btn-success" id="exportPdfBtn"><i class="bi bi-download" id="exportBtnIcon"></i> <span id="exportBtnText">Download PDF</span></button>
                 </div>
             </form>
         </div>
@@ -192,6 +202,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 .then(response => response.text())
                 .then(html => {
                     modalContent.innerHTML = html;
+                    initializeDatePickers(modalContent);
                 });
         });
     });
@@ -215,6 +226,48 @@ document.addEventListener("DOMContentLoaded", function () {
         });
         phoneField.setAttribute('maxlength', '12');
         phoneField.setAttribute('placeholder', '0304-1234567');
+    }
+
+    // Populate default dates in export modal
+    const unifiedExportPdfModal = document.getElementById('unifiedExportPdfModal');
+    if (unifiedExportPdfModal) {
+        unifiedExportPdfModal.addEventListener('shown.bs.modal', function() {
+            const startDateInput = document.getElementById('exportStartDate');
+            const endDateInput = document.getElementById('exportEndDate');
+            
+            // Set end date to today
+            const today = new Date();
+            const todayString = today.toISOString().split('T')[0];
+            if (endDateInput && !endDateInput.value) {
+                endDateInput.value = todayString;
+            }
+            
+            // Find earliest client date_added from the table
+            let earliestDate = null;
+            const dateAddedCells = document.querySelectorAll('table tbody tr td:nth-child(4)');
+            dateAddedCells.forEach(cell => {
+                const dateIso = cell.getAttribute('data-client-date');
+                if (dateIso) {
+                    const cellDate = new Date(dateIso);
+                    if (!Number.isNaN(cellDate.getTime()) && (!earliestDate || cellDate < earliestDate)) {
+                        earliestDate = cellDate;
+                    }
+                }
+            });
+            
+            // Set start date to earliest client date or today's first day of month
+            if (startDateInput && !startDateInput.value) {
+                let defaultStartDate;
+                if (earliestDate) {
+                    defaultStartDate = earliestDate.toISOString().split('T')[0];
+                } else {
+                    // Fallback to first day of current month
+                    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+                    defaultStartDate = firstDayOfMonth.toISOString().split('T')[0];
+                }
+                startDateInput.value = defaultStartDate;
+            }
+        });
     }
 
     // Handle Unified Export PDF Form
@@ -246,12 +299,27 @@ document.addEventListener("DOMContentLoaded", function () {
 
             if (params.length > 0) url += '?' + params.join('&');
             
+            // Show loading state
+            const exportBtn = document.getElementById('exportPdfBtn');
+            const exportBtnIcon = document.getElementById('exportBtnIcon');
+            const exportBtnText = document.getElementById('exportBtnText');
+            const originalIconClass = exportBtnIcon.className;
+            exportBtn.disabled = true;
+            exportBtnIcon.className = 'bi bi-hourglass-split';
+            exportBtnText.textContent = 'Processing...';
+            
             // Close modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('unifiedExportPdfModal'));
             if (modal) modal.hide();
 
-            // Trigger download
-            window.location.href = url;
+            // Trigger download and restore button state after a delay
+            setTimeout(function() {
+                window.location.href = url;
+                // Restore button state
+                exportBtn.disabled = false;
+                exportBtnIcon.className = originalIconClass;
+                exportBtnText.textContent = 'Download PDF';
+            }, 500);
         });
     }
 });
