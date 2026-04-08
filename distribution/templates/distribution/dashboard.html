@@ -48,15 +48,32 @@
     </div>
 
     <!-- Time Period Filter -->
-    <div style="background: white; padding: 1rem; border-radius: 8px; display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.5rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);">
-        <span style="color: var(--text-secondary); font-weight: 600; margin-right: 1rem; align-self: center;">Filter by Period:</span>
-        <button type="button" class="btn btn-sm active" data-period="all">All Time</button>
-        <button type="button" class="btn btn-sm" data-period="today">Today</button>
-        <button type="button" class="btn btn-sm" data-period="week">Last 7 Days</button>
-        <button type="button" class="btn btn-sm" data-period="month">Last 30 Days</button>
-        <button type="button" class="btn btn-sm" data-period="quarter">Last 90 Days</button>
-        <button type="button" class="btn btn-sm" data-period="6months">Last 6 Months</button>
-        <button type="button" class="btn btn-sm" data-period="year">Last Year</button>
+    <div style="background: white; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);">
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.75rem;">
+            <span style="color: var(--text-secondary); font-weight: 600; margin-right: 1rem;">Filter by Period:</span>
+            <button type="button" class="btn btn-sm active" data-period="all">All Time</button>
+            <button type="button" class="btn btn-sm" data-period="today">Today</button>
+            <button type="button" class="btn btn-sm" data-period="week">Last 7 Days</button>
+            <button type="button" class="btn btn-sm" data-period="month">Last 30 Days</button>
+            <button type="button" class="btn btn-sm" data-period="quarter">Last 90 Days</button>
+            <button type="button" class="btn btn-sm" data-period="6months">Last 6 Months</button>
+            <button type="button" class="btn btn-sm" data-period="year">Last Year</button>
+            <button type="button" class="btn btn-sm" data-period="custom" id="customPeriodBtn">Custom</button>
+        </div>
+        
+        <!-- Custom Date Range Inputs (Hidden by default) -->
+        <div id="customDateRange" style="gap: 1rem; align-items: flex-end; flex-wrap: wrap;" hidden>
+            <div>
+                <label class="form-label" style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem;">From Date</label>
+                <input type="date" id="customFromDate" class="form-control form-control-sm">
+            </div>
+            <div>
+                <label class="form-label" style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem;">To Date</label>
+                <input type="date" id="customToDate" class="form-control form-control-sm">
+            </div>
+            <button type="button" class="btn btn-sm btn-primary" id="applyCustomDateBtn">Apply</button>
+            <button type="button" class="btn btn-sm btn-secondary" id="cancelCustomDateBtn">Cancel</button>
+        </div>
     </div>
 
     <!-- Period-Based Metrics Section -->
@@ -185,7 +202,6 @@
                         <thead class="table-light">
                             <tr>
                                 <th>Client Name</th>
-                                <th>Phone</th>
                                 <th>Total Sales</th>
                                 <th>Total Profit</th>
                                 <th>Transactions</th>
@@ -197,7 +213,7 @@
                         <tbody id="client-table-body">
                             <!-- Data will be loaded via AJAX -->
                             <tr>
-                                <td colspan="8" class="text-center py-4">
+                                <td colspan="7" class="text-center py-4">
                                     <div class="spinner-border text-primary" role="status">
                                         <span class="visually-hidden">Loading...</span>
                                     </div>
@@ -313,9 +329,69 @@ document.addEventListener('DOMContentLoaded', function() {
     // Start auto-refresh for client analytics
     startClientAnalyticsRefresh();
 
+    // Custom date range handlers
+    let customDateInputs = {};
+    
+    document.getElementById('customPeriodBtn').addEventListener('click', function() {
+        const customRange = document.getElementById('customDateRange');
+        customRange.hidden = !customRange.hidden;
+        if (!customRange.hidden) {
+            customRange.style.display = 'flex';
+        }
+    });
+    
+    document.getElementById('applyCustomDateBtn').addEventListener('click', function() {
+        const fromDate = document.getElementById('customFromDate').value;
+        const toDate = document.getElementById('customToDate').value;
+        
+        if (!fromDate || !toDate) {
+            alert('Please select both From and To dates');
+            return;
+        }
+        
+        if (new Date(fromDate) > new Date(toDate)) {
+            alert('From date must be before To date');
+            return;
+        }
+        
+        // Mark all period buttons as inactive
+        document.querySelectorAll('[data-period]').forEach(btn => {
+            btn.classList.remove('active');
+            btn.style.background = 'white';
+            btn.style.color = 'var(--text-primary)';
+            btn.style.border = '1px solid var(--border)';
+        });
+        
+        // Mark custom button as active
+        document.getElementById('customPeriodBtn').classList.add('active');
+        document.getElementById('customPeriodBtn').style.background = 'var(--primary)';
+        document.getElementById('customPeriodBtn').style.color = 'white';
+        document.getElementById('customPeriodBtn').style.border = '1px solid var(--primary)';
+        
+        currentPeriod = 'custom';
+        customDateInputs = { fromDate, toDate };
+        
+        updateDebtColumnHeader('custom');
+        loadGeneralMetrics('custom', fromDate, toDate);
+        loadClientAnalytics('custom', fromDate, toDate);
+        loadProductAnalytics('custom', fromDate, toDate);
+    });
+    
+    document.getElementById('cancelCustomDateBtn').addEventListener('click', function() {
+        const customRange = document.getElementById('customDateRange');
+        customRange.hidden = true;
+    });
+
     // Time period filter buttons
     document.querySelectorAll('[data-period]').forEach(button => {
         button.addEventListener('click', function() {
+            const period = this.dataset.period;
+            if (period === 'custom') return; // Handle custom separately above
+            
+            // Hide custom date inputs
+            const customRange = document.getElementById('customDateRange');
+            customRange.hidden = true;
+            
             // Remove active class from all buttons
             document.querySelectorAll('[data-period]').forEach(btn => {
                 btn.classList.remove('active');
@@ -331,7 +407,7 @@ document.addEventListener('DOMContentLoaded', function() {
             this.style.border = '1px solid var(--primary)';
 
             // Load data for selected period
-            currentPeriod = this.dataset.period;
+            currentPeriod = period;
             updateDebtColumnHeader(currentPeriod);
             loadGeneralMetrics(currentPeriod);
             loadClientAnalytics(currentPeriod);
@@ -376,8 +452,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function loadGeneralMetrics(period) {
-        fetch(`/api/general-metrics/?period=${period}`, {
+    function loadGeneralMetrics(period, fromDate = null, toDate = null) {
+        let url = `/api/general-metrics/?period=${period}`;
+        if (period === 'custom' && fromDate && toDate) {
+            url = `/api/general-metrics/?period=custom&from_date=${fromDate}&to_date=${toDate}`;
+        }
+        
+        fetch(url, {
             credentials: 'include'
         })
             .then(response => response.json())
@@ -402,8 +483,13 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
-    function loadClientAnalytics(period) {
-        fetch(`/api/client-analytics/?period=${period}`, {
+    function loadClientAnalytics(period, fromDate = null, toDate = null) {
+        let url = `/api/client-analytics/?period=${period}`;
+        if (period === 'custom' && fromDate && toDate) {
+            url = `/api/client-analytics/?period=custom&from_date=${fromDate}&to_date=${toDate}`;
+        }
+        
+        fetch(url, {
             credentials: 'include'
         })
             .then(response => response.json())
@@ -423,8 +509,13 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
-    function loadProductAnalytics(period) {
-        fetch(`/api/product-analytics/?period=${period}`, {
+    function loadProductAnalytics(period, fromDate = null, toDate = null) {
+        let url = `/api/product-analytics/?period=${period}`;
+        if (period === 'custom' && fromDate && toDate) {
+            url = `/api/product-analytics/?period=custom&from_date=${fromDate}&to_date=${toDate}`;
+        }
+        
+        fetch(url, {
             credentials: 'include'
         })
             .then(response => response.json())
@@ -455,7 +546,8 @@ document.addEventListener('DOMContentLoaded', function() {
             'quarter': 'Debt (Last 90 Days)',
             '6months': 'Debt (Last 6 Months)',
             'year': 'Debt (Last Year)',
-            'all': 'Debt (All-time)'
+            'all': 'Debt (All-time)',
+            'custom': 'Debt (Custom Period)'
         };
         document.getElementById('debt-column-header').textContent = periodNames[period] || 'Debt';
     }
@@ -512,7 +604,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (clients.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="8" class="text-center text-muted py-4">
+                    <td colspan="7" class="text-center text-muted py-4">
                         No client data available for this period
                     </td>
                 </tr>
@@ -523,12 +615,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const rows = clients.map(client => `
             <tr>
                 <td><strong>${client.name}</strong></td>
-                <td>${client.phone}</td>
                 <td><span class="badge bg-primary">PKR ${client.total_sales.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
                 <td><span class="badge bg-success">PKR ${client.total_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
                 <td><span class="badge bg-secondary">${client.total_transactions}</span></td>
                 <td>PKR ${client.avg_sale.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-                <td>${client.last_sale_date ? new Date(client.last_sale_date).toLocaleDateString('en-US') : 'Never'}</td>
+                <td>${client.last_sale_time ? new Date(client.last_sale_time).toLocaleString('en-US') : 'Never'}</td>
                 <td><span class="badge bg-danger">PKR ${client.debt.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span></td>
             </tr>
         `).join('');
@@ -617,8 +708,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function filterClients(searchTerm) {
         const filteredClients = allClientData.filter(client =>
-            client.name.toLowerCase().includes(searchTerm) ||
-            client.phone.toLowerCase().includes(searchTerm)
+            client.name.toLowerCase().includes(searchTerm)
         );
         renderClientTable(filteredClients);
     }
@@ -644,15 +734,14 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function generateClientCSV(clients) {
-        const headers = ['Client Name', 'Phone', 'Total Sales', 'Total Profit', 'Transactions', 'Avg Sale', 'Last Sale', 'Debt (All-time)'];
+        const headers = ['Client Name', 'Total Sales', 'Total Profit', 'Transactions', 'Avg Sale', 'Last Sale', 'Debt (All-time)'];
         const rows = clients.map(client => [
             client.name,
-            client.phone,
             client.total_sales,
             client.total_profit,
             client.total_transactions,
             client.avg_sale,
-            client.last_sale_date || 'Never',
+            client.last_sale_time || 'Never',
             client.debt
         ]);
 

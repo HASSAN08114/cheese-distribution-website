@@ -45,6 +45,8 @@ urlpatterns = [
     path('sales/create/', views.sale_create, name='sale_create'),
     path('sales/quick-create/', views.quick_sale_create, name='quick_sale_create'),
     path('sales/<int:pk>/', views.sale_detail, name='sale_detail'),
+    path('sales/<int:pk>/edit/', views.sale_edit, name='sale_edit'),
+    path('sales/<int:pk>/delete/', views.sale_delete, name='sale_delete'),
     path('sales/<int:pk>/modal/', views.sale_modal_details, name='sale_modal_details_alt'),
 
     path('returns/sale-item/', views.return_sale_item, name='return_sale_item'),

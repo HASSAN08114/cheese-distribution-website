@@ -14,6 +14,11 @@
                 {% endfor %}
             </select>
         </div>
+        <div class="mb-3">
+            <label class="form-label">Sale Date & Time (Optional)</label>
+            <input type="datetime-local" name="sale_date" id="addSaleModalDate" class="form-control" title="Leave empty to use current date and time">
+            <small class="text-muted">Leave empty to use current date and time</small>
+        </div>
         <h6 class="mt-4 mb-3">Sale Items</h6>
         {{ formset.management_form }}
         <div id="addSaleFormsetContainer">
@@ -109,5 +114,24 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     updateRemoveButtons();
+});
+
+// Populate current date/time when modal is shown
+document.addEventListener('DOMContentLoaded', function() {
+    const addSaleModal = document.getElementById('addSaleModal');
+    if (addSaleModal) {
+        addSaleModal.addEventListener('shown.bs.modal', function() {
+            const saleDateInput = document.getElementById('addSaleModalDate');
+            if (saleDateInput && !saleDateInput.value) {
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                saleDateInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+            }
+        });
+    }
 });
 </script>

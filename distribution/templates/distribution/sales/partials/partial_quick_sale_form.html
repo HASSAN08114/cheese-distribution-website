@@ -15,6 +15,12 @@
             </select>
         </div>
 
+        <div class="mb-3">
+            <label for="sale_date" class="form-label">Sale Date & Time (Optional)</label>
+            <input type="datetime-local" name="sale_date" id="sale_date" class="form-control" title="Leave empty to use current date and time">
+            <small class="text-muted">Leave empty to use current date and time</small>
+        </div>
+
         <h6 class="mt-4 mb-3">Sale Items</h6>
         {{ formset.management_form }}
         <div id="formset-container">

@@ -24,8 +24,14 @@
                 </select>
             </div>
 
+            <div class="mb-3">
+                <label for="sale_date" class="form-label">Sale Date & Time (Optional)</label>
+                <input type="datetime-local" name="sale_date" id="sale_date" class="form-control" title="Leave empty to use current date and time">
+                <small class="text-muted">Leave empty to use current date and time</small>
+            </div>
+
             <div class="border-top pt-4 mt-4">
-            <h5 class="mb-3"><i class="bi bi-boxes"></i> Sale Items</h5>
+            <h5 class="mb-3">Sale Items</h5>
             {{ formset.management_form }}
             <div id="formset-container">
                 {% for form in formset %}
@@ -149,6 +155,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
     updateRemoveButtons();
 });
+
+// Populate current date/time for sale_date field
+function populateSaleDateTime() {
+    const saleDateInput = document.getElementById('sale_date');
+    if (saleDateInput && !saleDateInput.value) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        saleDateInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', populateSaleDateTime);
 </script>
 {% endblock %}
 

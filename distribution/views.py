@@ -427,12 +427,17 @@ def dashboard(request):
 def get_client_analytics(request):
     """AJAX endpoint to get client analytics based on time period"""
     period = request.GET.get('period', 'all')
+    from_date_str = request.GET.get('from_date')
+    to_date_str = request.GET.get('to_date')
 
     # Use localtime to get the date in the configured timezone (Asia/Karachi)
     now_local = timezone.localtime(timezone.now())
     today = now_local.date()
 
-    if period == 'today':
+    if period == 'custom' and from_date_str and to_date_str:
+        start_date = datetime.strptime(from_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(to_date_str, '%Y-%m-%d').date()
+    elif period == 'today':
         start_date = today
         end_date = today
     elif period == 'week':
@@ -475,8 +480,9 @@ def get_client_analytics(request):
             # Count total sales transactions
             total_transactions = client_sales.count()
 
-            # Get last sale date
-            last_sale_date = client_sales.order_by('-sale_date').first().sale_date.date() if client_sales.exists() else None
+            # Get last sale date and time
+            last_sale = client_sales.order_by('-sale_date').first()
+            last_sale_time = last_sale.sale_date.strftime('%Y-%m-%d %H:%M') if last_sale else None
 
             # DEBT IS PERIOD-BASED: Sales in period - Payments in period
             # Filter payments by date range for period-based debt calculation
@@ -496,11 +502,10 @@ def get_client_analytics(request):
             client_data.append({
                 'id': client.id,
                 'name': client.name,
-                'phone': client.phone,
                 'total_sales': float(total_sales),
                 'total_profit': float(total_profit),
                 'total_transactions': total_transactions,
-                'last_sale_date': last_sale_date.strftime('%Y-%m-%d') if last_sale_date else None,
+                'last_sale_time': last_sale_time,
                 'avg_sale': float(total_sales / total_transactions) if total_transactions > 0 else 0,
                 'debt': float(client_debt),
             })
@@ -547,10 +552,15 @@ def get_client_analytics(request):
 def get_product_analytics(request):
     """AJAX endpoint to get product analytics based on time period"""
     period = request.GET.get('period', 'all')
+    from_date_str = request.GET.get('from_date')
+    to_date_str = request.GET.get('to_date')
 
     now = timezone.now()
 
-    if period == 'today':
+    if period == 'custom' and from_date_str and to_date_str:
+        start_date = datetime.strptime(from_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(to_date_str, '%Y-%m-%d').date()
+    elif period == 'today':
         start_date = now.date()
         end_date = now.date()
     elif period == 'week':
@@ -670,12 +680,17 @@ def get_product_analytics(request):
 def get_general_metrics(request):
     """AJAX endpoint to get general business metrics based on time period"""
     period = request.GET.get('period', 'all')
+    from_date_str = request.GET.get('from_date')
+    to_date_str = request.GET.get('to_date')
 
     # Use localtime to get the date in the configured timezone (Asia/Karachi)
     now_local = timezone.localtime(timezone.now())
     today = now_local.date()
 
-    if period == 'today':
+    if period == 'custom' and from_date_str and to_date_str:
+        start_date = datetime.strptime(from_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(to_date_str, '%Y-%m-%d').date()
+    elif period == 'today':
         start_date = today
         end_date = today
     elif period == 'week':
@@ -1251,6 +1266,8 @@ def quick_sale_create(request):
     """Quick sale creation from inventory page - same logic as sale_create"""
     if request.method == 'POST':
         client_id = request.POST.get('client')
+        sale_date_str = request.POST.get('sale_date')
+        
         if not client_id:
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return JsonResponse({'success': False, 'error': 'Please select a client.'})
@@ -1278,6 +1295,15 @@ def quick_sale_create(request):
 
             with transaction.atomic():
                 sale = Sale.objects.create(client=client, total_amount=Decimal('0.00'))
+                
+                # Update sale_date if custom date was provided
+                if sale_date_str:
+                    try:
+                        sale_date = datetime.fromisoformat(sale_date_str)
+                        sale.sale_date = timezone.make_aware(sale_date) if sale_date.tzinfo is None else sale_date
+                    except ValueError:
+                        pass  # Keep the default current time if parsing fails
+                
                 total_amount = Decimal('0.00')
 
                 for form in valid_forms:
@@ -1768,6 +1794,7 @@ def export_all_clients_pdf(request):
 def sale_create(request):
     if request.method == 'POST':
         client_id = request.POST.get('client')
+        sale_date_str = request.POST.get('sale_date')
 
         if not client_id:
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -1797,7 +1824,17 @@ def sale_create(request):
                 })
 
             with transaction.atomic():
+                # Create sale (initially with current time)
                 sale = Sale.objects.create(client=client, total_amount=Decimal('0.00'))
+                
+                # Update sale_date if custom date was provided
+                if sale_date_str:
+                    try:
+                        sale_date = datetime.fromisoformat(sale_date_str)
+                        sale.sale_date = timezone.make_aware(sale_date) if sale_date.tzinfo is None else sale_date
+                    except ValueError:
+                        pass  # Keep the default current time if parsing fails
+                
                 total_amount = Decimal('0.00')
 
                 for form in valid_forms:
@@ -1888,7 +1925,7 @@ def sale_history(request):
     })
 
 
-@owner_required
+@login_required
 def add_payment(request):
     """Record a client payment."""
     if request.method == 'POST':
@@ -2161,6 +2198,173 @@ def sale_detail(request, pk):
         'sale_items': sale_items,
         'total_profit': total_profit
     })
+
+
+@login_required
+def sale_edit(request, pk):
+    """Edit sale with client, date, and items with inventory management"""
+    sale = get_object_or_404(Sale, pk=pk)
+    original_items = list(sale.saleitem_set.all())  # Store original items
+    
+    if request.method == 'GET':
+        # Return JSON data for modal population
+        return JsonResponse({
+            'success': True,
+            'sale': {
+                'id': sale.id,
+                'client_id': sale.client_id,
+                'client_name': sale.client.name,
+                'sale_date_iso': sale.sale_date.strftime('%Y-%m-%dT%H:%M') if sale.sale_date else '',
+                'total_amount': str(sale.total_amount)
+            },
+            'items': [
+                {
+                    'id': item.id,
+                    'cheese_product_id': item.cheese_product_id,
+                    'cheese_product_name': f"{item.cheese_product.manufacturer.name} {item.cheese_product.type.name} {item.cheese_product.packet_size}kg",
+                    'quantity_packets': item.quantity_packets,
+                    'selling_price_per_packet': str(item.selling_price_per_packet)
+                }
+                for item in original_items
+            ],
+            'clients': [
+                {'id': c.id, 'name': c.name}
+                for c in Client.objects.all()
+            ],
+            'products': [
+                {'id': p.id, 'name': f"{p.manufacturer.name} {p.type.name} {p.packet_size}kg"}
+                for p in CheeseProduct.objects.all()
+            ]
+        })
+    
+    if request.method == 'POST':
+        client_id = request.POST.get('client')
+        sale_date_str = request.POST.get('sale_date')
+        formset = SaleItemFormSet(request.POST)
+        
+        # Validate client
+        if not client_id:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': 'Please select a client.'})
+            messages.error(request, 'Please select a client.')
+            return redirect('sale_history')
+        
+        client = get_object_or_404(Client, pk=client_id)
+        
+        # Validate formset
+        if formset.is_valid():
+            valid_forms = [f for f in formset if f.cleaned_data and not f.cleaned_data.get('DELETE', False)]
+            
+            if not valid_forms:
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({'success': False, 'error': 'Please add at least one item to the sale.'})
+                messages.error(request, 'Please add at least one item to the sale.')
+                return redirect('sale_history')
+            
+            with transaction.atomic():
+                # Step 1: Restore original stock
+                for original_item in original_items:
+                    original_item.cheese_product.available_quantity_packets += original_item.quantity_packets
+                    original_item.cheese_product.save()
+                
+                # Step 2: Check if new quantities are available
+                for form in valid_forms:
+                    cheese_product = form.cleaned_data['cheese_product']
+                    quantity_packets = form.cleaned_data['quantity_packets']
+                    
+                    if quantity_packets > cheese_product.available_quantity_packets:
+                        # Restore all previously modified stock before failing
+                        for orig_item in original_items:
+                            if orig_item.cheese_product.id != cheese_product.id:
+                                orig_item.cheese_product.available_quantity_packets += orig_item.quantity_packets
+                                orig_item.cheese_product.save()
+                        
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            return JsonResponse({'success': False, 'error': f'Insufficient stock for {cheese_product}. Requested: {quantity_packets}, available: {cheese_product.available_quantity_packets}.'})
+                        messages.error(request, f'Insufficient stock for {cheese_product}.')
+                        return redirect('sale_history')
+                
+                # Step 3: Delete old sale items
+                sale.saleitem_set.all().delete()
+                
+                # Step 4: Create new sale items and deduct stock
+                total_amount = Decimal('0.00')
+                
+                for form in valid_forms:
+                    cheese_product = form.cleaned_data['cheese_product']
+                    quantity_packets = form.cleaned_data['quantity_packets']
+                    selling_price_per_packet = form.cleaned_data['selling_price_per_packet']
+                    
+                    SaleItem.objects.create(
+                        sale=sale,
+                        cheese_product=cheese_product,
+                        quantity_packets=quantity_packets,
+                        selling_price_per_packet=selling_price_per_packet
+                    )
+                    
+                    cheese_product.available_quantity_packets -= quantity_packets
+                    cheese_product.save()
+                    
+                    total_amount += selling_price_per_packet * quantity_packets
+                
+                # Step 5: Update sale with new client, date, and total
+                sale.client = client
+                if sale_date_str:
+                    try:
+                        sale_date = datetime.fromisoformat(sale_date_str)
+                        sale.sale_date = timezone.make_aware(sale_date) if sale_date.tzinfo is None else sale_date
+                    except ValueError:
+                        pass  # Keep existing date if parsing fails
+                
+                sale.total_amount = total_amount
+                sale.save()
+                
+                SiteActivity.update_activity(f'Sale #{sale.id} edited for {client.name}')
+                
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({'success': True, 'message': 'Sale updated successfully.'})
+                
+                messages.success(request, 'Sale updated successfully.')
+                return redirect('sale_history')
+        else:
+            # Formset validation failed - get detailed error message
+            error_msg = 'Form validation failed:'
+            error_count = 0
+            for idx, form in enumerate(formset):
+                if form.errors:
+                    error_count += 1
+                    for field, errors in form.errors.items():
+                        if error_count == 1:  # Only show first error
+                            error_msg = f"Item {idx + 1}: {errors[0]}"
+                            break
+                    if error_count == 1:
+                        break
+            
+            if not error_msg or error_msg == 'Form validation failed:':
+                error_msg = 'Please check the form data and try again.'
+            
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': error_msg})
+            messages.error(request, error_msg)
+
+
+@login_required
+def sale_delete(request, pk):
+    """Delete a sale"""
+    sale = get_object_or_404(Sale, pk=pk)
+    
+    if request.method == 'POST':
+        sale_id = sale.id
+        sale.delete()
+        SiteActivity.update_activity(f'Sale #{sale_id} deleted')
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'success': True, 'message': 'Sale deleted successfully.'})
+        
+        messages.success(request, 'Sale deleted successfully.')
+        return redirect('sale_history')
+    
+    return render(request, 'distribution/sales/sale_confirm_delete.html', {'sale': sale})
 
 
 @owner_required

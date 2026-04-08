@@ -227,7 +227,7 @@ body {
     color: var(--text-secondary);
     background: var(--bg-light);
     padding: 0.875rem 1rem;
-    border-right: 1px solid var(--border);
+    /* border-right: 1px solid var(--border); */
 }
 
 .table thead th:last-child {
@@ -321,6 +321,18 @@ body {
     background: var(--primary);
     color: var(--white);
     border-color: var(--primary);
+}
+
+.btn-outline-secondary {
+    color: var(--secondary);
+    border-color: var(--secondary);
+    background: transparent;
+}
+
+.btn-outline-secondary:hover {
+    background: var(--secondary);
+    color: var(--white);
+    border-color: var(--secondary);
 }
 
 /* Success Button */
