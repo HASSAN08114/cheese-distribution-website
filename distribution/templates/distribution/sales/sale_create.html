@@ -78,18 +78,69 @@
 {% endblock %}
 
 {% block extra_js %}
+<style>
+    .price-auto-filled {
+        color: #999 !important;
+        font-style: italic;
+    }
+    .price-auto-filled::placeholder {
+        color: #ccc;
+    }
+</style>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const addButton = document.getElementById('add-item');
     const container = document.getElementById('formset-container');
     const totalForms = document.getElementById('id_form-TOTAL_FORMS');
+    const clientSelect = document.getElementById('client');
     let formCount = parseInt(totalForms.value);
+
+    // Function to fetch and fill price based on client and product
+    function fetchAndFillPrice(productSelect, priceInput) {
+        const clientId = clientSelect.value;
+        const productId = productSelect.value;
+        
+        if (!clientId || !productId) {
+            priceInput.value = '';
+            priceInput.classList.remove('price-auto-filled');
+            return;
+        }
+        
+        fetch(`/api/client-product-price/${clientId}/${productId}/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    priceInput.value = data.price;
+                    // Add visual indicator that this is an auto-filled price
+                    priceInput.classList.add('price-auto-filled');
+                    priceInput.title = 'Auto-suggested price (you can edit this)';
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching price:', error);
+            });
+    }
 
     function attachProductChangeListener(row) {
         const productSelect = row.querySelector('select[name*="cheese_product"]');
-        if (productSelect) {
+        const priceInput = row.querySelector('input[name*="selling_price_per_packet"]');
+        
+        if (productSelect && priceInput) {
             productSelect.addEventListener('change', function() {
-                // Purchase price display removed per user request
+                fetchAndFillPrice(productSelect, priceInput);
+            });
+            
+            // Remove the grey styling when user focuses on the price field
+            priceInput.addEventListener('focus', function() {
+                priceInput.classList.remove('price-auto-filled');
+                priceInput.title = '';
+            });
+            
+            // Add back the styling if user clears the field
+            priceInput.addEventListener('blur', function() {
+                if (!priceInput.value) {
+                    priceInput.classList.remove('price-auto-filled');
+                }
             });
         }
     }
@@ -110,6 +161,17 @@ document.addEventListener('DOMContentLoaded', function() {
     // Attach listeners to existing rows
     container.querySelectorAll('.formset-row').forEach(function(row) {
         attachProductChangeListener(row);
+    });
+
+    // When client changes, refetch prices for all rows with selected products
+    clientSelect.addEventListener('change', function() {
+        container.querySelectorAll('.formset-row').forEach(function(row) {
+            const productSelect = row.querySelector('select[name*="cheese_product"]');
+            const priceInput = row.querySelector('input[name*="selling_price_per_packet"]');
+            if (productSelect && productSelect.value && priceInput) {
+                fetchAndFillPrice(productSelect, priceInput);
+            }
+        });
     });
 
     addButton.addEventListener('click', function() {

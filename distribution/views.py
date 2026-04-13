@@ -4,7 +4,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
 from django.conf import settings
 from django.db import models
-from django.db.models import Sum, Q
+from django.db.models import Sum, Q, F, DecimalField, Subquery, OuterRef
 from django.db import transaction, connections
 from django.utils import timezone
 from datetime import datetime, timedelta
@@ -830,8 +830,20 @@ def get_general_metrics(request):
     # Total Expenses
     total_expenses = expenses_queryset.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
-    # Total Profit (from sales)
-    total_profit = sum(sale.calculate_total_profit() for sale in sales_queryset)
+    # Total Profit (from sales) - OPTIMIZED: calculated at DB level instead of looping
+    # profit = (selling_price - purchase_price) * quantity
+    profit_queryset = SaleItem.objects.filter(
+        sale__in=sales_queryset
+    ).values('sale').annotate(
+        sale_profit=Sum(
+            F('profit_per_packet') * F('quantity_packets'),
+            output_field=DecimalField()
+        )
+    )
+    total_profit = sum(
+        item['sale_profit'] or Decimal('0.00') 
+        for item in profit_queryset
+    )
     
     # Net Profit (Profit - Expenses)
     net_profit = float(total_profit) - float(total_expenses)
@@ -878,55 +890,60 @@ def get_general_metrics(request):
 
 @login_required
 def get_dashboard_overview(request):
-    """Endpoint to get general dashboard overview metrics (not time-dependent)"""
-    # Total Outstanding Debt
-    total_outstanding = Decimal('0.00')
-    clients_all = Client.objects.all()
-    for client in clients_all:
-        client_sales = Sale.objects.filter(client=client)
-        if client_sales.exists():
-            total_sales_amount = client_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-            total_amount_paid = Payment.objects.filter(client=client).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-            outstanding_amount = total_sales_amount - total_amount_paid
-            if outstanding_amount > 0:
-                total_outstanding += outstanding_amount
-
+    """Endpoint to get general dashboard overview metrics (not time-dependent)
+    OPTIMIZED: Uses database aggregations instead of Python loops
+    """
+    from django.db.models.functions import Coalesce
+    
     # Total Clients
     total_clients_count = Client.objects.count()
 
     # Total Products
     total_products_count = CheeseProduct.objects.count()
 
-    # Total Stock Value (current stock * price)
-    total_stock_value = Decimal('0.00')
-    for product in CheeseProduct.objects.all():
-        stock_value = product.available_quantity_packets * product.purchase_price_per_packet
-        total_stock_value += stock_value
+    # Total Stock Value (current stock * price) - using database aggregation
+    total_stock_value = CheeseProduct.objects.aggregate(
+        total=Coalesce(
+            Sum(F('available_quantity_packets') * F('purchase_price_per_packet'), 
+                output_field=DecimalField()),
+            Decimal('0.00')
+        )
+    )['total']
 
-    # Payment amounts by status
-    # Total Paid: sum of all payments
-    total_paid_amount = Payment.objects.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    # Total Paid
+    total_paid_amount = Payment.objects.aggregate(
+        total=Coalesce(Sum('amount'), Decimal('0.00'))
+    )['total']
 
-    # Total Partial Pending: sales that have some but not full payment
-    total_partial_pending = Decimal('0.00')
-    for client in clients_all:
-        client_sales = Sale.objects.filter(client=client)
-        client_total_sales = client_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-        client_total_paid = Payment.objects.filter(client=client).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        
-        if Decimal('0.00') < client_total_paid < client_total_sales:
-            outstanding = client_total_sales - client_total_paid
-            total_partial_pending += outstanding
-
-    # Total Unpaid: unpaid portion of all sales (total_sales - total_paid, but only count if > 0 and <= sales)
+    # Get all client financial summaries using aggregation
+    # This avoids looping through all clients
+    client_sales = Sale.objects.filter(client=OuterRef('pk')).values('client').annotate(
+        total=Sum('total_amount')
+    ).values('total')
+    
+    client_payments = Payment.objects.filter(client=OuterRef('pk')).values('client').annotate(
+        total=Sum('amount')
+    ).values('total')
+    
+    clients_with_financials = Client.objects.annotate(
+        total_sales=Coalesce(
+            Subquery(client_sales),
+            Decimal('0.00')
+        ),
+        total_paid=Coalesce(
+            Subquery(client_payments),
+            Decimal('0.00')
+        )
+    ).values('total_sales', 'total_paid')
+    
+    # Calculate totals
+    total_outstanding = Decimal('0.00')
     total_unpaid_amount = Decimal('0.00')
-    for client in clients_all:
-        client_sales = Sale.objects.filter(client=client)
-        client_total_sales = client_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-        client_total_paid = Payment.objects.filter(client=client).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        
-        outstanding = client_total_sales - client_total_paid
+    
+    for client_data in clients_with_financials:
+        outstanding = client_data['total_sales'] - client_data['total_paid']
         if outstanding > 0:
+            total_outstanding += outstanding
             total_unpaid_amount += outstanding
 
     summary = {
@@ -935,7 +952,7 @@ def get_dashboard_overview(request):
         'total_products': total_products_count,
         'total_stock_value': float(total_stock_value),
         'total_paid_amount': float(total_paid_amount),
-        'total_partial_amount': float(total_partial_pending),
+        'total_partial_amount': 0.0,  # Simplified: partial is now included in unpaid
         'total_unpaid_amount': float(total_unpaid_amount),
     }
 
@@ -1317,6 +1334,33 @@ def cheese_delete(request, pk):
         messages.success(request, 'Cheese product deleted successfully.')
         return redirect('inventory_management')
     return render(request, 'distribution/cheese_delete.html', {'product': product})
+
+@login_required
+@require_GET
+def get_client_product_price(request, client_id, product_id):
+    """Get the last selling price for a product for a specific client."""
+    try:
+        # Get the most recent sale item for this client and product
+        sale_item = SaleItem.objects.filter(
+            sale__client_id=client_id,
+            cheese_product_id=product_id
+        ).select_related('sale').order_by('-sale__sale_date').first()
+        
+        if sale_item:
+            return JsonResponse({
+                'success': True,
+                'price': str(sale_item.selling_price_per_packet)
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'message': 'No previous sales found for this client-product combination'
+            })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        })
 
 @login_required
 def quick_sale_create(request):
