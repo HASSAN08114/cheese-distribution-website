@@ -25,8 +25,9 @@
             </div>
 
             <div class="mb-3">
-                <label for="sale_date" class="form-label">Sale Date & Time (Optional)</label>
-                <input type="datetime-local" name="sale_date" id="sale_date" class="form-control" title="Leave empty to use current date and time">
+                <label for="sale_date_display" class="form-label">Sale Date & Time (Optional - DD/MM/YYYY HH:MM)</label>
+                <input type="text" id="sale_date_display" class="form-control js-datetime-picker" placeholder="DD/MM/YYYY HH:MM" title="Leave empty to use current date and time">
+                <input type="hidden" name="sale_date" id="sale_date">
                 <small class="text-muted">Leave empty to use current date and time</small>
             </div>
 
@@ -157,19 +158,42 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Populate current date/time for sale_date field
 function populateSaleDateTime() {
-    const saleDateInput = document.getElementById('sale_date');
-    if (saleDateInput && !saleDateInput.value) {
+    const saleDateDisplayInput = document.getElementById('sale_date_display');
+    if (saleDateDisplayInput && !saleDateDisplayInput.value) {
         const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
         const day = String(now.getDate()).padStart(2, '0');
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const year = now.getFullYear();
         const hours = String(now.getHours()).padStart(2, '0');
         const minutes = String(now.getMinutes()).padStart(2, '0');
-        saleDateInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+        saleDateDisplayInput.value = `${day}/${month}/${year} ${hours}:${minutes}`;
     }
 }
 
 document.addEventListener('DOMContentLoaded', populateSaleDateTime);
+
+// Convert DD/MM/YYYY HH:MM to ISO format before form submission
+document.addEventListener('DOMContentLoaded', function() {
+    const saleForm = document.getElementById('saleForm');
+    if (saleForm) {
+        saleForm.addEventListener('submit', function(e) {
+            const displayInput = document.getElementById('sale_date_display');
+            const hiddenInput = document.getElementById('sale_date');
+            
+            if (displayInput && displayInput.value) {
+                const match = displayInput.value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})$/);
+                if (match) {
+                    const day = match[1];
+                    const month = match[2];
+                    const year = match[3];
+                    const hours = match[4];
+                    const minutes = match[5];
+                    hiddenInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+                }
+            }
+        });
+    }
+});
 </script>
 {% endblock %}
 

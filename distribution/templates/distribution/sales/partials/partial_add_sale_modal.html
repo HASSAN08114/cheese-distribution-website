@@ -15,8 +15,9 @@
             </select>
         </div>
         <div class="mb-3">
-            <label class="form-label">Sale Date & Time (Optional)</label>
-            <input type="datetime-local" name="sale_date" id="addSaleModalDate" class="form-control" title="Leave empty to use current date and time">
+            <label class="form-label">Sale Date & Time (Optional - DD/MM/YYYY HH:MM)</label>
+            <input type="text" id="addSaleModalDateDisplay" class="form-control js-datetime-picker" placeholder="DD/MM/YYYY HH:MM" title="Leave empty to use current date and time">
+            <input type="hidden" id="addSaleModalDate" name="sale_date">
             <small class="text-muted">Leave empty to use current date and time</small>
         </div>
         <h6 class="mt-4 mb-3">Sale Items</h6>
@@ -121,15 +122,38 @@ document.addEventListener('DOMContentLoaded', function() {
     const addSaleModal = document.getElementById('addSaleModal');
     if (addSaleModal) {
         addSaleModal.addEventListener('shown.bs.modal', function() {
-            const saleDateInput = document.getElementById('addSaleModalDate');
-            if (saleDateInput && !saleDateInput.value) {
+            const saleDateDisplayInput = document.getElementById('addSaleModalDateDisplay');
+            if (saleDateDisplayInput && !saleDateDisplayInput.value) {
                 const now = new Date();
-                const year = now.getFullYear();
-                const month = String(now.getMonth() + 1).padStart(2, '0');
                 const day = String(now.getDate()).padStart(2, '0');
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const year = now.getFullYear();
                 const hours = String(now.getHours()).padStart(2, '0');
                 const minutes = String(now.getMinutes()).padStart(2, '0');
-                saleDateInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+                saleDateDisplayInput.value = `${day}/${month}/${year} ${hours}:${minutes}`;
+            }
+        });
+    }
+});
+
+// Convert DD/MM/YYYY HH:MM to ISO format before form submission
+document.addEventListener('DOMContentLoaded', function() {
+    const addSaleForm = document.getElementById('addSaleForm');
+    if (addSaleForm) {
+        addSaleForm.addEventListener('submit', function(e) {
+            const displayInput = document.getElementById('addSaleModalDateDisplay');
+            const hiddenInput = document.getElementById('addSaleModalDate');
+            
+            if (displayInput && displayInput.value) {
+                const match = displayInput.value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})$/);
+                if (match) {
+                    const day = match[1];
+                    const month = match[2];
+                    const year = match[3];
+                    const hours = match[4];
+                    const minutes = match[5];
+                    hiddenInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+                }
             }
         });
     }

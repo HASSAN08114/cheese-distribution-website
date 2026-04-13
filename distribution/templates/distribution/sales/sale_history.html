@@ -51,6 +51,7 @@
         <table class="table table-hover">
             <thead>
                 <tr>
+                    <th>Sale ID</th>
                     <th>Client</th>
                     <th>Total</th>
                     <th>Date</th>                    
@@ -60,6 +61,7 @@
             <tbody>
                 {% for item in sales_data %}
                 <tr>
+                    <td>#{{ item.sale.id }}</td>
                     <td>{{ item.sale.client.name }}</td>
                     <td>PKR {{ item.sale.total_amount|floatformat:2 }}</td>
                     <td data-iso-date="{{ item.sale.sale_date|date:'c' }}">{{ item.sale.sale_date|date:"d/m/Y H:i" }}</td>
@@ -158,7 +160,10 @@
     <div class="modal-dialog modal-lg edit-sale-modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="editSaleModalLabel">Edit Sale</h5>
+                <div>
+                    <h5 class="modal-title" id="editSaleModalLabel">Edit Sale</h5>
+                    <small class="text-muted">Sale ID: <strong id="editSaleIdDisplay"></strong></small>
+                </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body edit-sale-modal-body">
@@ -597,9 +602,9 @@ function applySalesFilters() {
     
     const rows = document.querySelectorAll('tbody tr');
     rows.forEach(row => {
-        if (row.querySelector('td:nth-child(4)')) {  // Check if it's not an empty message row
-            const clientName = row.querySelector('td:nth-child(1)').textContent.trim();
-            const dateIso = row.querySelector('td:nth-child(3)').getAttribute('data-iso-date');
+        if (row.querySelector('td:nth-child(5)')) {  // Check if it's not an empty message row
+            const clientName = row.querySelector('td:nth-child(2)').textContent.trim();
+            const dateIso = row.querySelector('td:nth-child(4)').getAttribute('data-iso-date');
             const saleDate = new Date(dateIso);
             
             const fromDateObj = parseDdMmDate(fromDate);
@@ -681,6 +686,7 @@ function applySalesFilters() {
                         document.getElementById('editSaleDate').value = data.sale.sale_date_iso;
                         document.getElementById('editSaleDateDisplay').value = formatIsoToDdMmDateTime(data.sale.sale_date_iso);
                         document.getElementById('editSaleId').value = saleId;
+                        document.getElementById('editSaleIdDisplay').textContent = '#' + saleId;
                         
                         // Populate items formset
                         const managementDiv = document.getElementById('editFormsetManagement');
@@ -998,7 +1004,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const seenClients = new Set();
     
     rows.forEach(row => {
-        if (row.querySelector('td:nth-child(4)')) {  // Not an empty message row
+        if (row.querySelector('td:nth-child(5)')) {  // Not an empty message row
             const clientName = row.querySelector('td:nth-child(2)').textContent.trim();
             if (clientName && !seenClients.has(clientName)) {
                 seenClients.add(clientName);
