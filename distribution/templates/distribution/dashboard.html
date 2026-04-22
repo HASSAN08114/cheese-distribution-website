@@ -334,7 +334,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function parseDdMmDateTime(value, isEndBoundary = false) {
         if (!value) return null;
-        const match = value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?$/);
+        const match = value.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?$/);
         if (!match) return null;
 
         const day = parseInt(match[1], 10);
@@ -517,7 +517,14 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 allClientData = data.clients;
-                renderClientTable(data.clients);
+                
+                // Preserve the search filter if one is active
+                const searchInput = document.getElementById('client-search');
+                if (searchInput && searchInput.value.trim()) {
+                    filterClients(searchInput.value.toLowerCase());
+                } else {
+                    renderClientTable(data.clients);
+                }
             })
             .catch(error => {
                 console.error('Error loading client analytics:', error);

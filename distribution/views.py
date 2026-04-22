@@ -1726,28 +1726,75 @@ def export_client_pdf(request, pk):
     # Sales History Section
     elements.append(Spacer(1, 0.4*inch))
     elements.append(Paragraph("Sales History", heading_style))
-    sales = Sale.objects.filter(**sales_filter).order_by('-sale_date')
-    sales_data = [["Date", "Amount (Rs.)"]]
-    for sale in sales:
-        sales_data.append([
-            sale.sale_date.strftime('%Y-%m-%d'),
-            f"{sale.total_amount:,.2f}"
-        ])
-    sales_table = Table(sales_data, colWidths=[3*inch, 3*inch])
-    sales_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2980b9')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 12),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('FONTSIZE', (0, 1), (-1, -1), 11),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
-        ('ALIGN', (1, 1), (1, -1), 'RIGHT'),
-    ]))
-    elements.append(sales_table)
+    sales = Sale.objects.filter(**sales_filter).prefetch_related('saleitem_set').order_by('-sale_date')
+    
+    if sales.exists():
+        sales_data = [["ID", "Date", "Product", "Qty", "Packet Price", "Total"]]
+        for sale in sales:
+            sale_items = sale.saleitem_set.all()
+            is_first_item = True
+            for item in sale_items:
+                if is_first_item:
+                    sales_data.append([
+                        f"{sale.id}",
+                        sale.sale_date.strftime('%d-%m-%Y'),
+                        f"{item.cheese_product}",
+                        str(item.quantity_packets),
+                        f"{item.selling_price_per_packet:,.2f}",
+                        f"{item.quantity_packets * item.selling_price_per_packet:,.2f}"
+                    ])
+                    is_first_item = False
+                else:
+                    sales_data.append([
+                        "",
+                        "",
+                        f"{item.cheese_product}",
+                        str(item.quantity_packets),
+                        f"{item.selling_price_per_packet:,.2f}",
+                        f"{item.quantity_packets * item.selling_price_per_packet:,.2f}"
+                    ])
+            # Add total row for this sale
+            sales_data.append([
+                "",
+                "SALE TOTAL",
+                "",
+                "",
+                f"{sale.total_amount:,.2f}"
+            ])
+        
+        sales_table = Table(sales_data, colWidths=[1*inch,1.2*inch, 1.8*inch, 0.8*inch, 1.2*inch, 1.2*inch])
+        sales_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2980b9')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 11),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
+            ('ALIGN', (1, 1), (1, -1), 'RIGHT'),
+            ('ALIGN', (2, 1), (4, -1), 'RIGHT'),
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            # Highlight sale total rows
+        ]))
+        
+        # Highlight sale total rows
+        row_idx = 1
+        for sale in sales:
+            sale_items = sale.saleitem_set.all()
+            row_idx += len(sale_items)
+            sales_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, row_idx), (-1, row_idx), colors.HexColor('#d5dbdb')),
+                ('FONTNAME', (0, row_idx), (-1, row_idx), 'Helvetica-Bold'),
+            ]))
+            row_idx += 1
+        
+        elements.append(sales_table)
+    else:
+        elements.append(Paragraph("No sales found for the selected period.", 
+                                ParagraphStyle('Normal', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#666666'))))
 
     # Payments History Section
     elements.append(Spacer(1, 0.4*inch))

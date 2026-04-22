@@ -237,7 +237,12 @@ document.addEventListener("DOMContentLoaded", function () {
             
             // Set end date to today
             const today = new Date();
-            const todayString = today.toISOString().split('T')[0];
+            // Convert to local YYYY-MM-DD
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+
+            const todayString = `${year}-${month}-${day}`;
             if (endDateInput && !endDateInput.value) {
                 endDateInput.value = todayString;
             }
