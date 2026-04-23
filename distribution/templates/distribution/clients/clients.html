@@ -117,12 +117,12 @@
                     </div>
                     <div class="mb-3">
                         <label for="exportStartDate" class="form-label">Start Date (Optional)</label>
-                        <input type="date" id="exportStartDate" class="form-control">
+                        <input type="text" id="exportStartDate" class="form-control js-date-picker" placeholder="DD/MM/YYYY">
                         <small class="text-muted">Defaults to the earliest client date in the system</small>
                     </div>
                     <div class="mb-3">
                         <label for="exportEndDate" class="form-label">End Date (Optional)</label>
-                        <input type="date" id="exportEndDate" class="form-control">
+                        <input type="text" id="exportEndDate" class="form-control js-date-picker" placeholder="DD/MM/YYYY">
                         <small class="text-muted">Defaults to today's date</small>
                     </div>
                 </div>
@@ -235,14 +235,17 @@ document.addEventListener("DOMContentLoaded", function () {
             const startDateInput = document.getElementById('exportStartDate');
             const endDateInput = document.getElementById('exportEndDate');
             
+            // Helper function to convert YYYY-MM-DD to DD/MM/YYYY
+            function formatDateDdMmYyyy(date) {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${day}/${month}/${year}`;
+            }
+            
             // Set end date to today
             const today = new Date();
-            // Convert to local YYYY-MM-DD
-            const year = today.getFullYear();
-            const month = String(today.getMonth() + 1).padStart(2, '0');
-            const day = String(today.getDate()).padStart(2, '0');
-
-            const todayString = `${year}-${month}-${day}`;
+            const todayString = formatDateDdMmYyyy(today);
             if (endDateInput && !endDateInput.value) {
                 endDateInput.value = todayString;
             }
@@ -264,14 +267,17 @@ document.addEventListener("DOMContentLoaded", function () {
             if (startDateInput && !startDateInput.value) {
                 let defaultStartDate;
                 if (earliestDate) {
-                    defaultStartDate = earliestDate.toISOString().split('T')[0];
+                    defaultStartDate = formatDateDdMmYyyy(earliestDate);
                 } else {
                     // Fallback to first day of current month
                     const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-                    defaultStartDate = firstDayOfMonth.toISOString().split('T')[0];
+                    defaultStartDate = formatDateDdMmYyyy(firstDayOfMonth);
                 }
                 startDateInput.value = defaultStartDate;
             }
+            
+            // Initialize flatpickr for the newly set values
+            initializeDatePickers(unifiedExportPdfModal);
         });
     }
 
@@ -281,13 +287,26 @@ document.addEventListener("DOMContentLoaded", function () {
         unifiedExportForm.addEventListener('submit', function(e) {
             e.preventDefault();
             const clientId = document.getElementById('exportClientSelect').value;
-            const startDate = document.getElementById('exportStartDate').value;
-            const endDate = document.getElementById('exportEndDate').value;
+            const startDateStr = document.getElementById('exportStartDate').value;
+            const endDateStr = document.getElementById('exportEndDate').value;
 
             if (!clientId) {
                 showToast('Please select a client', 'warning');
                 return;
             }
+
+            // Helper function to convert DD/MM/YYYY to YYYY-MM-DD
+            function convertDdMmToYyyMmDd(dateStr) {
+                if (!dateStr) return '';
+                const parts = dateStr.split('/');
+                if (parts.length === 3) {
+                    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+                }
+                return dateStr;
+            }
+
+            const startDate = convertDdMmToYyyMmDd(startDateStr);
+            const endDate = convertDdMmToYyyMmDd(endDateStr);
 
             let url;
             const params = [];

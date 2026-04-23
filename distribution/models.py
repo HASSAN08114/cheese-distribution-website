@@ -133,7 +133,7 @@ class Payment(models.Model):
 
 class Sale(models.Model):
     client = models.ForeignKey(Client, on_delete=models.CASCADE)
-    sale_date = models.DateTimeField(auto_now_add=True)
+    sale_date = models.DateTimeField(default=timezone.now)
     total_amount = models.DecimalField(
         max_digits=10,
         decimal_places=2,

@@ -30,7 +30,8 @@
         </div>
         <div class="mb-3">
             <label class="form-label">Expense Date</label>
-            <input type="date" name="expense_date" class="form-control" required>
+            <input type="text" name="expense_date_display" class="form-control js-date-picker" placeholder="DD/MM/YYYY" required>
+            <input type="hidden" name="expense_date" id="expense_date">
         </div>
         <div class="mb-3">
             <label class="form-label">Note</label>
@@ -42,3 +43,24 @@
         <button type="submit" class="btn btn-primary">Add Expense</button>
     </div>
 </form>
+
+<script>
+// Handle expense date conversion before form submission
+document.addEventListener('DOMContentLoaded', function() {
+    const expenseForm = document.querySelector('.modal form[action*="expense_management"]');
+    if (!expenseForm) return;
+    
+    expenseForm.addEventListener('submit', function(e) {
+        const displayInput = document.querySelector('input[name="expense_date_display"]');
+        const hiddenInput = document.querySelector('input[name="expense_date"]');
+        
+        if (displayInput && displayInput.value) {
+            // Convert DD/MM/YYYY to YYYY-MM-DD
+            const parts = displayInput.value.split('/');
+            if (parts.length === 3) {
+                hiddenInput.value = `${parts[2]}-${parts[1]}-${parts[0]}`;
+            }
+        }
+    });
+});
+</script>

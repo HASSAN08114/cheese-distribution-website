@@ -10,11 +10,11 @@
         <form id="exportPdfForm">
           <div class="mb-3">
             <label for="startDate" class="form-label">Start Date</label>
-            <input type="date" class="form-control" id="startDate" name="start_date">
+            <input type="text" class="form-control js-date-picker" id="startDate" name="start_date" placeholder="DD/MM/YYYY">
           </div>
           <div class="mb-3">
             <label for="endDate" class="form-label">End Date</label>
-            <input type="date" class="form-control" id="endDate" name="end_date">
+            <input type="text" class="form-control js-date-picker" id="endDate" name="end_date" placeholder="DD/MM/YYYY">
           </div>
           <input type="hidden" id="exportClientId" name="client_id">
         </form>
@@ -40,8 +40,22 @@ function openExportPdfModal(clientId) {
 // Handle export button click
 function handleExportPdf() {
   const clientId = document.getElementById('exportClientId').value;
-  const startDate = document.getElementById('startDate').value;
-  const endDate = document.getElementById('endDate').value;
+  const startDateStr = document.getElementById('startDate').value;
+  const endDateStr = document.getElementById('endDate').value;
+  
+  // Helper function to convert DD/MM/YYYY to YYYY-MM-DD
+  function convertDdMmToYyyMmDd(dateStr) {
+    if (!dateStr) return '';
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+    return dateStr;
+  }
+  
+  const startDate = convertDdMmToYyyMmDd(startDateStr);
+  const endDate = convertDdMmToYyyMmDd(endDateStr);
+  
   let url = `/clients/${clientId}/export-pdf/`;
   const params = [];
   if (startDate) params.push(`start_date=${startDate}`);

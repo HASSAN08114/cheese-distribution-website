@@ -1412,8 +1412,8 @@ def quick_sale_create(request):
                     if quantity_packets > cheese_product.available_quantity_packets:
                         sale.delete()
                         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                            return JsonResponse({'success': False, 'error': f'Insufficient stock for {cheese_product.name}.'})
-                        messages.error(request, f'Insufficient stock for {cheese_product.name}.')
+                            return JsonResponse({'success': False, 'error': f'Insufficient stock for {cheese_product}.'})
+                        messages.error(request, f'Insufficient stock for {cheese_product}')
                         return redirect('sale_history')
 
                     sale_item = SaleItem.objects.create(
@@ -2023,8 +2023,8 @@ def sale_create(request):
                     if quantity_packets > cheese_product.available_quantity_packets:
                         sale.delete()
                         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                            return JsonResponse({'success': False, 'error': f'Insufficient stock for {cheese_product.name}.'})
-                        messages.error(request, f'Insufficient stock for {cheese_product.name}.')
+                            return JsonResponse({'success': False, 'error': f'Insufficient stock for {cheese_product}.'})
+                        messages.error(request, f'Insufficient stock for {cheese_product}.')
                         return render(request, 'distribution/sales/sale_create.html', {
                             'formset': formset,
                             'clients': Client.objects.all(),

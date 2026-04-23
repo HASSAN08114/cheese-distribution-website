@@ -20,7 +20,8 @@
         </div>
         <div class="mb-3">
             <label class="form-label">Payment Date & Time</label>
-            <input type="datetime-local" name="date" id="quick_payment_date" class="form-control" required>
+            <input type="text" name="date_display" id="quick_payment_date" class="form-control js-datetime-picker" placeholder="DD/MM/YYYY HH:MM" required>
+            <input type="hidden" name="date" id="quick_payment_date_hidden">
             <small class="text-muted">Defaults to current date and time.</small>
         </div>
         <div class="mb-3">
@@ -47,6 +48,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const modeSelect = document.getElementById('mode_select');
     const bankField = document.getElementById('bank-field');
     const paymentDateInput = document.getElementById('quick_payment_date');
+    const paymentDateHidden = document.getElementById('quick_payment_date_hidden');
 
     function setDefaultPaymentDateTime() {
         if (!paymentDateInput || paymentDateInput.value) return;
@@ -56,10 +58,32 @@ document.addEventListener('DOMContentLoaded', function() {
         const day = String(now.getDate()).padStart(2, '0');
         const hours = String(now.getHours()).padStart(2, '0');
         const minutes = String(now.getMinutes()).padStart(2, '0');
-        paymentDateInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+        paymentDateInput.value = `${day}/${month}/${year} ${hours}:${minutes}`;
+        
+        // Also set the hidden field with ISO format
+        paymentDateHidden.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+
+    function convertPaymentDateToISO() {
+        if (paymentDateInput && paymentDateInput.value && paymentDateHidden) {
+            const parts = paymentDateInput.value.match(/(\d{2})\/(\d{2})\/(\d{4})\s(\d{2}):(\d{2})/);
+            if (parts) {
+                const day = parts[1];
+                const month = parts[2];
+                const year = parts[3];
+                const hours = parts[4];
+                const minutes = parts[5];
+                paymentDateHidden.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+            }
+        }
     }
 
     setDefaultPaymentDateTime();
+
+    // Convert date whenever flatpickr changes it
+    if (paymentDateInput) {
+        paymentDateInput.addEventListener('change', convertPaymentDateToISO);
+    }
 
     if (modeSelect) {
         modeSelect.addEventListener('change', function() {
@@ -73,6 +97,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const quickPaymentForm = document.getElementById('quickPaymentForm');
     
     if (quickPaymentForm) {
+        quickPaymentForm.addEventListener('submit', function() {
+            convertPaymentDateToISO();
+        });
+        
         setupAjaxForm(quickPaymentForm,
             function(data) {
                 showToast(data.message || 'Payment has been recorded successfully.', 'success');
