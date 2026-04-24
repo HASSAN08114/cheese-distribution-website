@@ -52,6 +52,13 @@ A complete, professional Django web application for managing a cheese distributi
    python manage.py migrate
    ```
 
+   
+# Data Restoration
+   ```bash
+   py manage.py loaddata file
+   ```
+   Maybe do a sequence reset.
+   
 6. **Create a superuser account:**
    ```bash
    python manage.py createsuperuser
@@ -198,3 +205,4 @@ If you encounter issues:
 ## 📄 License
 
 This project is ready for handover and deployment.
+

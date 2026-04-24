@@ -16,6 +16,7 @@ import tempfile
 import sqlite3
 import os
 import json
+from io import StringIO
 from django.core.management import call_command
 from .models import (
     Manufacturer, CheeseProduct, Client, Sale, SaleItem, SaleAction, UserProfile, Payment, PaymentAction,
@@ -3350,12 +3351,28 @@ def database_management(request):
                         indent=2,
                         stdout=safety_file,
                     )
+                # Flush OUTSIDE transaction
+                call_command('flush', verbosity=0, interactive=False)
 
-                # Reset data and load uploaded fixture.
                 with transaction.atomic():
-                    call_command('flush', verbosity=0, interactive=False)
                     call_command('loaddata', temp_path, verbosity=0)
 
+                    sequence_sql_buffer = StringIO()
+                    call_command(
+                        'sqlsequencereset',
+                        'admin', 'auth', 'contenttypes', 'sessions', 'distribution',
+                        stdout=sequence_sql_buffer,
+                    )
+
+                    sequence_sql = sequence_sql_buffer.getvalue().strip()
+
+                    if sequence_sql:
+                        with connections['default'].cursor() as cursor:
+                            for stmt in sequence_sql.split(';'):
+                                stmt = stmt.strip()
+                                if stmt:
+                                    cursor.execute(stmt)
+                                    
                 SiteActivity.update_activity(
                     f'PostgreSQL database restored by {request.user.username}; previous data saved as {safety_backup_name}'
                 )
