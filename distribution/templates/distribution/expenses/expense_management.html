@@ -28,9 +28,9 @@
         </thead>
         <tbody>
           {% for exp in expenses %}
-          <tr>
+          <tr class="{% if exp.is_voided %}table-danger{% elif exp.has_actions %}table-warning{% endif %}">
             <td>
-              <span class="badge bg-light text-dark">{{ exp.expense_date|date:"d/m/Y" }}</span>
+              {{ exp.expense_date|date:"d/m/Y" }}
             </td>
             <td>{{ exp.employee.name|default:"N/A" }}</td>
             <td>
@@ -53,12 +53,10 @@
             <td class="text-end">
               <button
                 type="button"
-                class="btn btn-sm btn-outline-primary edit-expense-btn"
-                data-edit-url="{% url 'expense_edit' exp.pk %}"
-                data-bs-toggle="modal"
-                data-bs-target="#dynamicExpenseEditModal"
+                class="btn btn-sm btn-outline-secondary view-expense-btn"
+                data-view-url="{% url 'expense_modal_details' exp.pk %}"
               >
-                <i class="bi bi-pencil"></i>
+                View
               </button>
               {% if user_is_owner %}
               <button
@@ -159,12 +157,9 @@
   </div>
 </div>
 
-{# Dynamic Edit Modal #}
-<div class="modal fade" id="dynamicExpenseEditModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="dynamicExpenseViewModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg">
-    <div class="modal-content" id="dynamicExpenseEditModalContent">
-      <!-- Loaded via fetch -->
-    </div>
+    <div class="modal-content" id="dynamicExpenseViewModalContent"></div>
   </div>
 </div>
 {% endblock %}
@@ -175,6 +170,212 @@ document.addEventListener("DOMContentLoaded", function () {
   const deleteModal = document.getElementById("deleteExpenseConfirmModal");
   const deleteTitleEl = document.getElementById("deleteExpenseTitle");
   const deleteForm = document.getElementById("deleteExpenseForm");
+  const expenseViewModal = document.getElementById("dynamicExpenseViewModal");
+  const expenseViewModalContent = document.getElementById("dynamicExpenseViewModalContent");
+
+  function normalizeModalState() {
+    const openModalCount = document.querySelectorAll('.modal.show').length;
+    const backdrops = Array.from(document.querySelectorAll('.modal-backdrop'));
+
+    if (openModalCount === 0) {
+      backdrops.forEach(backdrop => backdrop.remove());
+      document.body.classList.remove('modal-open');
+      document.body.style.removeProperty('overflow');
+      document.body.style.removeProperty('padding-right');
+      return;
+    }
+
+    document.body.classList.add('modal-open');
+    if (backdrops.length > openModalCount) {
+      backdrops.slice(openModalCount).forEach(backdrop => backdrop.remove());
+    }
+  }
+
+  function setupExpenseActionHandlers(modalElement) {
+    const actionModalElement = modalElement.querySelector('#expenseActionModal');
+    const submitButton = modalElement.querySelector('#expenseActionSubmitBtn');
+    if (!actionModalElement || !submitButton) return;
+
+    const actionModal = new bootstrap.Modal(actionModalElement, {
+      backdrop: false,
+      focus: true,
+    });
+
+    initializeDatePickers(actionModalElement);
+
+    const expenseId = modalElement.querySelector('#expenseActionExpenseId')?.value;
+    const actionTypeInput = modalElement.querySelector('#expenseActionType');
+    const modalTitle = modalElement.querySelector('#expenseActionModalLabel');
+    const reasonInput = modalElement.querySelector('#expenseActionReason');
+
+    const dateGroup = modalElement.querySelector('#expenseActionDateGroup');
+    const dateInput = modalElement.querySelector('#expenseActionDateDisplay');
+    const typeGroup = modalElement.querySelector('#expenseActionTypeGroup');
+    const typeInput = modalElement.querySelector('#expenseActionTypeSelect');
+    const amountGroup = modalElement.querySelector('#expenseActionAmountGroup');
+    const amountInput = modalElement.querySelector('#expenseActionAmount');
+    const employeeGroup = modalElement.querySelector('#expenseActionEmployeeGroup');
+    const employeeInput = modalElement.querySelector('#expenseActionEmployee');
+
+    function openExpenseActionModal(config) {
+      actionTypeInput.value = config.actionType;
+      modalTitle.textContent = config.title;
+      reasonInput.value = '';
+
+      dateGroup.style.display = config.showDate ? '' : 'none';
+      typeGroup.style.display = config.showType ? '' : 'none';
+      amountGroup.style.display = config.showAmount ? '' : 'none';
+      employeeGroup.style.display = config.showEmployee ? '' : 'none';
+
+      if (dateInput) dateInput.value = config.dateValue || '';
+      if (typeInput) typeInput.value = config.typeValue || '';
+      if (amountInput) amountInput.value = config.amountValue || '';
+      if (employeeInput) employeeInput.value = config.employeeValue || '';
+
+      actionModal.show();
+    }
+
+    modalElement.querySelectorAll('.edit-expense-date-btn').forEach(button => {
+      button.addEventListener('click', function() {
+        openExpenseActionModal({
+          actionType: 'date_change',
+          title: 'Edit expense date',
+          showDate: true,
+          showType: false,
+          showAmount: false,
+          showEmployee: false,
+          dateValue: this.getAttribute('data-date') || '',
+        });
+      });
+    });
+
+    modalElement.querySelectorAll('.edit-expense-type-btn').forEach(button => {
+      button.addEventListener('click', function() {
+        openExpenseActionModal({
+          actionType: 'type_change',
+          title: 'Edit expense type',
+          showDate: false,
+          showType: true,
+          showAmount: false,
+          showEmployee: false,
+          typeValue: this.getAttribute('data-type') || '',
+        });
+      });
+    });
+
+    modalElement.querySelectorAll('.edit-expense-amount-btn').forEach(button => {
+      button.addEventListener('click', function() {
+        openExpenseActionModal({
+          actionType: 'amount_change',
+          title: 'Edit expense amount',
+          showDate: false,
+          showType: false,
+          showAmount: true,
+          showEmployee: false,
+          amountValue: this.getAttribute('data-amount') || '',
+        });
+      });
+    });
+
+    modalElement.querySelectorAll('.edit-expense-employee-btn').forEach(button => {
+      button.addEventListener('click', function() {
+        openExpenseActionModal({
+          actionType: 'employee_change',
+          title: 'Edit expense employee',
+          showDate: false,
+          showType: false,
+          showAmount: false,
+          showEmployee: true,
+          employeeValue: this.getAttribute('data-employee-id') || '',
+        });
+      });
+    });
+
+    modalElement.querySelectorAll('.void-expense-btn').forEach(button => {
+      button.addEventListener('click', function() {
+        openExpenseActionModal({
+          actionType: 'void',
+          title: 'Void expense',
+          showDate: false,
+          showType: false,
+          showAmount: false,
+          showEmployee: false,
+        });
+      });
+    });
+
+    actionModalElement.addEventListener('hidden.bs.modal', function() {
+      normalizeModalState();
+    });
+
+    submitButton.onclick = function() {
+      const actionType = actionTypeInput.value;
+      const reason = reasonInput.value;
+
+      if (!expenseId) {
+        showToast('Expense ID is missing.', 'danger');
+        return;
+      }
+
+      if (actionType === 'date_change' && !dateInput.value) {
+        showToast('Please select a valid expense date.', 'warning');
+        return;
+      }
+      if (actionType === 'type_change' && !typeInput.value) {
+        showToast('Please select a valid expense type.', 'warning');
+        return;
+      }
+      if (actionType === 'amount_change') {
+        if (!amountInput.value || parseFloat(amountInput.value) <= 0) {
+          showToast('Please enter a valid amount.', 'warning');
+          return;
+        }
+      }
+      if (actionType === 'void') {
+        const confirmVoid = confirm('Void this expense? It will be excluded from expense totals.');
+        if (!confirmVoid) return;
+      }
+
+      const formData = new FormData();
+      formData.append('action_type', actionType);
+      formData.append('reason', reason);
+
+      if (actionType === 'date_change') formData.append('new_date', dateInput.value);
+      if (actionType === 'type_change') formData.append('new_type', typeInput.value);
+      if (actionType === 'amount_change') formData.append('new_amount', amountInput.value);
+      if (actionType === 'employee_change') formData.append('new_employee_id', employeeInput.value || '');
+
+      const csrfToken = modalElement.querySelector('[name=csrfmiddlewaretoken]')?.value || document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+      if (csrfToken) formData.append('csrfmiddlewaretoken', csrfToken);
+
+      fetch(`/expenses/${expenseId}/action/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': csrfToken,
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: formData,
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          showToast(data.message || 'Expense updated successfully.', 'success');
+          actionModal.hide();
+          fetch(`/expenses/${expenseId}/modal/`)
+            .then(response => response.text())
+            .then(html => {
+              expenseViewModalContent.innerHTML = html;
+              setupExpenseActionHandlers(expenseViewModalContent);
+            });
+        } else {
+          showToast(data.error || 'Failed to apply expense action.', 'danger');
+        }
+      })
+      .catch(error => {
+        showToast('Error applying expense action: ' + error.message, 'danger');
+      });
+    };
+  }
 
   deleteModal.addEventListener("show.bs.modal", function (event) {
     const button = event.relatedTarget;
@@ -185,18 +386,35 @@ document.addEventListener("DOMContentLoaded", function () {
     deleteTitleEl.textContent = expenseTitle;
   });
 
-  document.querySelectorAll(".edit-expense-btn").forEach(function (btn) {
+  document.querySelectorAll(".view-expense-btn").forEach(function (btn) {
     btn.addEventListener("click", function () {
-      const editUrl = btn.getAttribute("data-edit-url");
-      fetch(editUrl, { headers: { "X-Requested-With": "XMLHttpRequest" } })
-        .then((r) => r.text())
+      const url = btn.getAttribute("data-view-url");
+      fetch(url)
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          return response.text();
+        })
         .then((html) => {
-          document.getElementById("dynamicExpenseEditModalContent").innerHTML = html;
-          const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById("dynamicExpenseEditModal"));
+          expenseViewModalContent.innerHTML = html;
+          setupExpenseActionHandlers(expenseViewModalContent);
+          const modal = bootstrap.Modal.getOrCreateInstance(expenseViewModal);
           modal.show();
+        })
+        .catch((error) => {
+          showToast("Failed to load expense details: " + error.message, "danger");
         });
     });
   });
+
+  if (expenseViewModal) {
+    expenseViewModal.addEventListener('hidden.bs.modal', function(event) {
+      if (event.target !== expenseViewModal) return;
+      expenseViewModalContent.innerHTML = '';
+      normalizeModalState();
+    });
+  }
 
   // Auto-open Add Expense modal if form has errors
   const addFormErrors = document.querySelectorAll("#addExpenseModal .alert-danger");

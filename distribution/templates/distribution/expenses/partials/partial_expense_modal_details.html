@@ -1,0 +1,133 @@
+<div class="modal-header">
+    <h5 class="modal-title">Expense #{{ expense.id }}</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<div class="modal-body">
+    <div class="mb-3">
+        <div class="mb-2">
+            <strong>Status:</strong>
+            {% if expense.is_voided %}
+            <span class="badge bg-danger">Voided</span>
+            {% else %}
+            <span class="badge bg-success">Active</span>
+            {% endif %}
+        </div>
+        <div class="mb-2"><strong>Date:</strong> {{ expense.expense_date|date:"d/m/Y" }}</div>
+        <div class="mb-2"><strong>Employee:</strong> {{ expense.employee.name|default:"N/A" }}</div>
+        <div class="mb-2"><strong>Type:</strong> {{ expense.get_expense_type_display }}</div>
+        <div class="mb-2"><strong>Amount:</strong> PKR {{ expense.amount|floatformat:2 }}</div>
+        <div class="mb-0"><strong>Note:</strong> {{ expense.note|default:"-" }}</div>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        {% if expense.is_voided %}
+        <span class="text-muted small">Expense is voided. Actions are disabled.</span>
+        {% else %}
+        <button type="button" class="btn btn-sm btn-outline-primary edit-expense-date-btn" data-date="{{ expense.expense_date|date:'d/m/Y' }}">Edit Date</button>
+        <button type="button" class="btn btn-sm btn-outline-primary edit-expense-type-btn" data-type="{{ expense.expense_type }}">Edit Type</button>
+        <button type="button" class="btn btn-sm btn-outline-primary edit-expense-amount-btn" data-amount="{{ expense.amount }}">Edit Amount</button>
+        <button type="button" class="btn btn-sm btn-outline-primary edit-expense-employee-btn" data-employee-id="{{ expense.employee_id|default:'' }}">Edit Employee</button>
+        {% if user_is_owner %}
+        <button type="button" class="btn btn-sm btn-outline-danger void-expense-btn">Void Expense</button>
+        {% endif %}
+        {% endif %}
+    </div>
+
+    <hr>
+    <h6>Expense Actions Log</h6>
+    <div class="table-responsive">
+        <table class="table table-sm">
+            <thead class="table-light">
+                <tr>
+                    <th>Action</th>
+                    <th>Details</th>
+                    <th>Reason</th>
+                    <th>By</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for action in expense_actions %}
+                <tr>
+                    <td>{{ action.get_action_type_display }}</td>
+                    <td>
+                        {% if action.action_type == 'date_change' %}
+                            {{ action.old_date|date:"d/m/Y" }} -> {{ action.new_date|date:"d/m/Y" }}
+                        {% elif action.action_type == 'type_change' %}
+                            {{ action.old_type|title }} -> {{ action.new_type|title }}
+                        {% elif action.action_type == 'amount_change' %}
+                            PKR {{ action.old_amount|floatformat:2 }} -> PKR {{ action.new_amount|floatformat:2 }}
+                        {% elif action.action_type == 'employee_change' %}
+                            Employee changed (ID {{ action.old_employee_id|default:'-' }} -> {{ action.new_employee_id|default:'-' }})
+                        {% elif action.action_type == 'void' %}
+                            Expense voided
+                        {% endif %}
+                    </td>
+                    <td>{{ action.reason|default:'-' }}</td>
+                    <td>{% if action.created_by %}{{ action.created_by.user.username }}{% else %}-{% endif %}</td>
+                    <td>{{ action.created_at|date:"d/m/Y H:i" }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="text-center text-muted">No actions recorded yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="expenseActionModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="false" data-bs-focus="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="expenseActionModalLabel">Expense Action</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="expenseActionForm">
+                    {% csrf_token %}
+                    <input type="hidden" id="expenseActionExpenseId" value="{{ expense.id }}">
+                    <input type="hidden" id="expenseActionType" name="action_type">
+
+                    <div class="mb-3" id="expenseActionDateGroup" style="display: none;">
+                        <label class="form-label">Expense Date</label>
+                        <input type="text" id="expenseActionDateDisplay" class="form-control js-date-picker" placeholder="DD/MM/YYYY">
+                    </div>
+
+                    <div class="mb-3" id="expenseActionTypeGroup" style="display: none;">
+                        <label class="form-label">Expense Type</label>
+                        <select id="expenseActionTypeSelect" class="form-control">
+                            <option value="">-- Select type --</option>
+                            {% for value, label in expense_types %}
+                            <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3" id="expenseActionAmountGroup" style="display: none;">
+                        <label class="form-label">Amount (PKR)</label>
+                        <input type="number" id="expenseActionAmount" class="form-control" min="0.01" step="0.01">
+                    </div>
+
+                    <div class="mb-3" id="expenseActionEmployeeGroup" style="display: none;">
+                        <label class="form-label">Employee</label>
+                        <select id="expenseActionEmployee" class="form-control">
+                            <option value="">No employee</option>
+                            {% for employee in employees %}
+                            <option value="{{ employee.id }}">{{ employee.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Reason (Optional)</label>
+                        <textarea id="expenseActionReason" class="form-control" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="expenseActionSubmitBtn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>

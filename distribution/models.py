@@ -94,16 +94,16 @@ class Client(models.Model):
         from django.db.models.functions import Coalesce
         
         # Get total sale amount
-        total_sales = self.sale_set.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+        total_sales = self.sale_set.filter(is_voided=False).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
         
         # Get total returned value (price per packet × quantity returned for each item)
         total_returned = Decimal('0.00')
-        for sale in self.sale_set.all():
+        for sale in self.sale_set.filter(is_voided=False):
             for item in sale.saleitem_set.all():
                 total_returned += item.selling_price_per_packet * item.quantity_returned
         
         # Get total paid
-        total_paid = self.payment_set.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        total_paid = self.payment_set.filter(is_voided=False).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
         
         # Calculate: (total sales - returned value) - total paid + previous debt
         return total_sales - total_returned - total_paid + self.previous_debt
@@ -121,11 +121,16 @@ class Payment(models.Model):
     client = models.ForeignKey(Client, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     date = models.DateTimeField(default=timezone.now)
+    is_voided = models.BooleanField(default=False)
+    voided_at = models.DateTimeField(null=True, blank=True)
+    void_reason = models.TextField(blank=True)
+    voided_by = models.ForeignKey(UserProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name='voided_payments')
     mode = models.CharField(max_length=10, choices=PAYMENT_MODES)
     bank = models.CharField(max_length=100, blank=True, help_text="Required if mode is online")
 
     def __str__(self):
-        return f"{self.client.name} - {self.amount} ({self.get_mode_display()}) on {self.date.date()}"
+        status = 'VOID' if self.is_voided else f"{self.amount}"
+        return f"{self.client.name} - {status} ({self.get_mode_display()}) on {self.date.date()}"
 
     class Meta:
         ordering = ['-date']
@@ -134,6 +139,10 @@ class Payment(models.Model):
 class Sale(models.Model):
     client = models.ForeignKey(Client, on_delete=models.CASCADE)
     sale_date = models.DateTimeField(default=timezone.now)
+    is_voided = models.BooleanField(default=False)
+    voided_at = models.DateTimeField(null=True, blank=True)
+    void_reason = models.TextField(blank=True)
+    voided_by = models.ForeignKey(UserProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name='voided_sales')
     total_amount = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -141,9 +150,12 @@ class Sale(models.Model):
     )
 
     def __str__(self):
-        return f"Sale #{self.id} - {self.client.name} - {self.sale_date.date()} - PKR {self.total_amount}"
+        status = 'VOID' if self.is_voided else f'PKR {self.total_amount}'
+        return f"Sale #{self.id} - {self.client.name} - {self.sale_date.date()} - {status}"
 
     def calculate_total_profit(self):
+        if self.is_voided:
+            return Decimal('0.00')
         return sum(item.profit_per_packet * item.quantity_packets for item in self.saleitem_set.all())
 
     class Meta:
@@ -238,21 +250,49 @@ class StockAdditionItem(models.Model):
         ordering = ['id']
 
 
-# Track returns for sales and stock operations
-class Return(models.Model):
-    sale_item = models.ForeignKey(SaleItem, on_delete=models.CASCADE, null=True, blank=True)
+# Track all actions on sales: returns, quantity changes, price changes, item additions
+class SaleAction(models.Model):
+    """
+    Unified model to track all modifications to a sale and its items.
+    Supports: returns, quantity additions, price changes, and item additions.
+    """
+    ACTION_TYPES = [
+        ('return', 'Return Items'),
+        ('quantity_add', 'Add Quantity'),
+        ('price_change', 'Change Price'),
+        ('item_add', 'Add New Item'),
+        ('date_change', 'Change Sale Date'),
+        ('void', 'Void Sale'),
+    ]
+    
+    sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name='actions', null=True, blank=True)
+    sale_item = models.ForeignKey(SaleItem, on_delete=models.CASCADE, null=True, blank=True, related_name='actions')
     stock_addition = models.ForeignKey(StockAdditionHistory, on_delete=models.CASCADE, null=True, blank=True)
-    quantity_packets = models.IntegerField()
-    date_returned = models.DateTimeField(auto_now_add=True)
-    reason = models.TextField(blank=True)
+    
+    action_type = models.CharField(max_length=20, choices=ACTION_TYPES)
+    quantity_change = models.IntegerField(null=True, blank=True)  # Can be positive or negative
+    old_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    new_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    old_sale_date = models.DateTimeField(null=True, blank=True)
+    new_sale_date = models.DateTimeField(null=True, blank=True)
+    
+    reason = models.TextField(blank=True, help_text="Reason for the action (e.g., customer return reason)")
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(UserProfile, on_delete=models.SET_NULL, null=True, blank=True)
 
     def __str__(self):
-        if self.sale_item:
-            return f"Return from Sale Item #{self.sale_item.id} - {self.quantity_packets} packets"
-        return f"Return from Stock Addition #{self.stock_addition.id} - {self.quantity_packets} packets"
+        action_label = self.get_action_type_display()
+        if self.sale_item and self.sale:
+            return f"{action_label} - Sale Item #{self.sale_item.id} on Sale #{self.sale.id}"
+        if self.sale:
+            return f"{action_label} - Sale #{self.sale.id}"
+        if self.stock_addition:
+            return f"{action_label} - Stock Addition #{self.stock_addition.id}"
+        return action_label
 
     class Meta:
-        ordering = ['-date_returned']
+        ordering = ['-created_at']
+        verbose_name_plural = 'Sale Actions'
 
 
 class DeliveryEmployee(models.Model):
@@ -278,6 +318,38 @@ class DeliveryEmployee(models.Model):
         ordering = ['name']
 
 
+class PaymentAction(models.Model):
+    ACTION_TYPES = [
+        ('amount_change', 'Change Amount'),
+        ('date_change', 'Change Payment Date'),
+        ('mode_change', 'Change Payment Mode'),
+        ('void', 'Void Payment'),
+    ]
+
+    payment = models.ForeignKey(Payment, on_delete=models.CASCADE, related_name='actions')
+    action_type = models.CharField(max_length=20, choices=ACTION_TYPES)
+
+    old_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    new_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    old_date = models.DateTimeField(null=True, blank=True)
+    new_date = models.DateTimeField(null=True, blank=True)
+    old_mode = models.CharField(max_length=10, blank=True)
+    new_mode = models.CharField(max_length=10, blank=True)
+    old_bank = models.CharField(max_length=100, blank=True)
+    new_bank = models.CharField(max_length=100, blank=True)
+
+    reason = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(UserProfile, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.get_action_type_display()} - Payment #{self.payment_id}"
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name_plural = 'Payment Actions'
+
+
 class DeliveryExpense(models.Model):
     EXPENSE_TYPES = [
         ('bike_maintenance', 'Bike Maintenance'),
@@ -298,13 +370,52 @@ class DeliveryExpense(models.Model):
     note = models.TextField(blank=True)
     expense_date = models.DateField(default=timezone.localdate)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    is_voided = models.BooleanField(default=False)
+    voided_at = models.DateTimeField(null=True, blank=True)
+    void_reason = models.TextField(blank=True)
+    voided_by = models.ForeignKey(UserProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name='voided_expenses')
 
     def __str__(self):
         employee_name = self.employee.name if self.employee else 'N/A'
-        return f"{employee_name} - {self.get_expense_type_display()} - {self.amount}"
+        status = 'VOID' if self.is_voided else f'{self.amount}'
+        return f"{employee_name} - {self.get_expense_type_display()} - {status}"
 
     class Meta:
         ordering = ['-expense_date', '-id']
+
+
+class ExpenseAction(models.Model):
+    """Track all modifications to expenses: date, type, amount, employee changes and voids."""
+    ACTION_TYPES = [
+        ('date_change', 'Change Expense Date'),
+        ('type_change', 'Change Expense Type'),
+        ('amount_change', 'Change Amount'),
+        ('employee_change', 'Change Employee'),
+        ('void', 'Void Expense'),
+    ]
+
+    expense = models.ForeignKey(DeliveryExpense, on_delete=models.CASCADE, related_name='actions')
+    action_type = models.CharField(max_length=20, choices=ACTION_TYPES)
+
+    old_date = models.DateField(null=True, blank=True)
+    new_date = models.DateField(null=True, blank=True)
+    old_type = models.CharField(max_length=30, blank=True)
+    new_type = models.CharField(max_length=30, blank=True)
+    old_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    new_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    old_employee_id = models.IntegerField(null=True, blank=True)
+    new_employee_id = models.IntegerField(null=True, blank=True)
+
+    reason = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(UserProfile, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.get_action_type_display()} - Expense #{self.expense_id}"
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name_plural = 'Expense Actions'
 
 
 class SiteActivity(models.Model):

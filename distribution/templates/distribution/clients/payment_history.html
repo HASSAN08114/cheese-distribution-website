@@ -65,21 +65,22 @@
             </thead>
             <tbody>
                 {% for payment in payments %}
-                <tr data-payment-row="1">
+                <tr data-payment-row="1" class="{% if payment.is_voided %}table-danger{% elif payment.has_actions %}table-warning{% endif %}">
                     <td>{{ payment.client.name }}</td>
-                    <td>PKR {{ payment.amount|floatformat:2 }}</td>
+                    <td>
+                        PKR {{ payment.amount|floatformat:2 }}
+                        {% if payment.is_voided %}<span class="text-danger small ms-1">Voided</span>{% endif %}
+                    </td>
                     <td>{{ payment.get_mode_display }}</td>
                     <td>{% if payment.mode == 'online' %}{{ payment.bank }}{% else %}-{% endif %}</td>
                     <td data-iso-date="{{ payment.date|date:'c' }}">{{ payment.date|date:"d/m/Y H:i" }}</td>
                     <td class="text-end table-actions">
                         <button
                             type="button"
-                            class="btn btn-sm btn-outline-primary edit-payment-btn"
-                            data-edit-url="{% url 'payment_edit' payment.pk %}"
-                            data-bs-toggle="modal"
-                            data-bs-target="#dynamicPaymentEditModal"
+                            class="btn btn-sm btn-outline-secondary view-payment-btn"
+                            data-view-url="{% url 'payment_modal_details' payment.pk %}"
                         >
-                            <i class="bi bi-pencil"></i>
+                            View
                         </button>
                         {% if user_is_owner %}
                         <button
@@ -126,9 +127,9 @@
     </div>
 </div>
 
-<div class="modal fade" id="dynamicPaymentEditModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="dynamicPaymentViewModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
-        <div class="modal-content" id="dynamicPaymentEditModalContent"></div>
+        <div class="modal-content" id="dynamicPaymentViewModalContent"></div>
     </div>
 </div>
 
@@ -136,25 +137,16 @@
 
 {% block extra_js %}
 <script>
-// Payment History Filtering
 function parseDdMmDate(value) {
     if (!value) return null;
     const match = value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
     if (!match) return null;
-
-    const day = parseInt(match[1], 10);
-    const month = parseInt(match[2], 10);
-    const year = parseInt(match[3], 10);
-    const parsed = new Date(year, month - 1, day);
-
+    const parsed = new Date(parseInt(match[3], 10), parseInt(match[2], 10) - 1, parseInt(match[1], 10));
     if (
-        parsed.getFullYear() !== year ||
-        parsed.getMonth() !== month - 1 ||
-        parsed.getDate() !== day
-    ) {
-        return null;
-    }
-
+        parsed.getFullYear() !== parseInt(match[3], 10) ||
+        parsed.getMonth() !== parseInt(match[2], 10) - 1 ||
+        parsed.getDate() !== parseInt(match[1], 10)
+    ) return null;
     return parsed;
 }
 
@@ -162,29 +154,22 @@ function applyPaymentFilters() {
     const fromDate = document.getElementById('filterFromDate').value;
     const toDate = document.getElementById('filterToDate').value;
     const filterClient = document.getElementById('filterClient').value;
-    
-    const rows = document.querySelectorAll('tbody tr[data-payment-row]');
-    rows.forEach(row => {
-            const clientName = row.querySelector('td:first-child').textContent.trim();
-            const dateIso = row.querySelector('td:nth-child(5)').getAttribute('data-iso-date');
-            const paymentDate = new Date(dateIso);
-            
-            const fromDateObj = parseDdMmDate(fromDate);
-            const toDateObj = parseDdMmDate(toDate);
-            if (toDateObj) {
-                toDateObj.setHours(23, 59, 59, 999);
-            }
-            
-            let show = true;
-            
-            // Apply date filter
-            if (fromDateObj && paymentDate < fromDateObj) show = false;
-            if (toDateObj && paymentDate > toDateObj) show = false;
-            
-            // Apply client filter
-            if (filterClient && clientName !== filterClient) show = false;
-            
-            row.style.display = show ? '' : 'none';
+
+    document.querySelectorAll('tbody tr[data-payment-row]').forEach(row => {
+        const clientName = row.querySelector('td:first-child').textContent.trim();
+        const dateIso = row.querySelector('td:nth-child(5)').getAttribute('data-iso-date');
+        const paymentDate = new Date(dateIso);
+
+        const fromDateObj = parseDdMmDate(fromDate);
+        const toDateObj = parseDdMmDate(toDate);
+        if (toDateObj) toDateObj.setHours(23, 59, 59, 999);
+
+        let show = true;
+        if (fromDateObj && paymentDate < fromDateObj) show = false;
+        if (toDateObj && paymentDate > toDateObj) show = false;
+        if (filterClient && clientName !== filterClient) show = false;
+
+        row.style.display = show ? '' : 'none';
     });
 }
 
@@ -192,13 +177,229 @@ function resetPaymentFilters() {
     document.getElementById('filterFromDate').value = '';
     document.getElementById('filterToDate').value = '';
     document.getElementById('filterClient').value = '';
-    
-    const rows = document.querySelectorAll('tbody tr[data-payment-row]');
-    rows.forEach(row => row.style.display = '');
+    document.querySelectorAll('tbody tr[data-payment-row]').forEach(row => {
+        row.style.display = '';
+    });
 }
 
-// Attach filter event listeners
 document.addEventListener('DOMContentLoaded', function() {
+    const paymentViewModal = document.getElementById('dynamicPaymentViewModal');
+    const paymentViewModalContent = document.getElementById('dynamicPaymentViewModalContent');
+
+    function normalizeModalState() {
+        const openModalCount = document.querySelectorAll('.modal.show').length;
+        const backdrops = Array.from(document.querySelectorAll('.modal-backdrop'));
+
+        if (openModalCount === 0) {
+            backdrops.forEach(backdrop => backdrop.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('padding-right');
+            return;
+        }
+
+        document.body.classList.add('modal-open');
+        if (backdrops.length > openModalCount) {
+            backdrops.slice(openModalCount).forEach(backdrop => backdrop.remove());
+        }
+    }
+
+    function setupPaymentActionHandlers(modalElement) {
+        const actionModalElement = modalElement.querySelector('#paymentActionModal');
+        const submitButton = modalElement.querySelector('#paymentActionSubmitBtn');
+        if (!actionModalElement || !submitButton) return;
+
+        const actionModal = new bootstrap.Modal(actionModalElement, {
+            backdrop: false,
+            focus: true,
+        });
+
+        initializeDatePickers(actionModalElement);
+
+        const actionTypeInput = modalElement.querySelector('#paymentActionType');
+        const modalTitle = modalElement.querySelector('#paymentActionModalLabel');
+        const reasonInput = modalElement.querySelector('#paymentActionReason');
+        const amountGroup = modalElement.querySelector('#paymentActionAmountGroup');
+        const amountInput = modalElement.querySelector('#paymentActionAmount');
+        const dateGroup = modalElement.querySelector('#paymentActionDateGroup');
+        const dateInput = modalElement.querySelector('#paymentActionDateDisplay');
+        const modeGroup = modalElement.querySelector('#paymentActionModeGroup');
+        const modeInput = modalElement.querySelector('#paymentActionMode');
+        const bankGroup = modalElement.querySelector('#paymentActionBankGroup');
+        const bankInput = modalElement.querySelector('#paymentActionBank');
+
+        function toggleBankGroup() {
+            if (!modeInput || !bankGroup || !modeGroup) return;
+            if (modeGroup.style.display === 'none') {
+                bankGroup.style.display = 'none';
+                return;
+            }
+            bankGroup.style.display = modeInput.value === 'online' ? '' : 'none';
+            if (modeInput.value !== 'online' && bankInput) bankInput.value = '';
+        }
+
+        if (modeInput) modeInput.addEventListener('change', toggleBankGroup);
+
+        function openPaymentActionModal(config) {
+            actionTypeInput.value = config.actionType;
+            modalTitle.textContent = config.title;
+            reasonInput.value = '';
+
+            amountGroup.style.display = config.showAmount ? '' : 'none';
+            dateGroup.style.display = config.showDate ? '' : 'none';
+            modeGroup.style.display = config.showMode ? '' : 'none';
+            bankGroup.style.display = config.showBank ? '' : 'none';
+
+            if (amountInput) amountInput.value = config.amountValue || '';
+            if (dateInput) dateInput.value = config.dateValue || '';
+            if (modeInput) modeInput.value = config.modeValue || '';
+            if (bankInput) bankInput.value = config.bankValue || '';
+
+            toggleBankGroup();
+            actionModal.show();
+        }
+
+        modalElement.querySelectorAll('.edit-payment-amount-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                openPaymentActionModal({
+                    actionType: 'amount_change',
+                    title: 'Edit payment amount',
+                    showAmount: true,
+                    showDate: false,
+                    showMode: false,
+                    showBank: false,
+                    amountValue: this.getAttribute('data-amount') || '',
+                });
+            });
+        });
+
+        modalElement.querySelectorAll('.edit-payment-date-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                openPaymentActionModal({
+                    actionType: 'date_change',
+                    title: 'Edit payment date and time',
+                    showAmount: false,
+                    showDate: true,
+                    showMode: false,
+                    showBank: false,
+                    dateValue: this.getAttribute('data-date') || '',
+                });
+            });
+        });
+
+        modalElement.querySelectorAll('.edit-payment-mode-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                openPaymentActionModal({
+                    actionType: 'mode_change',
+                    title: 'Edit payment mode',
+                    showAmount: false,
+                    showDate: false,
+                    showMode: true,
+                    showBank: true,
+                    modeValue: this.getAttribute('data-mode') || '',
+                    bankValue: this.getAttribute('data-bank') || '',
+                });
+            });
+        });
+
+        modalElement.querySelectorAll('.void-payment-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                openPaymentActionModal({
+                    actionType: 'void',
+                    title: 'Void payment',
+                    showAmount: false,
+                    showDate: false,
+                    showMode: false,
+                    showBank: false,
+                });
+            });
+        });
+
+        actionModalElement.addEventListener('shown.bs.modal', function() {
+            actionModalElement.style.zIndex = '1070';
+        });
+
+        actionModalElement.addEventListener('hidden.bs.modal', function() {
+            normalizeModalState();
+        });
+
+        submitButton.onclick = function() {
+            const paymentId = modalElement.querySelector('#paymentActionPaymentId').value;
+            const actionType = actionTypeInput.value;
+            const reason = reasonInput.value;
+
+            if (actionType === 'amount_change') {
+                if (!amountInput.value || parseFloat(amountInput.value) <= 0) {
+                    showToast('Please enter a valid amount.', 'warning');
+                    return;
+                }
+            }
+            if (actionType === 'date_change' && !dateInput.value) {
+                showToast('Please select a valid payment date and time.', 'warning');
+                return;
+            }
+            if (actionType === 'mode_change') {
+                if (!modeInput.value) {
+                    showToast('Please select a valid payment mode.', 'warning');
+                    return;
+                }
+                if (modeInput.value === 'online' && !bankInput.value.trim()) {
+                    showToast('Bank/Wallet is required for online mode.', 'warning');
+                    return;
+                }
+            }
+            if (actionType === 'void') {
+                const confirmVoid = confirm('Void this payment? It will be excluded from balance calculations.');
+                if (!confirmVoid) return;
+            }
+
+            const formData = new FormData();
+            formData.append('action_type', actionType);
+            formData.append('reason', reason);
+
+            if (actionType === 'amount_change') {
+                formData.append('new_amount', amountInput.value);
+            }
+            if (actionType === 'date_change') {
+                formData.append('new_date', dateInput.value);
+            }
+            if (actionType === 'mode_change') {
+                formData.append('new_mode', modeInput.value);
+                formData.append('new_bank', bankInput.value || '');
+            }
+
+            const csrfToken = modalElement.querySelector('[name=csrfmiddlewaretoken]')?.value || document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+            if (csrfToken) formData.append('csrfmiddlewaretoken', csrfToken);
+
+            fetch(`/payments/${paymentId}/actions/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: formData,
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message || 'Payment updated successfully.', 'success');
+                    actionModal.hide();
+                    fetch(`/payments/${paymentId}/modal/`)
+                        .then(response => response.text())
+                        .then(html => {
+                            paymentViewModalContent.innerHTML = html;
+                            setupPaymentActionHandlers(paymentViewModalContent);
+                        });
+                } else {
+                    showToast(data.error || 'Failed to apply payment action.', 'danger');
+                }
+            })
+            .catch(error => {
+                showToast('Error applying payment action: ' + error.message, 'danger');
+            });
+        };
+    }
+
     document.getElementById('filterFromDate').addEventListener('input', applyPaymentFilters);
     document.getElementById('filterToDate').addEventListener('input', applyPaymentFilters);
     document.getElementById('filterClient').addEventListener('change', applyPaymentFilters);
@@ -206,7 +407,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const deleteModal = document.getElementById('deletePaymentConfirmModal');
     const deleteForm = document.getElementById('deletePaymentForm');
     const deleteTitle = document.getElementById('deletePaymentTitle');
-
     if (deleteModal && deleteForm && deleteTitle) {
         deleteModal.addEventListener('show.bs.modal', function(event) {
             const button = event.relatedTarget;
@@ -216,82 +416,35 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    function bindPaymentEditModalForm() {
-        const container = document.getElementById('dynamicPaymentEditModalContent');
-        if (!container) return;
-
-        const form = container.querySelector('form');
-        if (!form) return;
-
-        initializeDatePickers(container);
-
-        const modeSelect = container.querySelector('select[name="mode"]');
-        const bankField = container.querySelector('#edit-bank-field');
-
-        if (modeSelect && bankField) {
-            const toggleBankField = function() {
-                if (modeSelect.value === 'online') {
-                    bankField.classList.remove('hidden-element');
-                } else {
-                    bankField.classList.add('hidden-element');
-                    const bankInput = bankField.querySelector('input[name="bank"]');
-                    if (bankInput) bankInput.value = '';
-                }
-            };
-            modeSelect.addEventListener('change', toggleBankField);
-            toggleBankField();
-        }
-
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
-
-            const submitBtn = form.querySelector('button[type="submit"]');
-            if (submitBtn) submitBtn.disabled = true;
-
-            fetch(form.action, {
-                method: 'POST',
-                body: new FormData(form),
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value,
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('dynamicPaymentEditModal'));
-                    if (modal) modal.hide();
-                    location.reload();
-                    return;
-                }
-
-                if (data.html) {
-                    container.innerHTML = data.html;
-                    bindPaymentEditModalForm();
-                }
-            })
-            .catch(() => {
-                showToast('Failed to update payment.', 'danger');
-            })
-            .finally(() => {
-                if (submitBtn) submitBtn.disabled = false;
-            });
-        });
-    }
-
-    document.querySelectorAll('.edit-payment-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            const editUrl = btn.getAttribute('data-edit-url');
-            fetch(editUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-                .then(response => response.text())
+    document.querySelectorAll('.view-payment-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const url = button.getAttribute('data-view-url');
+            fetch(url)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.text();
+                })
                 .then(html => {
-                    document.getElementById('dynamicPaymentEditModalContent').innerHTML = html;
-                    bindPaymentEditModalForm();
-                    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('dynamicPaymentEditModal'));
+                    paymentViewModalContent.innerHTML = html;
+                    setupPaymentActionHandlers(paymentViewModalContent);
+                    const modal = bootstrap.Modal.getOrCreateInstance(paymentViewModal);
                     modal.show();
+                })
+                .catch(error => {
+                    showToast('Failed to load payment details: ' + error.message, 'danger');
                 });
         });
     });
+
+    if (paymentViewModal) {
+        paymentViewModal.addEventListener('hidden.bs.modal', function(event) {
+            if (event.target !== paymentViewModal) return;
+            paymentViewModalContent.innerHTML = '';
+            normalizeModalState();
+        });
+    }
 });
 </script>
 {% endblock %}

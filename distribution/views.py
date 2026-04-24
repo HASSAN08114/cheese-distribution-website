@@ -1,10 +1,10 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib import messages
 from django.conf import settings
 from django.db import models
-from django.db.models import Sum, Q, F, DecimalField, Subquery, OuterRef
+from django.db.models import Sum, Q, F, DecimalField, Subquery, OuterRef, Exists
 from django.db import transaction, connections
 from django.utils import timezone
 from datetime import datetime, timedelta
@@ -17,12 +17,13 @@ import os
 import json
 from django.core.management import call_command
 from .models import (
-    Manufacturer, CheeseProduct, Client, Sale, SaleItem, UserProfile, Payment,
-    DeliveryEmployee, DeliveryExpense, SiteActivity,
+    Manufacturer, CheeseProduct, Client, Sale, SaleItem, SaleAction, UserProfile, Payment, PaymentAction,
+    DeliveryEmployee, DeliveryExpense, ExpenseAction, SiteActivity,
 )
 from .forms import (
     ManufacturerForm, CheeseProductForm, ClientForm,
     SaleItemForm, SaleItemFormSet, UserForm, UserRoleForm,
+    UserPasswordChangeForm,
     PaymentForm, DeliveryEmployeeForm, DeliveryExpenseForm,
 )
 from .forms import CheeseTypeForm
@@ -37,6 +38,128 @@ from .models import CheeseType
 
 # AJAX endpoint to process return for sale item
 from django.views.decorators.http import require_POST
+
+
+def _get_sale_action_actor(request):
+    profile = getattr(request.user, 'userprofile', None)
+    return profile if profile and hasattr(profile, 'pk') else None
+
+
+def _record_sale_action(
+    *,
+    sale,
+    action_type,
+    sale_item=None,
+    quantity_change=None,
+    old_price=None,
+    new_price=None,
+    old_sale_date=None,
+    new_sale_date=None,
+    reason='',
+    created_by=None,
+    stock_addition=None,
+):
+    return SaleAction.objects.create(
+        sale=sale,
+        sale_item=sale_item,
+        stock_addition=stock_addition,
+        action_type=action_type,
+        quantity_change=quantity_change,
+        old_price=old_price,
+        new_price=new_price,
+        old_sale_date=old_sale_date,
+        new_sale_date=new_sale_date,
+        reason=reason,
+        created_by=created_by,
+    )
+
+
+def _parse_ddmmyyyy_datetime(value):
+    """Parse DD/MM/YYYY HH:MM or ISO datetime string into aware datetime."""
+    if not value:
+        raise ValueError('Datetime is required.')
+
+    raw_value = value.strip()
+    parsed = None
+
+    try:
+        parsed = datetime.fromisoformat(raw_value)
+    except ValueError:
+        parsed = datetime.strptime(raw_value, '%d/%m/%Y %H:%M')
+
+    if timezone.is_naive(parsed):
+        parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
+
+    return parsed
+
+
+def _update_sale_total(sale):
+    total_amount = Decimal('0.00')
+    for item in sale.saleitem_set.all():
+        total_amount += item.selling_price_per_packet * item.quantity_packets
+        total_amount -= item.selling_price_per_packet * item.quantity_returned
+    sale.total_amount = total_amount
+    sale.save(update_fields=['total_amount'])
+    return total_amount
+
+
+class SaleStockError(Exception):
+    pass
+
+
+def _normalize_sale_forms(formset):
+    valid_forms = [f for f in formset if f.cleaned_data and not f.cleaned_data.get('DELETE', False)]
+    if not valid_forms:
+        raise SaleStockError('Please add at least one item to the sale.')
+    return valid_forms
+
+
+def _reserve_sale_product_stock(product, quantity, *, allow_void=False):
+    locked_product = CheeseProduct.objects.select_for_update().get(pk=product.pk)
+    if quantity > locked_product.available_quantity_packets and not allow_void:
+        raise SaleStockError(
+            f'Insufficient stock for {locked_product}. Requested: {quantity}, available: {locked_product.available_quantity_packets}.'
+        )
+    return locked_product
+
+
+def _create_sale_from_valid_forms(*, client, sale_datetime, valid_forms, request=None):
+    with transaction.atomic():
+        sale = Sale.objects.create(
+            client=client,
+            total_amount=Decimal('0.00'),
+            sale_date=sale_datetime,
+        )
+
+        total_amount = Decimal('0.00')
+        created_items = []
+
+        try:
+            for form in valid_forms:
+                cheese_product = form.cleaned_data['cheese_product']
+                quantity_packets = int(form.cleaned_data['quantity_packets'])
+                selling_price_per_packet = form.cleaned_data['selling_price_per_packet']
+
+                locked_product = _reserve_sale_product_stock(cheese_product, quantity_packets)
+                sale_item = SaleItem.objects.create(
+                    sale=sale,
+                    cheese_product=locked_product,
+                    quantity_packets=quantity_packets,
+                    selling_price_per_packet=selling_price_per_packet,
+                )
+                created_items.append((sale_item, locked_product, quantity_packets))
+                locked_product.available_quantity_packets -= quantity_packets
+                locked_product.save(update_fields=['available_quantity_packets'])
+                total_amount += selling_price_per_packet * quantity_packets
+
+            sale.total_amount = total_amount
+            sale.save(update_fields=['total_amount'])
+            if request is not None:
+                SiteActivity.update_activity(f'Sale created for {client.name}')
+            return sale
+        except Exception:
+            sale.delete()
+            raise
 
 
 def _resolve_sale_datetime(sale_date_str):
@@ -116,7 +239,10 @@ def return_sale_item(request):
     
     try:
         item = get_object_or_404(SaleItem, pk=item_id)
-        quantity = Decimal(quantity)
+        if item.sale.is_voided:
+            del request.session[dedup_key]
+            return JsonResponse({'success': False, 'error': 'This sale has been voided.'})
+        quantity = int(quantity)
         
         # Check if quantity is valid
         if quantity <= 0:
@@ -129,8 +255,15 @@ def return_sale_item(request):
             del request.session[dedup_key]
             return JsonResponse({'success': False, 'error': f'Cannot return {quantity} packets. Only {available} available to return.'})
         
-        # Create return record
-        Return.objects.create(sale_item=item, quantity_packets=quantity, reason=reason)
+        # Create sale action record
+        _record_sale_action(
+            sale=item.sale,
+            action_type='return',
+            sale_item=item,
+            quantity_change=-quantity,
+            reason=reason,
+            created_by=_get_sale_action_actor(request),
+        )
         
         # Update SaleItem quantity_returned
         item.quantity_returned += quantity
@@ -140,6 +273,8 @@ def return_sale_item(request):
         # Update cheese product stock
         item.cheese_product.available_quantity_packets += quantity
         item.cheese_product.save()
+
+        _update_sale_total(item.sale)
         
         SiteActivity.update_activity(f'Returned {quantity} packets of {item.cheese_product} from Sale #{item.sale.id}')
         
@@ -168,14 +303,24 @@ def return_all_sale_items(request):
     
     try:
         sale = get_object_or_404(Sale, pk=sale_id)
+        if sale.is_voided:
+            request.session[dedup_key] = False
+            return JsonResponse({'success': False, 'error': 'This sale has been voided.'})
         
         for item in sale.saleitem_set.all():
             # Only return items that haven't been fully returned
             if item.quantity_returned < item.quantity_packets:
                 quantity_to_return = item.quantity_packets - item.quantity_returned
                 
-                # Create return record
-                Return.objects.create(sale_item=item, quantity_packets=quantity_to_return, reason=reason)
+                # Create sale action record
+                _record_sale_action(
+                    sale=sale,
+                    action_type='return',
+                    sale_item=item,
+                    quantity_change=-quantity_to_return,
+                    reason=reason,
+                    created_by=_get_sale_action_actor(request),
+                )
                 
                 # Update SaleItem
                 item.quantity_returned = item.quantity_packets
@@ -185,6 +330,7 @@ def return_all_sale_items(request):
                 # Update cheese product stock
                 item.cheese_product.available_quantity_packets += quantity_to_return
                 item.cheese_product.save()
+        _update_sale_total(sale)
         
         SiteActivity.update_activity(f'All items returned from Sale #{sale.id}')
         
@@ -195,6 +341,237 @@ def return_all_sale_items(request):
     except Exception as e:
         if dedup_key in request.session:
             del request.session[dedup_key]
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+@require_POST
+def sale_action_apply(request, pk):
+    sale = get_object_or_404(Sale, pk=pk)
+    action_type = request.POST.get('action_type', '').strip()
+    reason = request.POST.get('reason', '').strip()
+    created_by = _get_sale_action_actor(request)
+
+    if sale.is_voided and action_type != 'void':
+        return JsonResponse({'success': False, 'error': 'This sale has already been voided.'})
+
+    try:
+        with transaction.atomic():
+            sale = Sale.objects.select_for_update().get(pk=pk)
+
+            if action_type == 'return':
+                item_id = request.POST.get('item_id')
+                quantity = int(request.POST.get('quantity', '0'))
+                item = get_object_or_404(SaleItem, pk=item_id, sale=sale)
+
+                if quantity <= 0:
+                    return JsonResponse({'success': False, 'error': 'Return quantity must be greater than 0.'})
+
+                available = item.quantity_packets - item.quantity_returned
+                if quantity > available:
+                    return JsonResponse({'success': False, 'error': f'Cannot return {quantity} packets. Only {available} available to return.'})
+
+                _record_sale_action(
+                    sale=sale,
+                    action_type='return',
+                    sale_item=item,
+                    quantity_change=-quantity,
+                    reason=reason,
+                    created_by=created_by,
+                )
+                item.quantity_returned += quantity
+                item.modified = True
+                item.save()
+                item.cheese_product.available_quantity_packets += quantity
+                item.cheese_product.save()
+                _update_sale_total(sale)
+                SiteActivity.update_activity(f'Returned {quantity} packets of {item.cheese_product} from Sale #{sale.id}')
+                return JsonResponse({'success': True, 'message': f'Successfully returned {quantity} packets.'})
+
+            if action_type == 'return_all':
+                updated_any = False
+
+                for item in sale.saleitem_set.select_related('cheese_product').all():
+                    available_to_return = item.quantity_packets - item.quantity_returned
+                    if available_to_return <= 0:
+                        continue
+
+                    _record_sale_action(
+                        sale=sale,
+                        action_type='return',
+                        sale_item=item,
+                        quantity_change=-available_to_return,
+                        reason=reason,
+                        created_by=created_by,
+                    )
+                    item.quantity_returned = item.quantity_packets
+                    item.modified = True
+                    item.save(update_fields=['quantity_returned', 'modified'])
+
+                    locked_product = _reserve_sale_product_stock(item.cheese_product, 0, allow_void=True)
+                    locked_product.available_quantity_packets += available_to_return
+                    locked_product.save(update_fields=['available_quantity_packets'])
+                    updated_any = True
+
+                if not updated_any:
+                    return JsonResponse({'success': False, 'error': 'All items are already fully returned.'})
+
+                _update_sale_total(sale)
+                SiteActivity.update_activity(f'All items returned from Sale #{sale.id}')
+                return JsonResponse({'success': True, 'message': 'All items have been returned.'})
+
+            if action_type == 'quantity_add':
+                item_id = request.POST.get('item_id')
+                quantity = int(request.POST.get('quantity', '0'))
+                item = get_object_or_404(SaleItem, pk=item_id, sale=sale)
+                locked_product = _reserve_sale_product_stock(item.cheese_product, quantity)
+
+                if quantity <= 0:
+                    return JsonResponse({'success': False, 'error': 'Quantity must be greater than 0.'})
+
+                _record_sale_action(
+                    sale=sale,
+                    action_type='quantity_add',
+                    sale_item=item,
+                    quantity_change=quantity,
+                    reason=reason,
+                    created_by=created_by,
+                )
+                item.quantity_packets += quantity
+                item.modified = True
+                item.save()
+                locked_product.available_quantity_packets -= quantity
+                locked_product.save(update_fields=['available_quantity_packets'])
+                _update_sale_total(sale)
+                SiteActivity.update_activity(f'Added {quantity} packets to Sale #{sale.id} item {item.cheese_product}')
+                return JsonResponse({'success': True, 'message': f'Added {quantity} packets successfully.'})
+
+            if action_type == 'price_change':
+                item_id = request.POST.get('item_id')
+                new_price = Decimal(request.POST.get('new_price', '0'))
+                item = get_object_or_404(SaleItem, pk=item_id, sale=sale)
+
+                if new_price <= 0:
+                    return JsonResponse({'success': False, 'error': 'Price must be greater than 0.'})
+
+                old_price = item.selling_price_per_packet
+                _record_sale_action(
+                    sale=sale,
+                    action_type='price_change',
+                    sale_item=item,
+                    old_price=old_price,
+                    new_price=new_price,
+                    reason=reason,
+                    created_by=created_by,
+                )
+                item.selling_price_per_packet = new_price
+                item.modified = True
+                item.save()
+                _update_sale_total(sale)
+                SiteActivity.update_activity(f'Changed price for {item.cheese_product} on Sale #{sale.id}')
+                return JsonResponse({'success': True, 'message': f'Packet price updated to PKR {new_price}.'})
+
+            if action_type == 'date_change':
+                new_sale_date_value = request.POST.get('new_sale_date', '').strip()
+                if not new_sale_date_value:
+                    return JsonResponse({'success': False, 'error': 'Please provide a new sale date and time.'})
+
+                try:
+                    new_sale_date = _parse_ddmmyyyy_datetime(new_sale_date_value)
+                except ValueError:
+                    return JsonResponse({'success': False, 'error': 'Invalid date format. Please use DD/MM/YYYY HH:MM.'})
+
+                old_sale_date = sale.sale_date
+                if old_sale_date == new_sale_date:
+                    return JsonResponse({'success': False, 'error': 'New sale date must be different from current date.'})
+
+                date_error = _validate_sale_date_not_before_client_creation(sale.client, new_sale_date)
+                if date_error:
+                    return JsonResponse({'success': False, 'error': date_error})
+
+                sale.sale_date = new_sale_date
+                sale.save(update_fields=['sale_date'])
+
+                _record_sale_action(
+                    sale=sale,
+                    action_type='date_change',
+                    old_sale_date=old_sale_date,
+                    new_sale_date=new_sale_date,
+                    reason=reason,
+                    created_by=created_by,
+                )
+                SiteActivity.update_activity(f'Changed sale date for Sale #{sale.id}')
+                return JsonResponse({'success': True, 'message': 'Sale date updated successfully.'})
+
+            if action_type == 'item_add':
+                product_id = request.POST.get('product_id')
+                quantity = int(request.POST.get('quantity', '0'))
+                selling_price = Decimal(request.POST.get('selling_price_per_packet', '0'))
+                product = get_object_or_404(CheeseProduct, pk=product_id)
+                locked_product = _reserve_sale_product_stock(product, quantity)
+
+                if quantity <= 0:
+                    return JsonResponse({'success': False, 'error': 'Quantity must be greater than 0.'})
+                if selling_price <= 0:
+                    return JsonResponse({'success': False, 'error': 'Selling price must be greater than 0.'})
+
+                item = SaleItem.objects.create(
+                    sale=sale,
+                    cheese_product=locked_product,
+                    quantity_packets=quantity,
+                    selling_price_per_packet=selling_price,
+                )
+                locked_product.available_quantity_packets -= quantity
+                locked_product.save(update_fields=['available_quantity_packets'])
+
+                _record_sale_action(
+                    sale=sale,
+                    action_type='item_add',
+                    sale_item=item,
+                    quantity_change=quantity,
+                    new_price=selling_price,
+                    reason=reason,
+                    created_by=created_by,
+                )
+                _update_sale_total(sale)
+                SiteActivity.update_activity(f'Added {quantity} packets of {product} to Sale #{sale.id}')
+                return JsonResponse({'success': True, 'message': f'Added {product} to the sale.'})
+
+            if action_type == 'void':
+                if sale.is_voided:
+                    return JsonResponse({'success': False, 'error': 'This sale has already been voided.'})
+
+                voided_items = []
+
+                for item in sale.saleitem_set.select_related('cheese_product').all():
+                    available_to_restore = item.quantity_packets - item.quantity_returned
+                    if available_to_restore > 0:
+                        locked_product = _reserve_sale_product_stock(item.cheese_product, 0, allow_void=True)
+                        locked_product.available_quantity_packets += available_to_restore
+                        locked_product.save(update_fields=['available_quantity_packets'])
+                    item.quantity_returned = item.quantity_packets
+                    item.modified = True
+                    item.save(update_fields=['quantity_returned', 'modified'])
+                    voided_items.append(item.id)
+
+                sale.is_voided = True
+                sale.voided_at = timezone.now()
+                sale.void_reason = reason
+                sale.voided_by = created_by
+                _update_sale_total(sale)
+                sale.save(update_fields=['is_voided', 'voided_at', 'void_reason', 'voided_by', 'total_amount'])
+
+                _record_sale_action(
+                    sale=sale,
+                    action_type='void',
+                    reason=reason,
+                    created_by=created_by,
+                )
+                SiteActivity.update_activity(f'Sale #{sale.id} voided')
+                return JsonResponse({'success': True, 'message': 'Sale voided successfully.'})
+
+            return JsonResponse({'success': False, 'error': 'Unsupported sale action.'})
+    except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
 
 # AJAX endpoint to add stock to a product
@@ -365,6 +742,8 @@ from django.views.decorators.http import require_GET
 def sale_modal_details(request, pk):
     sale = get_object_or_404(Sale, pk=pk)
     sale_items = sale.saleitem_set.select_related('cheese_product').all()
+    sale_actions = sale.actions.select_related('sale_item', 'created_by').all()
+    products = CheeseProduct.objects.select_related('manufacturer', 'type').all()
     
     # Add total price for each item
     for item in sale_items:
@@ -374,10 +753,12 @@ def sale_modal_details(request, pk):
     return render(request, 'distribution/sales/partials/partial_sale_modal_details.html', {
         'sale': sale,
         'sale_items': sale_items,
+        'sale_actions': sale_actions,
+        'products': products,
         'total_profit': total_profit
     })
 
-from .models import StockAdditionHistory, Return
+from .models import StockAdditionHistory
 
 
 @login_required
@@ -483,7 +864,7 @@ def dashboard(request):
     # Calculate today's expenses
     today = timezone.localdate()
     from django.db.models import Sum
-    daily_expenses = DeliveryExpense.objects.filter(expense_date=today).aggregate(total=Sum('amount'))['total'] or 0
+    daily_expenses = DeliveryExpense.objects.filter(expense_date=today, is_voided=False).aggregate(total=Sum('amount'))['total'] or 0
 
     context = {
         'user_is_owner': user_is_owner,
@@ -542,9 +923,9 @@ def get_client_analytics(request):
     for client in clients:
         # Filter sales by date range for period-based metrics
         if custom_start_dt and custom_end_dt:
-            client_sales = Sale.objects.filter(client=client, sale_date__range=[custom_start_dt, custom_end_dt])
+            client_sales = Sale.objects.filter(client=client, is_voided=False, sale_date__range=[custom_start_dt, custom_end_dt])
         elif start_date and end_date:
-            client_sales = Sale.objects.filter(client=client, sale_date__date__range=[start_date, end_date])
+            client_sales = Sale.objects.filter(client=client, is_voided=False, sale_date__date__range=[start_date, end_date])
         else:
             client_sales = Sale.objects.filter(client=client)
 
@@ -565,11 +946,11 @@ def get_client_analytics(request):
             # DEBT IS PERIOD-BASED: Sales in period - Payments in period
             # Filter payments by date range for period-based debt calculation
             if custom_start_dt and custom_end_dt:
-                client_payments = Payment.objects.filter(client=client, date__range=[custom_start_dt, custom_end_dt])
+                client_payments = Payment.objects.filter(client=client, is_voided=False, date__range=[custom_start_dt, custom_end_dt])
             elif start_date and end_date:
-                client_payments = Payment.objects.filter(client=client, date__date__range=[start_date, end_date])
+                client_payments = Payment.objects.filter(client=client, is_voided=False, date__date__range=[start_date, end_date])
             else:
-                client_payments = Payment.objects.filter(client=client)
+                client_payments = Payment.objects.filter(client=client, is_voided=False)
             
             # Calculate period-based payments
             period_payments = client_payments.aggregate(
@@ -604,10 +985,10 @@ def get_client_analytics(request):
     clients_all = Client.objects.all()
     total_outstanding = Decimal('0.00')
     for client in clients_all:
-        client_sales = Sale.objects.filter(client=client)
+        client_sales = Sale.objects.filter(client=client, is_voided=False)
         if client_sales.exists():
             total_sales_amount = client_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-            total_amount_paid = Payment.objects.filter(client=client).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            total_amount_paid = Payment.objects.filter(client=client, is_voided=False).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
             outstanding_amount = total_sales_amount - total_amount_paid
             if outstanding_amount > 0:
                 total_outstanding += outstanding_amount
@@ -813,16 +1194,17 @@ def get_general_metrics(request):
 
     # Get general metrics
     if custom_start_dt and custom_end_dt:
-        sales_queryset = Sale.objects.filter(sale_date__range=[custom_start_dt, custom_end_dt])
+        sales_queryset = Sale.objects.filter(is_voided=False, sale_date__range=[custom_start_dt, custom_end_dt])
         expenses_queryset = DeliveryExpense.objects.filter(
-            expense_date__range=[custom_start_dt.date(), custom_end_dt.date()]
+            expense_date__range=[custom_start_dt.date(), custom_end_dt.date()],
+            is_voided=False,
         )
     elif start_date and end_date:
-        sales_queryset = Sale.objects.filter(sale_date__date__range=[start_date, end_date])
-        expenses_queryset = DeliveryExpense.objects.filter(expense_date__range=[start_date, end_date])
+        sales_queryset = Sale.objects.filter(is_voided=False, sale_date__date__range=[start_date, end_date])
+        expenses_queryset = DeliveryExpense.objects.filter(expense_date__range=[start_date, end_date], is_voided=False)
     else:
-        sales_queryset = Sale.objects.all()
-        expenses_queryset = DeliveryExpense.objects.all()
+        sales_queryset = Sale.objects.filter(is_voided=False)
+        expenses_queryset = DeliveryExpense.objects.filter(is_voided=False)
 
     # Total Revenue
     total_revenue = sales_queryset.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
@@ -864,11 +1246,11 @@ def get_general_metrics(request):
 
     # Total Paid this period
     if custom_start_dt and custom_end_dt:
-        total_paid_amount = Payment.objects.filter(date__range=[custom_start_dt, custom_end_dt]).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        total_paid_amount = Payment.objects.filter(is_voided=False, date__range=[custom_start_dt, custom_end_dt]).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
     elif start_date and end_date:
-        total_paid_amount = Payment.objects.filter(date__date__range=[start_date, end_date]).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        total_paid_amount = Payment.objects.filter(is_voided=False, date__date__range=[start_date, end_date]).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
     else:
-        total_paid_amount = Payment.objects.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        total_paid_amount = Payment.objects.filter(is_voided=False).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
     summary = {
         'total_revenue': float(total_revenue),
@@ -911,17 +1293,17 @@ def get_dashboard_overview(request):
     )['total']
 
     # Total Paid
-    total_paid_amount = Payment.objects.aggregate(
+    total_paid_amount = Payment.objects.filter(is_voided=False).aggregate(
         total=Coalesce(Sum('amount'), Decimal('0.00'))
     )['total']
 
     # Get all client financial summaries using aggregation
     # This avoids looping through all clients
-    client_sales = Sale.objects.filter(client=OuterRef('pk')).values('client').annotate(
+    client_sales = Sale.objects.filter(client=OuterRef('pk'), is_voided=False).values('client').annotate(
         total=Sum('total_amount')
     ).values('total')
     
-    client_payments = Payment.objects.filter(client=OuterRef('pk')).values('client').annotate(
+    client_payments = Payment.objects.filter(client=OuterRef('pk'), is_voided=False).values('client').annotate(
         total=Sum('amount')
     ).values('total')
     
@@ -992,9 +1374,9 @@ def get_sales_history(request):
 
     # Get sales
     if start_date and end_date:
-        sales = Sale.objects.filter(sale_date__date__range=[start_date, end_date]).select_related('client')
+        sales = Sale.objects.filter(is_voided=False, sale_date__date__range=[start_date, end_date]).select_related('client')
     else:
-        sales = Sale.objects.all().select_related('client')
+        sales = Sale.objects.filter(is_voided=False).select_related('client')
 
     sales_data = []
     for sale in sales:
@@ -1343,6 +1725,7 @@ def get_client_product_price(request, client_id, product_id):
         # Get the most recent sale item for this client and product
         sale_item = SaleItem.objects.filter(
             sale__client_id=client_id,
+            sale__is_voided=False,
             cheese_product_id=product_id
         ).select_related('sale').order_by('-sale__sale_date').first()
         
@@ -1387,70 +1770,37 @@ def quick_sale_create(request):
             return redirect('sale_history')
 
         if formset.is_valid():
-            valid_forms = [f for f in formset if f.cleaned_data and not f.cleaned_data.get('DELETE', False)]
-
-            if not valid_forms:
-                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                    return JsonResponse({'success': False, 'error': 'Please add at least one item to the sale.'})
-                messages.error(request, 'Please add at least one item to the sale.')
-                return redirect('sale_history')
-
-            with transaction.atomic():
-                sale = Sale.objects.create(
+            try:
+                sale = _create_sale_from_valid_forms(
                     client=client,
-                    total_amount=Decimal('0.00'),
-                    sale_date=sale_datetime,
+                    sale_datetime=sale_datetime,
+                    valid_forms=_normalize_sale_forms(formset),
+                    request=request,
                 )
-                
-                total_amount = Decimal('0.00')
-
-                for form in valid_forms:
-                    cheese_product = form.cleaned_data['cheese_product']
-                    quantity_packets = form.cleaned_data['quantity_packets']
-                    selling_price_per_packet = form.cleaned_data['selling_price_per_packet']
-
-                    if quantity_packets > cheese_product.available_quantity_packets:
-                        sale.delete()
-                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                            return JsonResponse({'success': False, 'error': f'Insufficient stock for {cheese_product}.'})
-                        messages.error(request, f'Insufficient stock for {cheese_product}')
-                        return redirect('sale_history')
-
-                    sale_item = SaleItem.objects.create(
-                        sale=sale,
-                        cheese_product=cheese_product,
-                        quantity_packets=quantity_packets,
-                        selling_price_per_packet=selling_price_per_packet
-                    )
-
-                    cheese_product.available_quantity_packets -= quantity_packets
-                    cheese_product.save()
-
-                    total_amount += selling_price_per_packet * quantity_packets
-
-                sale.total_amount = total_amount
-                sale.save()
-                SiteActivity.update_activity(f'Sale created for {client.name}')
-
+            except SaleStockError as error:
                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                    # Return sold items details for manual page update
-                    sold_items = [
-                        {
-                            'product_id': item.cheese_product.id,
-                            'quantity': item.quantity_packets
-                        }
-                        for item in sale.saleitem_set.all()
-                    ]
-                    total_sold = sum(item.quantity_packets for item in sale.saleitem_set.all())
-                    return JsonResponse({
-                        'success': True,
-                        'message': 'Sale created successfully.',
-                        'sold_items': sold_items,
-                        'total_sold_quantity': total_sold
-                    })
-                
-                messages.success(request, 'Sale created successfully.')
+                    return JsonResponse({'success': False, 'error': str(error)})
+                messages.error(request, str(error))
                 return redirect('sale_history')
+
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                sold_items = [
+                    {
+                        'product_id': item.cheese_product.id,
+                        'quantity': item.quantity_packets
+                    }
+                    for item in sale.saleitem_set.all()
+                ]
+                total_sold = sum(item.quantity_packets for item in sale.saleitem_set.all())
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Sale created successfully.',
+                    'sold_items': sold_items,
+                    'total_sold_quantity': total_sold
+                })
+
+            messages.success(request, 'Sale created successfully.')
+            return redirect('sale_history')
         else:
             # Get detailed error message
             error_msg = 'Please correct the errors below.'
@@ -1574,8 +1924,8 @@ def export_client_pdf(request, pk):
     client = get_object_or_404(Client, pk=pk)
     
     # Calculate client statistics
-    total_sales = Sale.objects.filter(client=client).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    total_paid = Payment.objects.filter(client=client).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    total_sales = Sale.objects.filter(client=client, is_voided=False).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    total_paid = Payment.objects.filter(client=client, is_voided=False).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
     due_payment = total_sales - total_paid
     
     # Create PDF in memory
@@ -1706,8 +2056,8 @@ def export_client_pdf(request, pk):
     elements.append(Spacer(1, 0.3*inch))
     
     # Prepare filters for sales and payments
-    sales_filter = {'client': client}
-    payments_filter = {'client': client}
+    sales_filter = {'client': client, 'is_voided': False}
+    payments_filter = {'client': client, 'is_voided': False}
     if start_date_str:
         try:
             start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
@@ -1918,8 +2268,8 @@ def export_all_clients_pdf(request):
         elements.append(Spacer(1, 0.2*inch))
         
         # Financial Summary
-        total_sales = Sale.objects.filter(client=client).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-        total_paid = Payment.objects.filter(client=client).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        total_sales = Sale.objects.filter(client=client, is_voided=False).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+        total_paid = Payment.objects.filter(client=client, is_voided=False).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
         due_payment = total_sales - total_paid
         
         elements.append(Paragraph("Financial Summary", ParagraphStyle('ClientHeading', parent=styles['Heading3'], fontSize=11, spaceAfter=8)))
@@ -1993,72 +2343,33 @@ def sale_create(request):
             })
 
         if formset.is_valid():
-            valid_forms = [f for f in formset if f.cleaned_data and not f.cleaned_data.get('DELETE', False)]
-
-            if not valid_forms:
+            try:
+                _create_sale_from_valid_forms(
+                    client=client,
+                    sale_datetime=sale_datetime,
+                    valid_forms=_normalize_sale_forms(formset),
+                    request=request,
+                )
+            except SaleStockError as error:
                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                    return JsonResponse({'success': False, 'error': 'Please add at least one item to the sale.'})
-                messages.error(request, 'Please add at least one item to the sale.')
+                    return JsonResponse({'success': False, 'error': str(error)})
+                messages.error(request, str(error))
                 return render(request, 'distribution/sales/sale_create.html', {
                     'formset': formset,
                     'clients': Client.objects.all(),
                     'selected_client_id': int(client_id)
                 })
 
-            with transaction.atomic():
-                # Create sale (initially with current time)
-                sale = Sale.objects.create(
-                    client=client,
-                    total_amount=Decimal('0.00'),
-                    sale_date=sale_datetime,
-                )
-                
-                total_amount = Decimal('0.00')
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': True, 'message': 'Sale created successfully.'})
 
-                for form in valid_forms:
-                    cheese_product = form.cleaned_data['cheese_product']
-                    quantity_packets = form.cleaned_data['quantity_packets']
-                    selling_price_per_packet = form.cleaned_data['selling_price_per_packet']
-
-                    if quantity_packets > cheese_product.available_quantity_packets:
-                        sale.delete()
-                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                            return JsonResponse({'success': False, 'error': f'Insufficient stock for {cheese_product}.'})
-                        messages.error(request, f'Insufficient stock for {cheese_product}.')
-                        return render(request, 'distribution/sales/sale_create.html', {
-                            'formset': formset,
-                            'clients': Client.objects.all(),
-                            'selected_client_id': int(client_id)
-                        })
-
-                    sale_item = SaleItem.objects.create(
-                        sale=sale,
-                        cheese_product=cheese_product,
-                        quantity_packets=quantity_packets,
-                        selling_price_per_packet=selling_price_per_packet
-                    )
-
-                    cheese_product.available_quantity_packets -= quantity_packets
-                    cheese_product.save()
-
-                    total_amount += selling_price_per_packet * quantity_packets
-
-                # Update sale with total amount
-                sale.total_amount = total_amount
-                sale.save()
-                SiteActivity.update_activity(f'Sale created for {client.name}')
-
-                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                    return JsonResponse({'success': True, 'message': 'Sale created successfully.'})
-                
-                messages.success(request, 'Sale created successfully.')
-                # Reset formset for same-page submission
-                formset = SaleItemFormSet()
-                return render(request, 'distribution/sales/sale_create.html', {
-                    'formset': formset,
-                    'clients': Client.objects.all(),
-                    'selected_client_id': None
-                })
+            messages.success(request, 'Sale created successfully.')
+            formset = SaleItemFormSet()
+            return render(request, 'distribution/sales/sale_create.html', {
+                'formset': formset,
+                'clients': Client.objects.all(),
+                'selected_client_id': None
+            })
         else:
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 # Get first error from formset
@@ -2087,14 +2398,17 @@ def sale_create(request):
 
 @login_required
 def sale_history(request):
-    sales = Sale.objects.select_related('client').prefetch_related('saleitem_set__cheese_product').all()
+    sales = Sale.objects.select_related('client').prefetch_related('saleitem_set__cheese_product').annotate(
+        has_actions=Exists(SaleAction.objects.filter(sale_id=OuterRef('pk')))
+    ).all()
     sales_with_profit = []
     for sale in sales:
         has_modified_items = sale.saleitem_set.filter(modified=True).exists()
         sales_with_profit.append({
             'sale': sale,
             'total_profit': sale.calculate_total_profit(),
-            'has_modified_items': has_modified_items
+            'has_modified_items': has_modified_items,
+            'has_actions': sale.has_actions,
         })
     
     # Calculate analytics
@@ -2139,13 +2453,156 @@ def add_payment(request):
 
 @login_required
 def payment_history(request):
-    payments = Payment.objects.select_related('client').all().order_by('-date')
+    payments = Payment.objects.select_related('client').annotate(
+        has_actions=Exists(PaymentAction.objects.filter(payment_id=OuterRef('pk')))
+    ).all().order_by('-date')
     clients = Client.objects.all()
     return render(request, 'distribution/clients/payment_history.html', {
         'payments': payments,
         'clients': clients,
         'user_is_owner': is_owner(request.user),
     })
+
+
+@login_required
+def payment_modal_details(request, pk):
+    payment = get_object_or_404(Payment.objects.select_related('client'), pk=pk)
+    payment_actions = payment.actions.select_related('created_by__user').all()
+    return render(request, 'distribution/clients/partials/partial_payment_modal_details.html', {
+        'payment': payment,
+        'payment_actions': payment_actions,
+        'payment_modes': Payment.PAYMENT_MODES,
+        'user_is_owner': is_owner(request.user),
+    })
+
+
+@login_required
+@require_POST
+def payment_action_apply(request, pk):
+    payment = get_object_or_404(Payment, pk=pk)
+    action_type = request.POST.get('action_type', '').strip()
+    reason = request.POST.get('reason', '').strip()
+    created_by = getattr(request.user, 'userprofile', None)
+
+    if payment.is_voided and action_type != 'void':
+        return JsonResponse({'success': False, 'error': 'This payment has already been voided.'})
+
+    try:
+        with transaction.atomic():
+            payment = Payment.objects.select_for_update().get(pk=pk)
+
+            if action_type == 'amount_change':
+                new_amount = Decimal(request.POST.get('new_amount', '0'))
+                if new_amount <= 0:
+                    return JsonResponse({'success': False, 'error': 'Amount must be greater than 0.'})
+
+                old_amount = payment.amount
+                if old_amount == new_amount:
+                    return JsonResponse({'success': False, 'error': 'New amount must be different from current amount.'})
+
+                payment.amount = new_amount
+                payment.save(update_fields=['amount'])
+
+                PaymentAction.objects.create(
+                    payment=payment,
+                    action_type='amount_change',
+                    old_amount=old_amount,
+                    new_amount=new_amount,
+                    reason=reason,
+                    created_by=created_by,
+                )
+                SiteActivity.update_activity(f'Changed amount for Payment #{payment.id}')
+                return JsonResponse({'success': True, 'message': 'Payment amount updated successfully.'})
+
+            if action_type == 'date_change':
+                new_date_value = request.POST.get('new_date', '').strip()
+                if not new_date_value:
+                    return JsonResponse({'success': False, 'error': 'Please provide a new payment date and time.'})
+
+                try:
+                    new_date = _parse_ddmmyyyy_datetime(new_date_value)
+                except ValueError:
+                    return JsonResponse({'success': False, 'error': 'Invalid date format. Please use DD/MM/YYYY HH:MM.'})
+
+                date_error = _validate_sale_date_not_before_client_creation(payment.client, new_date)
+                if date_error:
+                    return JsonResponse({'success': False, 'error': date_error.replace('Sale date', 'Payment date')})
+
+                old_date = payment.date
+                if old_date == new_date:
+                    return JsonResponse({'success': False, 'error': 'New date must be different from current date.'})
+
+                payment.date = new_date
+                payment.save(update_fields=['date'])
+
+                PaymentAction.objects.create(
+                    payment=payment,
+                    action_type='date_change',
+                    old_date=old_date,
+                    new_date=new_date,
+                    reason=reason,
+                    created_by=created_by,
+                )
+                SiteActivity.update_activity(f'Changed date for Payment #{payment.id}')
+                return JsonResponse({'success': True, 'message': 'Payment date updated successfully.'})
+
+            if action_type == 'mode_change':
+                new_mode = request.POST.get('new_mode', '').strip()
+                new_bank = request.POST.get('new_bank', '').strip()
+                valid_modes = {choice[0] for choice in Payment.PAYMENT_MODES}
+
+                if new_mode not in valid_modes:
+                    return JsonResponse({'success': False, 'error': 'Please select a valid payment mode.'})
+                if new_mode == 'online' and not new_bank:
+                    return JsonResponse({'success': False, 'error': 'Bank/Wallet is required for online mode.'})
+                if new_mode == 'cash':
+                    new_bank = ''
+
+                old_mode = payment.mode
+                old_bank = payment.bank or ''
+
+                if old_mode == new_mode and old_bank == new_bank:
+                    return JsonResponse({'success': False, 'error': 'Payment mode details are unchanged.'})
+
+                payment.mode = new_mode
+                payment.bank = new_bank
+                payment.save(update_fields=['mode', 'bank'])
+
+                PaymentAction.objects.create(
+                    payment=payment,
+                    action_type='mode_change',
+                    old_mode=old_mode,
+                    new_mode=new_mode,
+                    old_bank=old_bank,
+                    new_bank=new_bank,
+                    reason=reason,
+                    created_by=created_by,
+                )
+                SiteActivity.update_activity(f'Changed mode for Payment #{payment.id}')
+                return JsonResponse({'success': True, 'message': 'Payment mode updated successfully.'})
+
+            if action_type == 'void':
+                if payment.is_voided:
+                    return JsonResponse({'success': False, 'error': 'This payment has already been voided.'})
+
+                payment.is_voided = True
+                payment.voided_at = timezone.now()
+                payment.void_reason = reason
+                payment.voided_by = created_by
+                payment.save(update_fields=['is_voided', 'voided_at', 'void_reason', 'voided_by'])
+
+                PaymentAction.objects.create(
+                    payment=payment,
+                    action_type='void',
+                    reason=reason,
+                    created_by=created_by,
+                )
+                SiteActivity.update_activity(f'Payment #{payment.id} voided')
+                return JsonResponse({'success': True, 'message': 'Payment voided successfully.'})
+
+            return JsonResponse({'success': False, 'error': 'Unsupported payment action.'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
 
 
 @login_required
@@ -2208,8 +2665,10 @@ def get_payment_history(request):
             'mode': payment.get_mode_display(),
             'bank': payment.bank or 'N/A',
             'date': payment.date.strftime('%Y-%m-%d %H:%M'),
+            'is_voided': payment.is_voided,
         })
-        total_amount += payment.amount
+        if not payment.is_voided:
+            total_amount += payment.amount
     
     summary = {
         'total_payments': len(payment_data),
@@ -2321,7 +2780,9 @@ def employee_delete(request, pk):
 
 @login_required
 def expense_management(request):
-    expenses = DeliveryExpense.objects.select_related('employee').all().order_by('-expense_date', '-id')
+    expenses = DeliveryExpense.objects.select_related('employee').annotate(
+        has_actions=Exists(ExpenseAction.objects.filter(expense_id=OuterRef('pk')))
+    ).all().order_by('-expense_date', '-id')
     form = DeliveryExpenseForm()
 
     if request.method == 'POST':
@@ -2374,6 +2835,8 @@ def expense_management(request):
     return render(request, 'distribution/expenses/expense_management.html', {
         'expenses': expenses,
         'form': form,
+        'expense_types': DeliveryExpense.EXPENSE_TYPES,
+        'employees': DeliveryEmployee.objects.all().order_by('name'),
     })
 
 
@@ -2402,6 +2865,19 @@ def expense_edit(request, pk):
 
 
 @login_required
+def expense_modal_details(request, pk):
+    expense = get_object_or_404(DeliveryExpense.objects.select_related('employee'), pk=pk)
+    expense_actions = expense.actions.select_related('created_by__user').all()
+    return render(request, 'distribution/expenses/partials/partial_expense_modal_details.html', {
+        'expense': expense,
+        'expense_actions': expense_actions,
+        'expense_types': DeliveryExpense.EXPENSE_TYPES,
+        'employees': DeliveryEmployee.objects.all().order_by('name'),
+        'user_is_owner': is_owner(request.user),
+    })
+
+
+@login_required
 @require_POST
 def expense_delete(request, pk):
     expense = get_object_or_404(DeliveryExpense, pk=pk)
@@ -2410,6 +2886,155 @@ def expense_delete(request, pk):
     SiteActivity.update_activity(f'Expense deleted: {expense_type}')
     messages.success(request, 'Expense deleted successfully.')
     return redirect('expense_management')
+
+
+@login_required
+@require_POST
+def expense_action_apply(request, pk):
+    """Handle expense modifications: date, type, amount, employee changes and voids."""
+
+    expense = get_object_or_404(DeliveryExpense, pk=pk)
+    action_type = request.POST.get('action_type', '').strip()
+    reason = request.POST.get('reason', '').strip()
+    created_by = getattr(request.user, 'userprofile', None)
+
+    if expense.is_voided and action_type != 'void':
+        return JsonResponse({'success': False, 'error': 'This expense has already been voided.'})
+
+    try:
+        with transaction.atomic():
+            expense = DeliveryExpense.objects.select_for_update().get(pk=pk)
+
+            if action_type == 'date_change':
+                new_date_value = request.POST.get('new_date', '').strip()
+                if not new_date_value:
+                    return JsonResponse({'success': False, 'error': 'Please provide a new expense date.'})
+
+                try:
+                    # Parse date as DD/MM/YYYY
+                    from datetime import datetime
+                    new_date = datetime.strptime(new_date_value, '%d/%m/%Y').date()
+                except ValueError:
+                    return JsonResponse({'success': False, 'error': 'Invalid date format. Please use DD/MM/YYYY.'})
+
+                old_date = expense.expense_date
+                if old_date == new_date:
+                    return JsonResponse({'success': False, 'error': 'New date must be different from current date.'})
+
+                expense.expense_date = new_date
+                expense.save(update_fields=['expense_date'])
+
+                ExpenseAction.objects.create(
+                    expense=expense,
+                    action_type='date_change',
+                    old_date=old_date,
+                    new_date=new_date,
+                    reason=reason,
+                    created_by=created_by,
+                )
+                SiteActivity.update_activity(f'Changed date for Expense #{expense.id}')
+                return JsonResponse({'success': True, 'message': 'Expense date updated successfully.'})
+
+            if action_type == 'type_change':
+                new_type = request.POST.get('new_type', '').strip()
+                valid_types = {choice[0] for choice in DeliveryExpense.EXPENSE_TYPES}
+
+                if new_type not in valid_types:
+                    return JsonResponse({'success': False, 'error': 'Please select a valid expense type.'})
+
+                old_type = expense.expense_type
+                if old_type == new_type:
+                    return JsonResponse({'success': False, 'error': 'New type must be different from current type.'})
+
+                expense.expense_type = new_type
+                expense.save(update_fields=['expense_type'])
+
+                ExpenseAction.objects.create(
+                    expense=expense,
+                    action_type='type_change',
+                    old_type=old_type,
+                    new_type=new_type,
+                    reason=reason,
+                    created_by=created_by,
+                )
+                SiteActivity.update_activity(f'Changed type for Expense #{expense.id}')
+                return JsonResponse({'success': True, 'message': 'Expense type updated successfully.'})
+
+            if action_type == 'amount_change':
+                new_amount = Decimal(request.POST.get('new_amount', '0'))
+                if new_amount <= 0:
+                    return JsonResponse({'success': False, 'error': 'Amount must be greater than 0.'})
+
+                old_amount = expense.amount
+                if old_amount == new_amount:
+                    return JsonResponse({'success': False, 'error': 'New amount must be different from current amount.'})
+
+                expense.amount = new_amount
+                expense.save(update_fields=['amount'])
+
+                ExpenseAction.objects.create(
+                    expense=expense,
+                    action_type='amount_change',
+                    old_amount=old_amount,
+                    new_amount=new_amount,
+                    reason=reason,
+                    created_by=created_by,
+                )
+                SiteActivity.update_activity(f'Changed amount for Expense #{expense.id}')
+                return JsonResponse({'success': True, 'message': 'Expense amount updated successfully.'})
+
+            if action_type == 'employee_change':
+                new_employee_id = request.POST.get('new_employee_id', '').strip()
+                if new_employee_id:
+                    try:
+                        new_employee = DeliveryEmployee.objects.get(pk=int(new_employee_id))
+                    except (DeliveryEmployee.DoesNotExist, ValueError):
+                        return JsonResponse({'success': False, 'error': 'Invalid employee selected.'})
+                else:
+                    new_employee = None
+
+                old_employee_id = expense.employee_id
+                new_employee_id_int = new_employee.id if new_employee else None
+
+                if old_employee_id == new_employee_id_int:
+                    return JsonResponse({'success': False, 'error': 'New employee must be different from current employee.'})
+
+                expense.employee = new_employee
+                expense.save(update_fields=['employee'])
+
+                ExpenseAction.objects.create(
+                    expense=expense,
+                    action_type='employee_change',
+                    old_employee_id=old_employee_id,
+                    new_employee_id=new_employee_id_int,
+                    reason=reason,
+                    created_by=created_by,
+                )
+                SiteActivity.update_activity(f'Changed employee for Expense #{expense.id}')
+                return JsonResponse({'success': True, 'message': 'Expense employee updated successfully.'})
+
+            if action_type == 'void':
+                if expense.is_voided:
+                    return JsonResponse({'success': False, 'error': 'This expense has already been voided.'})
+
+                expense.is_voided = True
+                expense.voided_at = timezone.now()
+                expense.void_reason = reason
+                expense.voided_by = created_by
+                expense.save(update_fields=['is_voided', 'voided_at', 'void_reason', 'voided_by'])
+
+                ExpenseAction.objects.create(
+                    expense=expense,
+                    action_type='void',
+                    reason=reason,
+                    created_by=created_by,
+                )
+                SiteActivity.update_activity(f'Expense #{expense.id} voided')
+                return JsonResponse({'success': True, 'message': 'Expense voided successfully.'})
+
+            return JsonResponse({'success': False, 'error': 'Unsupported expense action.'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
 
 
 @login_required
@@ -2877,3 +3502,32 @@ def user_delete(request, pk):
         messages.success(request, f'User "{username}" deleted successfully.')
         return redirect('user_list')
     return render(request, 'distribution/user_delete.html', {'user': user})
+
+
+@owner_required
+def user_change_password(request, pk):
+    """Change a user's password from user management."""
+    from django.contrib.auth.models import User
+
+    target_user = get_object_or_404(User, pk=pk)
+
+    if request.method == 'POST':
+        form = UserPasswordChangeForm(request.POST)
+        if form.is_valid():
+            target_user.set_password(form.cleaned_data['new_password'])
+            target_user.save(update_fields=['password'])
+
+            # If owner changes their own password, keep current session authenticated.
+            if target_user == request.user:
+                update_session_auth_hash(request, target_user)
+
+            messages.success(request, f'Password updated successfully for "{target_user.username}".')
+            return redirect('user_list')
+    else:
+        form = UserPasswordChangeForm()
+
+    return render(request, 'distribution/user_password_form.html', {
+        'form': form,
+        'target_user': target_user,
+        'title': f'Change Password for {target_user.username}'
+    })

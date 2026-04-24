@@ -1,0 +1,126 @@
+<div class="modal-header">
+    <h5 class="modal-title">Payment #{{ payment.id }}</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<div class="modal-body">
+    <div class="mb-3">
+        <div class="mb-2"><strong>Client:</strong> {{ payment.client.name }}</div>
+        <div class="mb-2">
+            <strong>Status:</strong>
+            {% if payment.is_voided %}
+            <span class="badge bg-danger">Voided</span>
+            {% else %}
+            <span class="badge bg-success">Active</span>
+            {% endif %}
+        </div>
+        <div class="mb-2"><strong>Amount:</strong> PKR {{ payment.amount|floatformat:2 }}</div>
+        <div class="mb-2"><strong>Date:</strong> {{ payment.date|date:"d/m/Y H:i" }}</div>
+        <div class="mb-0"><strong>Mode:</strong> {{ payment.get_mode_display }}{% if payment.mode == 'online' and payment.bank %} ({{ payment.bank }}){% endif %}</div>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        {% if payment.is_voided %}
+        <span class="text-muted small">Payment is voided. Actions are disabled.</span>
+        {% else %}
+        <button type="button" class="btn btn-sm btn-outline-primary edit-payment-amount-btn" data-amount="{{ payment.amount }}">Edit Amount</button>
+        <button type="button" class="btn btn-sm btn-outline-primary edit-payment-date-btn" data-date="{{ payment.date|date:'d/m/Y H:i' }}">Edit Date</button>
+        <button type="button" class="btn btn-sm btn-outline-primary edit-payment-mode-btn" data-mode="{{ payment.mode }}" data-bank="{{ payment.bank|default:'' }}">Edit Mode</button>
+        {% if user_is_owner %}
+        <button type="button" class="btn btn-sm btn-outline-danger void-payment-btn">Void Payment</button>
+        {% endif %}
+        {% endif %}
+    </div>
+
+    <hr>
+    <h6>Payment Actions Log</h6>
+    <div class="table-responsive">
+        <table class="table table-sm">
+            <thead class="table-light">
+                <tr>
+                    <th>Action</th>
+                    <th>Details</th>
+                    <th>Reason</th>
+                    <th>By</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for action in payment_actions %}
+                <tr>
+                    <td>{{ action.get_action_type_display }}</td>
+                    <td>
+                        {% if action.action_type == 'amount_change' %}
+                            PKR {{ action.old_amount|floatformat:2 }} -> PKR {{ action.new_amount|floatformat:2 }}
+                        {% elif action.action_type == 'date_change' %}
+                            {{ action.old_date|date:"d/m/Y H:i" }} -> {{ action.new_date|date:"d/m/Y H:i" }}
+                        {% elif action.action_type == 'mode_change' %}
+                            {{ action.old_mode|title }}{% if action.old_mode == 'online' and action.old_bank %} ({{ action.old_bank }}){% endif %}
+                            ->
+                            {{ action.new_mode|title }}{% if action.new_mode == 'online' and action.new_bank %} ({{ action.new_bank }}){% endif %}
+                        {% elif action.action_type == 'void' %}
+                            Payment voided
+                        {% endif %}
+                    </td>
+                    <td>{{ action.reason|default:'-' }}</td>
+                    <td>{% if action.created_by %}{{ action.created_by.user.username }}{% else %}-{% endif %}</td>
+                    <td>{{ action.created_at|date:"d/m/Y H:i" }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="text-center text-muted">No actions recorded yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="paymentActionModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="false" data-bs-focus="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="paymentActionModalLabel">Payment Action</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="paymentActionForm">
+                    {% csrf_token %}
+                    <input type="hidden" id="paymentActionPaymentId" value="{{ payment.id }}">
+                    <input type="hidden" id="paymentActionType" name="action_type">
+
+                    <div class="mb-3" id="paymentActionAmountGroup" style="display: none;">
+                        <label class="form-label">Amount (PKR)</label>
+                        <input type="number" id="paymentActionAmount" class="form-control" min="0.01" step="0.01">
+                    </div>
+
+                    <div class="mb-3" id="paymentActionDateGroup" style="display: none;">
+                        <label class="form-label">Payment Date & Time</label>
+                        <input type="text" id="paymentActionDateDisplay" class="form-control js-datetime-picker" placeholder="DD/MM/YYYY HH:MM">
+                    </div>
+
+                    <div class="mb-3" id="paymentActionModeGroup" style="display: none;">
+                        <label class="form-label">Payment Mode</label>
+                        <select id="paymentActionMode" class="form-control">
+                            <option value="">-- Select mode --</option>
+                            {% for value, label in payment_modes %}
+                            <option value="{{ value }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3" id="paymentActionBankGroup" style="display: none;">
+                        <label class="form-label">Bank/Wallet</label>
+                        <input type="text" id="paymentActionBank" class="form-control" placeholder="Required for online mode">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Reason (Optional)</label>
+                        <textarea id="paymentActionReason" class="form-control" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="paymentActionSubmitBtn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>

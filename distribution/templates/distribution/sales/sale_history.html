@@ -29,7 +29,7 @@
         <div class="sales-filter-row">
             <div class="sales-filter-field">
                 <label class="form-label form-label-sm-muted">From Date</label>
-                <input type="text" id="filtFromDate" class="form-control form-control-sm js-date-picker" placeholder="DD/MM/YYYY">
+                <input type="text" id="filterFromDate" class="form-control form-control-sm js-date-picker" placeholder="DD/MM/YYYY">
             </div>
             <div class="sales-filter-field">
                 <label class="form-label form-label-sm-muted">To Date</label>
@@ -60,22 +60,16 @@
             </thead>
             <tbody>
                 {% for item in sales_data %}
-                <tr>
-                    <td>#{{ item.sale.id }}</td>
+                <tr class="{% if item.sale.is_voided %}table-danger{% elif item.has_actions %}table-warning{% endif %}">
+                    <td>#{{ item.sale.id }}{% if item.sale.is_voided %} <span class="badge bg-danger ms-1">Voided</span>{% endif %}</td>
                     <td>{{ item.sale.client.name }}</td>
-                    <td>PKR {{ item.sale.total_amount|floatformat:2 }}</td>
+                    <td>PKR {{ item.sale.total_amount|floatformat:2 }}{% if item.sale.is_voided %} <span class="text-danger small">Excluded</span>{% endif %}</td>
                     <td data-iso-date="{{ item.sale.sale_date|date:'c' }}">{{ item.sale.sale_date|date:"d/m/Y H:i" }}</td>
                     <td class="text-end table-actions">
                         <button class="btn btn-sm btn-outline-secondary view-sale-modal"
                                 data-id="{{ item.sale.id }}"
                                 title="View details">
                             View
-                        </button>
-                        <button class="btn btn-sm btn-outline-primary edit-sale-btn"
-                                data-id="{{ item.sale.id }}"
-                                data-sale-date="{{ item.sale.sale_date|date:'Y-m-dTH:i' }}"
-                                title="Edit sale date">
-                            <i class="bi bi-pencil"></i>
                         </button>
                         {% if user_is_owner %}
                         <button class="btn btn-sm btn-outline-danger delete-sale-btn"
@@ -155,57 +149,6 @@
     </div>
 </div>
 
-<!-- Edit Sale Modal -->
-<div class="modal fade" id="editSaleModal" tabindex="-1" aria-labelledby="editSaleModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg edit-sale-modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div>
-                    <h5 class="modal-title" id="editSaleModalLabel">Edit Sale</h5>
-                    <small class="text-muted">Sale ID: <strong id="editSaleIdDisplay"></strong></small>
-                </div>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body edit-sale-modal-body">
-                <form id="editSaleForm">
-                    {% csrf_token %}
-                    <input type="hidden" id="editSaleId" name="sale_id">
-                    
-                    <div class="mb-3">
-                        <label for="editSaleClient" class="form-label">Client</label>
-                        <select id="editSaleClient" name="client" class="form-control" required>
-                            <option value="">Select a client</option>
-                        </select>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="editSaleDateDisplay" class="form-label">Sale Date & Time (DD/MM/YYYY HH:MM)</label>
-                        <input type="text" id="editSaleDateDisplay" class="form-control js-datetime-picker" placeholder="DD/MM/YYYY HH:MM" required>
-                        <input type="hidden" id="editSaleDate" name="sale_date">
-                    </div>
-                    
-                    <div class="border-top pt-3 mt-3">
-                        <h6 class="mb-3"><i class="bi bi-boxes"></i> Sale Items</h6>
-                        <div id="editFormsetManagement">
-                            <!-- Management form will be injected here -->
-                        </div>
-                        <div id="editFormsetContainer">
-                            <!-- Formset rows will be injected here -->
-                        </div>
-                        <button type="button" class="btn btn-secondary btn-sm" id="editAddItemBtn">
-                            <i class="bi bi-plus-lg"></i> Add Item
-                        </button>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="saveEditSaleBtn">Save Changes</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- Delete Sale Modal -->
 <div class="modal fade" id="deleteSaleModal" tabindex="-1" aria-labelledby="deleteSaleModalLabel" aria-hidden="true">
     <div class="modal-dialog">
@@ -276,6 +219,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let formCount = totalForms ? parseInt(totalForms.value) : 0;
 
+    function normalizeModalState() {
+        const openModalCount = document.querySelectorAll('.modal.show').length;
+        const backdrops = Array.from(document.querySelectorAll('.modal-backdrop'));
+
+        if (openModalCount === 0) {
+            backdrops.forEach(backdrop => backdrop.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('padding-right');
+            return;
+        }
+
+        document.body.classList.add('modal-open');
+        if (backdrops.length > openModalCount) {
+            backdrops.slice(openModalCount).forEach(backdrop => backdrop.remove());
+        }
+    }
+
     function updateRemoveButtons() {
         if (!container || !totalForms) return;
         container.querySelectorAll('.remove-item').forEach(function(btn) {
@@ -342,234 +303,312 @@ document.addEventListener('DOMContentLoaded', function() {
     // Sale History: View Sale Modal Handler
     document.addEventListener('click', function(e) {
         const button = e.target.closest('.view-sale-modal');
-        if (button) {
-            console.log('View button clicked, Sale ID:', button.getAttribute('data-id'));
-            const saleId = button.getAttribute('data-id');
-            console.log('View button clicked, Sale ID:', saleId);
-            const url = `/sales/${saleId}/modal/`;
-            console.log('Fetching from URL:', url);
-            fetch(url)
-                .then(response => {
-                    console.log('Response status:', response.status);
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.text();
-                })
-                .then(html => {
-                    console.log('HTML received, length:', html.length);
-                    const modalDiv = document.createElement('div');
-                    modalDiv.className = 'modal fade';
-                    modalDiv.tabIndex = -1;
-                    modalDiv.innerHTML = html;
-                    document.body.appendChild(modalDiv);
-                    const modal = new bootstrap.Modal(modalDiv);
-                    modal.show();
-                    
-                    // Add return handlers to modal
-                    setupReturnHandlers(modalDiv);
-                    
-                    // Clean up after modal closes
-                    modalDiv.addEventListener('hidden.bs.modal', function() {
-                        modalDiv.remove();
-                    });
-                })
-                .catch(error => {
-                    console.error('Error loading sale details:', error);
-                    alert('Failed to load sale details: ' + error.message);
+        if (!button) return;
+
+        const saleId = button.getAttribute('data-id');
+        const url = `/sales/${saleId}/modal/`;
+
+        fetch(url)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.text();
+            })
+            .then(html => {
+                const modalDiv = document.createElement('div');
+                modalDiv.className = 'modal fade';
+                modalDiv.tabIndex = -1;
+                modalDiv.innerHTML = html;
+                document.body.appendChild(modalDiv);
+
+                const modal = new bootstrap.Modal(modalDiv);
+                modal.show();
+
+                setupSaleActionHandlers(modalDiv);
+
+                modalDiv.addEventListener('hidden.bs.modal', function(event) {
+                    if (event.target !== modalDiv) return;
+                    modalDiv.remove();
+                    normalizeModalState();
                 });
-        }
+            })
+            .catch(error => {
+                console.error('Error loading sale details:', error);
+                alert('Failed to load sale details: ' + error.message);
+            });
     });
-    
-    // Setup return button handlers with modal
-    function setupReturnHandlers(modalElement) {
-        let currentItemId = null;
-        let currentMaxQty = null;
-        let currentSaleId = null;
-        let currentSaleModalElement = modalElement;
-        
-        // Helper function to refresh the sale modal
-        function refreshSaleModal(saleId) {
-            const url = `/sales/${saleId}/modal/`;
-            fetch(url)
-                .then(response => response.text())
-                .then(html => {
-                    // Update the current modal with new content
-                    const newContent = document.createElement('div');
-                    newContent.innerHTML = html;
-                    const newModalDialog = newContent.querySelector('.modal-dialog');
-                    const currentModalDialog = currentSaleModalElement.querySelector('.modal-dialog');
-                    if (currentModalDialog && newModalDialog) {
-                        currentModalDialog.innerHTML = newModalDialog.innerHTML;
-                    }
-                    // Re-setup handlers for the updated modal
-                    setupReturnHandlers(currentSaleModalElement);
-                })
-                .catch(error => {
-                    console.error('Error refreshing sale modal:', error);
-                    // On error, just reload the page
-                    location.reload();
-                });
+
+    function refreshSaleModal(modalElement) {
+        const saleId = modalElement.querySelector('#saleActionSaleId')?.value;
+        if (!saleId) return;
+
+        fetch(`/sales/${saleId}/modal/`)
+            .then(response => response.text())
+            .then(html => {
+                modalElement.innerHTML = html;
+                setupSaleActionHandlers(modalElement);
+            })
+            .catch(error => {
+                console.error('Error refreshing sale modal:', error);
+                location.reload();
+            });
+    }
+
+    function setupSaleActionHandlers(modalElement) {
+        const actionModalElement = modalElement.querySelector('#saleActionModal');
+        const actionForm = modalElement.querySelector('#saleActionForm');
+        const submitButton = modalElement.querySelector('#saleActionSubmitBtn');
+        if (!actionModalElement || !actionForm || !submitButton) return;
+
+        const actionModal = new bootstrap.Modal(actionModalElement, {
+            backdrop: false,
+            focus: true,
+        });
+        const actionTypeInput = modalElement.querySelector('#saleActionType');
+        const itemIdInput = modalElement.querySelector('#saleActionItemId');
+        const productSelect = modalElement.querySelector('#saleActionProduct');
+        const quantityInput = modalElement.querySelector('#saleActionQuantity');
+        const priceInput = modalElement.querySelector('#saleActionPrice');
+        const reasonInput = modalElement.querySelector('#saleActionReason');
+        const modalTitle = modalElement.querySelector('#saleActionModalLabel');
+        const productGroup = modalElement.querySelector('#saleActionProductGroup');
+        const quantityGroup = modalElement.querySelector('#saleActionQuantityGroup');
+        const priceGroup = modalElement.querySelector('#saleActionPriceGroup');
+        const dateGroup = modalElement.querySelector('#saleActionDateGroup');
+        const dateDisplayInput = modalElement.querySelector('#saleActionDateDisplay');
+        const dateHiddenInput = modalElement.querySelector('#saleActionDate');
+
+        initializeDatePickers(actionModalElement);
+
+        actionModalElement.addEventListener('shown.bs.modal', function() {
+            actionModalElement.style.zIndex = '1070';
+        });
+
+        actionModalElement.addEventListener('hidden.bs.modal', function() {
+            // Keep the parent sale modal interactive when closing nested action modal.
+            const parentModalIsOpen = modalElement.classList.contains('show');
+            if (parentModalIsOpen) {
+                document.body.classList.add('modal-open');
+                document.body.style.overflow = 'hidden';
+            }
+            normalizeModalState();
+        });
+
+        function openActionModal(config) {
+            actionTypeInput.value = config.actionType;
+            itemIdInput.value = config.itemId || '';
+            modalTitle.textContent = config.title;
+            reasonInput.value = '';
+
+            if (productGroup) productGroup.style.display = config.showProduct ? '' : 'none';
+            if (quantityGroup) quantityGroup.style.display = config.showQuantity ? '' : 'none';
+            if (priceGroup) priceGroup.style.display = config.showPrice ? '' : 'none';
+            if (dateGroup) dateGroup.style.display = config.showDate ? '' : 'none';
+
+            if (productSelect) productSelect.value = config.productId || '';
+            if (quantityInput) {
+                quantityInput.value = config.quantityValue || '';
+                quantityInput.max = config.quantityMax || '';
+                quantityInput.placeholder = config.quantityPlaceholder || '';
+            }
+            if (priceInput) priceInput.value = config.priceValue || '';
+            if (dateDisplayInput) dateDisplayInput.value = config.dateValue || '';
+            if (dateHiddenInput) dateHiddenInput.value = '';
+
+            actionModal.show();
         }
-        
-        // Return single item handler - open modal
-        const returnItemButtons = modalElement.querySelectorAll('.return-item-btn');
-        returnItemButtons.forEach(button => {
+
+        modalElement.querySelectorAll('.return-item-btn').forEach(button => {
             button.addEventListener('click', function() {
-                currentItemId = this.getAttribute('data-id');
-                currentMaxQty = parseInt(this.getAttribute('data-max'));
-                const productName = this.getAttribute('data-product');
-                
-                // Populate return modal
-                document.getElementById('returnProductName').textContent = productName;
-                document.getElementById('returnMaxQty').textContent = currentMaxQty;
-                document.getElementById('returnQuantity').max = currentMaxQty;
-                document.getElementById('returnQuantity').value = '';
-                document.getElementById('returnReason').value = '';
-                
-                // Show modal
-                const returnModal = new bootstrap.Modal(document.getElementById('returnItemModal'));
-                returnModal.show();
+                openActionModal({
+                    actionType: 'return',
+                    itemId: this.getAttribute('data-id'),
+                    title: `Return ${this.getAttribute('data-product')}`,
+                    showProduct: false,
+                    showQuantity: true,
+                    showPrice: false,
+                    quantityValue: '',
+                    quantityMax: this.getAttribute('data-max'),
+                    quantityPlaceholder: `Max ${this.getAttribute('data-max')}`,
+                });
             });
         });
-        
-        // Confirm return handler
-        const confirmReturnBtn = document.getElementById('confirmReturnBtn');
-        if (confirmReturnBtn) {
-            confirmReturnBtn.onclick = function() {
-                const quantity = parseInt(document.getElementById('returnQuantity').value);
-                const reason = document.getElementById('returnReason').value;
-                
-                if (!quantity || quantity < 1 || quantity > currentMaxQty) {
-                    showToast(`Invalid quantity. Must be between 1 and ${currentMaxQty}`, 'danger');
-                    return;
-                }
-                
-                // Send return request
-                const formData = new FormData();
-                formData.append('item_id', currentItemId);
-                formData.append('quantity', quantity);
-                formData.append('reason', reason);
-                
-                fetch('/returns/sale-item/', {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showToast(data.message || 'Item returned successfully!', 'success');
-                        // Get the sale ID from the modal
-                        const saleIdText = currentSaleModalElement.querySelector('h5.modal-title').textContent;
-                        const saleId = saleIdText.match(/\d+/)[0];
-                        
-                        // Hide return item modal
-                        const returnItemModal = bootstrap.Modal.getInstance(document.getElementById('returnItemModal'));
-                        if (returnItemModal) returnItemModal.hide();
-                        
-                        // Refresh the sale modal after a short delay
-                        setTimeout(() => refreshSaleModal(saleId), 500);
-                    } else {
-                        showToast(data.error || 'Failed to return item', 'danger');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    showToast('Error processing return: ' + error.message, 'danger');
-                });
-            };
-        }
-        
-        // Return all items handler - open modal
-        const returnAllButtons = modalElement.querySelectorAll('.return-all-btn');
-        returnAllButtons.forEach(button => {
+
+        modalElement.querySelectorAll('.increase-qty-btn').forEach(button => {
             button.addEventListener('click', function() {
-                currentSaleId = this.getAttribute('data-id');
-                
-                // Build list of items to be returned
-                const itemsList = document.getElementById('returnAllItemsList');
-                itemsList.innerHTML = '';
-                
-                const table = modalElement.querySelector('table tbody');
-                const rows = table.querySelectorAll('tr');
-                let hasItemsToReturn = false;
-                
-                rows.forEach(row => {
-                    const cells = row.querySelectorAll('td');
-                    if (cells.length >= 3) {
-                        const productName = cells[0].textContent.trim();
-                        const totalQtyText = cells[1].textContent.trim();
-                        const returnedQtyText = cells[2].textContent.trim();
-                        const totalQty = parseInt(totalQtyText);
-                        const returnedQty = parseInt(returnedQtyText);
-                        const availableQty = totalQty - returnedQty;
-                        
-                        if (availableQty > 0) {
-                            hasItemsToReturn = true;
-                            const itemDiv = document.createElement('div');
-                            itemDiv.className = 'alert alert-light';
-                            itemDiv.textContent = `${productName}: Will return ${availableQty} ${availableQty === 1 ? 'item' : 'items'}`;
-                            itemsList.appendChild(itemDiv);
-                        }
-                    }
+                openActionModal({
+                    actionType: 'quantity_add',
+                    itemId: this.getAttribute('data-id'),
+                    title: `Increase quantity for ${this.getAttribute('data-product')}`,
+                    showProduct: false,
+                    showQuantity: true,
+                    showPrice: false,
+                    quantityValue: '1',
+                    quantityPlaceholder: 'Quantity to add',
                 });
-                
-                if (!hasItemsToReturn) {
-                    showToast('No items to return. All items have already been fully returned.', 'info');
-                    return;
-                }
-                
-                // Clear reason field
-                document.getElementById('returnAllReason').value = '';
-                
-                // Show modal
-                const returnAllModal = new bootstrap.Modal(document.getElementById('returnAllModal'));
-                returnAllModal.show();
             });
         });
-        
-        // Confirm return all handler
-        const confirmReturnAllBtn = document.getElementById('confirmReturnAllBtn');
-        if (confirmReturnAllBtn) {
-            confirmReturnAllBtn.onclick = function() {
-                const reason = document.getElementById('returnAllReason').value;
-                const formData = new FormData();
-                formData.append('sale_id', currentSaleId);
-                formData.append('reason', reason);
-                
-                fetch('/returns/sale-all/', {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showToast(data.message || 'All items returned successfully!', 'success');
-                        
-                        // Hide return all modal
-                        const returnAllModal = bootstrap.Modal.getInstance(document.getElementById('returnAllModal'));
-                        if (returnAllModal) returnAllModal.hide();
-                        
-                        // Refresh the sale modal after a short delay
-                        setTimeout(() => refreshSaleModal(currentSaleId), 500);
-                    } else {
-                        showToast(data.error || 'Failed to return items', 'danger');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    showToast('Error processing return: ' + error.message, 'danger');
+
+        modalElement.querySelectorAll('.edit-price-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                openActionModal({
+                    actionType: 'price_change',
+                    itemId: this.getAttribute('data-id'),
+                    title: `Edit price for ${this.getAttribute('data-product')}`,
+                    showProduct: false,
+                    showQuantity: false,
+                    showPrice: true,
+                    priceValue: this.getAttribute('data-price'),
                 });
-            };
-        }
+            });
+        });
+
+        modalElement.querySelectorAll('.add-item-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                openActionModal({
+                    actionType: 'item_add',
+                    title: 'Add item to sale',
+                    showProduct: true,
+                    showQuantity: true,
+                    showPrice: true,
+                    quantityValue: '1',
+                    quantityPlaceholder: 'Quantity',
+                });
+            });
+        });
+
+        modalElement.querySelectorAll('.void-sale-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                openActionModal({
+                    actionType: 'void',
+                    title: 'Void sale',
+                    showProduct: false,
+                    showQuantity: false,
+                    showPrice: false,
+                });
+            });
+        });
+
+        modalElement.querySelectorAll('.return-all-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                openActionModal({
+                    actionType: 'return_all',
+                    title: 'Return all remaining items',
+                    showProduct: false,
+                    showQuantity: false,
+                    showPrice: false,
+                });
+            });
+        });
+
+        modalElement.querySelectorAll('.edit-sale-date-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                openActionModal({
+                    actionType: 'date_change',
+                    title: 'Edit sale date and time',
+                    showProduct: false,
+                    showQuantity: false,
+                    showPrice: false,
+                    showDate: true,
+                    dateValue: this.getAttribute('data-date') || '',
+                });
+            });
+        });
+
+        submitButton.onclick = function() {
+            const saleId = modalElement.querySelector('#saleActionSaleId').value;
+            const actionType = actionTypeInput.value;
+            const itemId = itemIdInput.value;
+            const reason = reasonInput.value;
+
+            if (actionType === 'return' || actionType === 'quantity_add') {
+                if (!quantityInput.value || parseInt(quantityInput.value, 10) < 1) {
+                    showToast('Please enter a valid quantity.', 'warning');
+                    return;
+                }
+            }
+            if (actionType === 'price_change') {
+                if (!priceInput.value || parseFloat(priceInput.value) <= 0) {
+                    showToast('Please enter a valid packet price.', 'warning');
+                    return;
+                }
+            }
+            if (actionType === 'item_add') {
+                if (!productSelect.value) {
+                    showToast('Please select a product.', 'warning');
+                    return;
+                }
+                if (!quantityInput.value || parseInt(quantityInput.value, 10) < 1) {
+                    showToast('Please enter a valid quantity.', 'warning');
+                    return;
+                }
+                if (!priceInput.value || parseFloat(priceInput.value) <= 0) {
+                    showToast('Please enter a valid selling price.', 'warning');
+                    return;
+                }
+            }
+            if (actionType === 'date_change') {
+                if (!dateDisplayInput.value) {
+                    showToast('Please select a valid sale date and time.', 'warning');
+                    return;
+                }
+            }
+            if (actionType === 'void') {
+                const confirmVoid = confirm('Void this sale? Stock will be returned to inventory and the sale will be excluded from analytics.');
+                if (!confirmVoid) return;
+            }
+            if (actionType === 'return_all') {
+                const confirmReturnAll = confirm('Return all remaining items in this sale?');
+                if (!confirmReturnAll) return;
+            }
+
+            const formData = new FormData();
+            formData.append('action_type', actionType);
+            formData.append('reason', reason);
+            if (itemId) formData.append('item_id', itemId);
+
+            if (actionType === 'return' || actionType === 'quantity_add') {
+                formData.append('quantity', quantityInput.value);
+            }
+            if (actionType === 'price_change') {
+                formData.append('new_price', priceInput.value);
+            }
+            if (actionType === 'item_add') {
+                formData.append('product_id', productSelect.value);
+                formData.append('quantity', quantityInput.value);
+                formData.append('selling_price_per_packet', priceInput.value);
+            }
+            if (actionType === 'date_change') {
+                formData.append('new_sale_date', dateDisplayInput.value);
+            }
+
+            const csrfToken = modalElement.querySelector('[name=csrfmiddlewaretoken]')?.value || document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+            if (csrfToken) formData.append('csrfmiddlewaretoken', csrfToken);
+
+            fetch(`/sales/${saleId}/actions/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message || 'Sale updated successfully.', 'success');
+                    actionModal.hide();
+                    refreshSaleModal(modalElement);
+                } else {
+                    showToast(data.error || 'Failed to apply sale action.', 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('Error applying sale action: ' + error.message, 'danger');
+            });
+        };
     }
 });
 
@@ -596,7 +635,7 @@ function parseDdMmDate(value) {
 }
 
 function applySalesFilters() {
-    const fromDate = document.getElementById('filtFromDate').value;
+    const fromDate = document.getElementById('filterFromDate').value;
     const toDate = document.getElementById('filterToDate').value;
     const filterClient = document.getElementById('filterClient').value;
     
@@ -626,318 +665,6 @@ function applySalesFilters() {
         }
     });
 }
-
-    // Store products globally for reuse
-    let editModalProducts = [];
-
-    function formatIsoToDdMmDateTime(isoValue) {
-        if (!isoValue) return '';
-        const parsed = new Date(isoValue);
-        if (Number.isNaN(parsed.getTime())) return '';
-
-        const day = String(parsed.getDate()).padStart(2, '0');
-        const month = String(parsed.getMonth() + 1).padStart(2, '0');
-        const year = parsed.getFullYear();
-        const hours = String(parsed.getHours()).padStart(2, '0');
-        const minutes = String(parsed.getMinutes()).padStart(2, '0');
-        return `${day}/${month}/${year} ${hours}:${minutes}`;
-    }
-
-    function parseDdMmDateTimeToIso(value) {
-        if (!value) return null;
-        const match = value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})$/);
-        if (!match) return null;
-
-        const day = match[1];
-        const month = match[2];
-        const year = match[3];
-        const hours = match[4];
-        const minutes = match[5];
-        return `${year}-${month}-${day}T${hours}:${minutes}`;
-    }
-    
-    // Edit Sale Handler - Load sale data and populate formset
-    document.addEventListener('click', function(e) {
-        const button = e.target.closest('.edit-sale-btn');
-        if (button) {
-            const saleId = button.getAttribute('data-id');
-            
-            // Fetch sale data including items
-            fetch(`/sales/${saleId}/edit/`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // Store products for later use
-                        editModalProducts = data.products;
-                        
-                        // Populate client select
-                        const clientSelect = document.getElementById('editSaleClient');
-                        clientSelect.innerHTML = '<option value="">Select a client</option>';
-                        
-                        data.clients.forEach(client => {
-                            const option = document.createElement('option');
-                            option.value = client.id;
-                            option.textContent = client.name;
-                            if (client.id === data.sale.client_id) option.selected = true;
-                            clientSelect.appendChild(option);
-                        });
-                        
-                        // Populate sale date
-                        document.getElementById('editSaleDate').value = data.sale.sale_date_iso;
-                        document.getElementById('editSaleDateDisplay').value = formatIsoToDdMmDateTime(data.sale.sale_date_iso);
-                        document.getElementById('editSaleId').value = saleId;
-                        document.getElementById('editSaleIdDisplay').textContent = '#' + saleId;
-                        
-                        // Populate items formset
-                        const managementDiv = document.getElementById('editFormsetManagement');
-                        const container = document.getElementById('editFormsetContainer');
-                        
-                        // Create management form
-                        managementDiv.innerHTML = `
-                            <input type="hidden" name="form-TOTAL_FORMS" value="${data.items.length}">
-                            <input type="hidden" name="form-INITIAL_FORMS" value="${data.items.length}">
-                            <input type="hidden" name="form-MIN_NUM_FORMS" value="0">
-                            <input type="hidden" name="form-MAX_NUM_FORMS" value="1000">
-                        `;
-                        
-                        container.innerHTML = '';
-                        
-                        // Create rows from existing items
-                        data.items.forEach((item, index) => {
-                            const row = createEditItemRow(index, item);
-                            container.appendChild(row);
-                        });
-                        
-                        // Re-bind remove buttons
-                        bindEditRemoveButtons();
-                        
-                        // Show modal
-                        const editSaleModal = new bootstrap.Modal(document.getElementById('editSaleModal'));
-                        editSaleModal.show();
-                    } else {
-                        showToast(data.error || 'Error loading sale data', 'danger');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    showToast('An error occurred while loading the sale', 'danger');
-                });
-        }
-    });
-    
-    // Create edit item row with formset fields
-    function createEditItemRow(index, item) {
-        const row = document.createElement('div');
-        row.className = 'row mb-3 edit-formset-row border-bottom pb-3';
-        
-        let productOptionsHtml = '<option value="">-- Select Product --</option>';
-        let productFound = false;
-        
-        editModalProducts.forEach(product => {
-            const selected = String(item.cheese_product_id) === String(product.id) ? 'selected' : '';
-            productOptionsHtml += `<option value="${product.id}" ${selected}>${product.name}</option>`;
-            if (String(item.cheese_product_id) === String(product.id)) {
-                productFound = true;
-            }
-        });
-        
-        // If the product isn't in the list (possibly deleted), add it as a selected option
-        if (!productFound && item.cheese_product_id) {
-            productOptionsHtml += `<option value="${item.cheese_product_id}" selected>(${item.cheese_product_name}) - Archived</option>`;
-        }
-        
-        row.innerHTML = `
-            <input type="hidden" name="form-${index}-id" value="${item.id || ''}">
-            <input type="hidden" name="form-${index}-DELETE" value="off" class="delete-checkbox">
-            
-            <div class="col-md-4">
-                <label class="form-label">Product</label>
-                <select name="form-${index}-cheese_product" class="form-control" required>
-                    ${productOptionsHtml}
-                </select>
-            </div>
-            
-            <div class="col-md-2">
-                <label class="form-label">Quantity</label>
-                <input type="number" name="form-${index}-quantity_packets" class="form-control" value="${item.quantity_packets}" min="1" required>
-            </div>
-            
-            <div class="col-md-3">
-                <label class="form-label">Price/Packet (PKR)</label>
-                <input type="number" name="form-${index}-selling_price_per_packet" class="form-control" value="${item.selling_price_per_packet}" step="0.01" min="0" required>
-            </div>
-            
-            <div class="col-md-2 d-flex align-items-end">
-                <button type="button" class="btn btn-danger btn-sm remove-edit-item">Remove</button>
-            </div>
-        `;
-        
-        return row;
-    }
-    
-    // Bind remove buttons for edit formset
-    function bindEditRemoveButtons() {
-        document.querySelectorAll('.remove-edit-item').forEach(btn => {
-            btn.removeEventListener('click', removeEditItem);  // Remove old listeners
-            btn.addEventListener('click', removeEditItem);
-        });
-    }
-    
-    // Edit item remove handler
-    function removeEditItem(e) {
-        e.preventDefault();
-        const row = this.closest('.edit-formset-row');
-        const checkbox = row.querySelector('.delete-checkbox');
-        
-        if (checkbox) {
-            checkbox.value = 'on';  // Mark for deletion
-        }
-        
-        if (document.querySelectorAll('.edit-formset-row:not([hidden])').length > 1 || checkbox.value === 'on') {
-            row.style.display = 'none';
-        }
-    }
-    
-    // Add item button for edit formset
-    document.addEventListener('click', function(e) {
-        if (e.target.closest('#editAddItemBtn')) {
-            e.preventDefault();
-            const container = document.getElementById('editFormsetContainer');
-            const totalForms = document.querySelector('input[name="form-TOTAL_FORMS"]');
-            
-            if (totalForms) {
-                const formCount = parseInt(totalForms.value);
-                const newItem = {
-                    id: '',
-                    quantity_packets: 1,
-                    selling_price_per_packet: '',
-                    cheese_product_id: ''
-                };
-                
-                const newRow = createEditItemRow(formCount, newItem);
-                container.appendChild(newRow);
-                
-                totalForms.value = formCount + 1;
-                bindEditRemoveButtons();
-                
-                // Scroll to new item
-                newRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }
-        }
-    });
-    
-    // Save Edit Sale Handler - Submit full formset
-    document.getElementById('saveEditSaleBtn').addEventListener('click', function() {
-        const saleId = document.getElementById('editSaleId').value;
-        const clientId = document.getElementById('editSaleClient').value;
-        const saleDateDisplayValue = document.getElementById('editSaleDateDisplay').value;
-        const saleDateValue = parseDdMmDateTimeToIso(saleDateDisplayValue);
-        
-        if (!clientId) {
-            showToast('Please select a client', 'warning');
-            return;
-        }
-        if (!saleDateValue) {
-            showToast('Please enter date/time as DD/MM/YYYY HH:MM', 'warning');
-            return;
-        }
-
-        document.getElementById('editSaleDate').value = saleDateValue;
-        
-        const items = [];
-        let errorMsg = '';
-        
-        // Collect active (non-deleted) items
-        document.querySelectorAll('.edit-formset-row').forEach((row, rowIndex) => {
-            // Skip hidden/deleted rows
-            if (row.style.display === 'none') return;
-            
-            const deleteCheckbox = row.querySelector('.delete-checkbox');
-            if (deleteCheckbox?.value === 'on') return;
-            
-            const productSelect = row.querySelector('select[name^="form-"][name$="-cheese_product"]');
-            const quantityInput = row.querySelector('input[name^="form-"][name$="-quantity_packets"]');
-            const priceInput = row.querySelector('input[name^="form-"][name$="-selling_price_per_packet"]');
-            
-            // Validate fields
-            const hasProduct = productSelect && String(productSelect.value || '').trim() !== '';
-            const hasQuantity = quantityInput && String(quantityInput.value || '').trim() !== '';
-            const hasPrice = priceInput && String(priceInput.value || '').trim() !== '';
-            
-            if (hasProduct && hasQuantity && hasPrice) {
-                items.push({
-                    cheese_product: productSelect.value,
-                    quantity_packets: quantityInput.value,
-                    selling_price_per_packet: priceInput.value
-                });
-            } else {
-                // Build error message for missing fields
-                const missingFields = [];
-                if (!hasProduct) missingFields.push('Product');
-                if (!hasQuantity) missingFields.push('Quantity');
-                if (!hasPrice) missingFields.push('Price');
-                if (missingFields.length > 0 && !errorMsg) {
-                    errorMsg = `Item ${rowIndex + 1} is missing: ${missingFields.join(', ')}`;
-                }
-            }
-        });
-        
-        if (items.length === 0) {
-            showToast(errorMsg || 'Please add at least one complete item to the sale', 'warning');
-            return;
-        }
-        
-        // Build form data with only active items
-        const formData = new FormData();
-        formData.append('client', clientId);
-        formData.append('sale_date', saleDateValue);
-        
-        // Management form fields
-        formData.append('form-TOTAL_FORMS', items.length);
-        formData.append('form-INITIAL_FORMS', '0');
-        formData.append('form-MIN_NUM_FORMS', '0');
-        formData.append('form-MAX_NUM_FORMS', '1000');
-        
-        // Add active items to form data with proper naming convention
-        items.forEach((item, idx) => {
-            formData.append(`form-${idx}-cheese_product`, item.cheese_product);
-            formData.append(`form-${idx}-quantity_packets`, item.quantity_packets);
-            formData.append(`form-${idx}-selling_price_per_packet`, item.selling_price_per_packet);
-            formData.append(`form-${idx}-id`, '');
-            formData.append(`form-${idx}-sale`, saleId);
-            // Keep unchecked delete value empty so Django interprets it as False.
-            formData.append(`form-${idx}-DELETE`, '');
-        });
-        
-        // Include CSRF token
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-        formData.append('csrfmiddlewaretoken', csrfToken);
-        
-        fetch(`/sales/${saleId}/edit/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': csrfToken,
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showToast(data.message, 'success');
-                const editSaleModal = bootstrap.Modal.getInstance(document.getElementById('editSaleModal'));
-                editSaleModal.hide();
-                // Reload the page to show updated data
-                setTimeout(() => window.location.reload(), 1000);
-            } else {
-                showToast(data.error || 'Error updating sale', 'danger');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showToast('An error occurred while updating the sale', 'danger');
-        });
-    });
     
     // Delete Sale Handler
     document.addEventListener('click', function(e) {
@@ -984,7 +711,7 @@ function applySalesFilters() {
     });
 
 function resetSalesFilters() {
-    document.getElementById('filtFromDate').value = '';
+    document.getElementById('filterFromDate').value = '';
     document.getElementById('filterToDate').value = '';
     document.getElementById('filterClient').value = '';
     
@@ -994,7 +721,7 @@ function resetSalesFilters() {
 
 // Attach filter event listeners
 document.addEventListener('DOMContentLoaded', function() {
-    document.getElementById('filtFromDate').addEventListener('input', applySalesFilters);
+    document.getElementById('filterFromDate').addEventListener('input', applySalesFilters);
     document.getElementById('filterToDate').addEventListener('input', applySalesFilters);
     document.getElementById('filterClient').addEventListener('change', applySalesFilters);
     

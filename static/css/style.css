@@ -387,6 +387,18 @@ body {
     border-color: var(--secondary);
 }
 
+.btn-outline-success {
+    color: var(--success);
+    border-color: var(--success);
+    background: transparent;
+}
+
+.btn-outline-success:hover {
+    background: var(--success);
+    color: var(--white);
+    border-color: var(--success);
+}
+
 /* Success Button */
 .btn-success {
     background: var(--success);
@@ -1067,6 +1079,37 @@ body {
     gap: 1rem;
     align-items: flex-end;
     flex-wrap: wrap;
+}
+
+.analytics-table-wrap {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto !important;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+}
+
+.analytics-table {
+    width: 100%;
+    margin-bottom: 0;
+}
+
+@media (max-width: 768px) {
+    .analytics-table-wrap {
+        overflow-x: auto !important;
+    }
+
+    .analytics-table {
+        width: max-content;
+        min-width: 980px;
+        font-size: 0.86rem;
+    }
+
+    .analytics-table th,
+    .analytics-table td {
+        padding: 0.45rem 0.65rem;
+    }
 }
 
 /* ===== TOAST NOTIFICATIONS ===== */

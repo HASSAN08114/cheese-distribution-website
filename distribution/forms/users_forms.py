@@ -61,3 +61,28 @@ class UserRoleForm(forms.ModelForm):
         widgets = {
             'role': forms.Select(attrs={'class': 'form-control'}),
         }
+
+
+class UserPasswordChangeForm(forms.Form):
+    new_password = forms.CharField(
+        widget=forms.PasswordInput(attrs={'class': 'form-control'}),
+        required=True,
+        label='New Password',
+        min_length=8,
+        help_text='Use at least 8 characters.'
+    )
+    new_password_confirm = forms.CharField(
+        widget=forms.PasswordInput(attrs={'class': 'form-control'}),
+        required=True,
+        label='Confirm New Password'
+    )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        new_password = cleaned_data.get('new_password')
+        new_password_confirm = cleaned_data.get('new_password_confirm')
+
+        if new_password and new_password_confirm and new_password != new_password_confirm:
+            raise forms.ValidationError('Passwords do not match.')
+
+        return cleaned_data

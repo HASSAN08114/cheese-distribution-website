@@ -186,6 +186,7 @@ document.addEventListener("DOMContentLoaded", function () {
         .then((r) => r.text())
         .then((html) => {
           document.getElementById("dynamicEmployeeEditModalContent").innerHTML = html;
+          initializeDatePickers(document.getElementById("dynamicEmployeeEditModalContent"));
           const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById("dynamicEmployeeEditModal"));
           modal.show();
         });

@@ -1,17 +1,40 @@
-<div class="modal-dialog modal-lg">
+<div class="modal-dialog modal-xl">
     <div class="modal-content">
         <div class="modal-header">
             <h5 class="modal-title">Sale #{{ sale.id }}</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body modal-body-scroll-70">
-            <p><strong>Client:</strong> {{ sale.client.name }}</p>
-            <p><strong>Date:</strong> {{ sale.sale_date|date:"d/m/Y H:i" }}</p>
-            <p><strong>Total Amount:</strong> PKR {{ sale.total_amount|floatformat:2 }}</p>
-            <hr>
-            <h6>Products in Sale</h6>
+            <div class="row g-3 mb-3">
+                <div class="col-md-4"><strong>Client:</strong> {{ sale.client.name }}</div>
+                <div class="col-md-4">
+                    <strong>Date:</strong> {{ sale.sale_date|date:"d/m/Y H:i" }}
+                    {% if not sale.is_voided %}
+                    <button type="button"
+                            class="btn btn-sm btn-outline-primary ms-2 edit-sale-date-btn"
+                            data-date="{{ sale.sale_date|date:'d/m/Y H:i' }}"
+                            title="Edit sale date and time">
+                        Edit Date
+                    </button>
+                    {% endif %}
+                </div>
+                <div class="col-md-4">
+                    <strong>Total Amount:</strong> PKR {{ sale.total_amount|floatformat:2 }}
+                    {% if sale.is_voided %}<span class="badge bg-danger ms-2">Voided</span>{% endif %}
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0">Products in Sale</h6>
+                <button type="button" class="btn btn-sm btn-outline-success add-item-btn"
+                        data-sale-id="{{ sale.id }}"
+                        title="Add a new product to this sale">
+                    <i class="bi bi-plus-lg"></i> Add Item
+                </button>
+            </div>
+
             <div class="table-responsive">
-                <table class="table table-sm table-hover">
+                <table class="table table-sm table-hover align-middle">
                     <thead class="table-light">
                         <tr>
                             <th>Product</th>
@@ -19,7 +42,7 @@
                             <th>Returned</th>
                             <th>Packet Price</th>
                             <th>Total</th>
-                            <th class="text-center">Action</th>
+                            <th class="text-center">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -31,13 +54,27 @@
                             <td><small>PKR {{ item.selling_price_per_packet|floatformat:2 }}</small></td>
                             <td><small>PKR {{ item.item_total|floatformat:2 }}</small></td>
                             <td class="text-center">
-                                {% if item.quantity_available > 0 %}
-                                <button class="btn btn-sm btn-outline-danger return-item-btn" 
-                                        data-id="{{ item.id }}" 
-                                        data-product="{{ item.cheese_product }}"
-                                        data-max="{{ item.quantity_available }}">Return</button>
+                                {% if sale.is_voided %}
+                                <span class="badge bg-secondary">Locked</span>
                                 {% else %}
-                                <span class="badge bg-danger">Fully Returned</span>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    {% if item.quantity_available > 0 %}
+                                    <button type="button" class="btn btn-outline-danger return-item-btn"
+                                            data-id="{{ item.id }}"
+                                            data-product="{{ item.cheese_product }}"
+                                            data-max="{{ item.quantity_available }}"
+                                            title="Return items">Return</button>
+                                    {% endif %}
+                                    <button type="button" class="btn btn-outline-primary increase-qty-btn"
+                                            data-id="{{ item.id }}"
+                                            data-product="{{ item.cheese_product }}"
+                                            title="Increase quantity">+Qty</button>
+                                    <button type="button" class="btn btn-outline-secondary edit-price-btn"
+                                            data-id="{{ item.id }}"
+                                            data-product="{{ item.cheese_product }}"
+                                            data-price="{{ item.selling_price_per_packet }}"
+                                            title="Edit packet price">Edit Price</button>
+                                </div>
                                 {% endif %}
                             </td>
                         </tr>
@@ -45,10 +82,115 @@
                     </tbody>
                 </table>
             </div>
-            <div class="row justify-content-end mt-2">
+
+            <div class="row justify-content-end mt-3">
                 <div class="col-auto">
-                    <button class="btn btn-sm btn-outline-danger return-all-btn" data-id="{{ sale.id }}">Return All</button>
+                    {% if sale.is_voided %}
+                    <span class="text-muted small me-2">Sale is voided. Actions are disabled.</span>
+                    {% else %}
+                    <button type="button" class="btn btn-sm btn-outline-warning return-all-btn" data-id="{{ sale.id }}">Return All</button>
+                    <button type="button" class="btn btn-sm btn-outline-danger void-sale-btn ms-2" data-id="{{ sale.id }}">Void Sale</button>
+                    {% endif %}
                 </div>
+            </div>
+
+            <hr>
+            <h6>Sale Actions Log</h6>
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Action</th>
+                            <th>Item</th>
+                            <th>Details</th>
+                            <th>Reason</th>
+                            <th>By</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for action in sale_actions %}
+                        <tr>
+                            <td>{{ action.get_action_type_display }}</td>
+                            <td>{% if action.sale_item %}{{ action.sale_item.cheese_product }}{% else %}-{% endif %}</td>
+                            <td>
+                                {% if action.action_type == 'return' %}
+                                    Returned {% if action.quantity_change %}{{ action.quantity_change|add:'0'|cut:'-' }}{% else %}0{% endif %} packets
+                                {% elif action.action_type == 'quantity_add' %}
+                                    Added {{ action.quantity_change }} packets
+                                {% elif action.action_type == 'price_change' %}
+                                    PKR {{ action.old_price|floatformat:2 }} → PKR {{ action.new_price|floatformat:2 }}
+                                {% elif action.action_type == 'item_add' %}
+                                    Added item
+                                {% elif action.action_type == 'date_change' %}
+                                    {{ action.old_sale_date|date:"d/m/Y H:i" }} -> {{ action.new_sale_date|date:"d/m/Y H:i" }}
+                                {% elif action.action_type == 'void' %}
+                                    Sale voided
+                                {% endif %}
+                            </td>
+                            <td>{{ action.reason|default:'-' }}</td>
+                            <td>{% if action.created_by %}{{ action.created_by.user.username }}{% else %}-{% endif %}</td>
+                            <td>{{ action.created_at|date:"d/m/Y H:i" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" class="text-center text-muted">No actions recorded yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="saleActionModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="false" data-bs-focus="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="saleActionModalLabel">Sale Action</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="saleActionForm">
+                    {% csrf_token %}
+                    <input type="hidden" id="saleActionSaleId" name="sale_id" value="{{ sale.id }}">
+                    <input type="hidden" id="saleActionType" name="action_type">
+                    <input type="hidden" id="saleActionItemId" name="item_id">
+
+                    <div class="mb-3" id="saleActionProductGroup">
+                        <label class="form-label">Product</label>
+                        <select id="saleActionProduct" class="form-control" name="product_id">
+                            <option value="">-- Select product --</option>
+                            {% for product in products %}
+                            <option value="{{ product.id }}">{{ product }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3" id="saleActionQuantityGroup">
+                        <label class="form-label">Quantity</label>
+                        <input type="number" id="saleActionQuantity" name="quantity" class="form-control" min="1">
+                    </div>
+
+                    <div class="mb-3" id="saleActionPriceGroup">
+                        <label class="form-label">Packet Price</label>
+                        <input type="number" id="saleActionPrice" name="selling_price_per_packet" class="form-control" min="0.01" step="0.01">
+                    </div>
+
+                    <div class="mb-3" id="saleActionDateGroup">
+                        <label class="form-label">Sale Date & Time</label>
+                        <input type="text" id="saleActionDateDisplay" class="form-control js-datetime-picker" placeholder="DD/MM/YYYY HH:MM">
+                        <input type="hidden" id="saleActionDate" name="new_sale_date">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Reason (Optional)</label>
+                        <textarea id="saleActionReason" name="reason" class="form-control" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saleActionSubmitBtn">Save</button>
             </div>
         </div>
     </div>

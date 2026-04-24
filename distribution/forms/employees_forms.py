@@ -9,13 +9,23 @@ class DeliveryEmployeeForm(forms.ModelForm):
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'id_card_number': forms.TextInput(attrs={'class': 'form-control'}),
-            'joining_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'joining_date': forms.DateInput(
+                attrs={
+                    'class': 'form-control js-date-picker',
+                    'type': 'text',
+                    'placeholder': 'DD/MM/YYYY'
+                },
+                format='%d/%m/%Y'
+            ),
             'route_from': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'From where'}),
             'route_to': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'To where'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['joining_date'].input_formats = ['%Y-%m-%d', '%d/%m/%Y']
+        if not self.is_bound and getattr(self.instance, 'joining_date', None):
+            self.fields['joining_date'].initial = self.instance.joining_date.strftime('%d/%m/%Y')
 
         # Format CNIC with dashes when editing existing employee
         instance = kwargs.get("instance")
@@ -83,5 +93,18 @@ class DeliveryExpenseForm(forms.ModelForm):
             'expense_type': forms.Select(attrs={'class': 'form-control'}),
             'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'note': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-            'expense_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'expense_date': forms.DateInput(
+                attrs={
+                    'class': 'form-control js-date-picker',
+                    'type': 'text',
+                    'placeholder': 'DD/MM/YYYY'
+                },
+                format='%d/%m/%Y'
+            ),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['expense_date'].input_formats = ['%Y-%m-%d', '%d/%m/%Y']
+        if not self.is_bound and getattr(self.instance, 'expense_date', None):
+            self.fields['expense_date'].initial = self.instance.expense_date.strftime('%d/%m/%Y')

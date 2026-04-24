@@ -48,6 +48,7 @@ urlpatterns = [
     path('sales/<int:pk>/edit/', views.sale_edit, name='sale_edit'),
     path('sales/<int:pk>/delete/', views.sale_delete, name='sale_delete'),
     path('sales/<int:pk>/modal/', views.sale_modal_details, name='sale_modal_details_alt'),
+    path('sales/<int:pk>/actions/', views.sale_action_apply, name='sale_action_apply'),
 
     path('returns/sale-item/', views.return_sale_item, name='return_sale_item'),
     path('returns/sale-all/', views.return_all_sale_items, name='return_all_sale_items'),
@@ -60,6 +61,8 @@ urlpatterns = [
     #Payment Management
     path('payments/add/', views.add_payment, name='add_payment'),
     path('payments/history/', views.payment_history, name='payment_history'),
+    path('payments/<int:pk>/modal/', views.payment_modal_details, name='payment_modal_details'),
+    path('payments/<int:pk>/actions/', views.payment_action_apply, name='payment_action_apply'),
     path('payments/<int:pk>/edit/', views.payment_edit, name='payment_edit'),
     path('payments/<int:pk>/delete/', views.payment_delete, name='payment_delete'),
 
@@ -70,13 +73,16 @@ urlpatterns = [
 
     # Delivery expense management
     path('expenses/', views.expense_management, name='expense_management'),
+    path('expenses/<int:pk>/modal/', views.expense_modal_details, name='expense_modal_details'),
     path('expenses/<int:pk>/edit/', views.expense_edit, name='expense_edit'),
     path('expenses/<int:pk>/delete/', views.expense_delete, name='expense_delete'),
+    path('expenses/<int:pk>/action/', views.expense_action_apply, name='expense_action_apply'),
     
     # User Management (Owner only)
     path('users/', views.user_list, name='user_list'),
     path('users/add/', views.user_add, name='user_add'),
     path('users/<int:pk>/edit-role/', views.user_edit_role, name='user_edit_role'),
+    path('users/<int:pk>/change-password/', views.user_change_password, name='user_change_password'),
     path('users/<int:pk>/delete/', views.user_delete, name='user_delete'),
     path('database/', views.database_management, name='database_management'),
 ]
