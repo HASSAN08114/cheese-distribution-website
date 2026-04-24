@@ -4,10 +4,11 @@ from django.contrib.auth import authenticate, login, logout, update_session_auth
 from django.contrib import messages
 from django.conf import settings
 from django.db import models
-from django.db.models import Sum, Q, F, DecimalField, Subquery, OuterRef, Exists
+from django.db.models import Sum, Q, F, DecimalField, Subquery, OuterRef, Exists, Count, Max
 from django.db import transaction, connections
+from django.db.models.functions import Coalesce
 from django.utils import timezone
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from decimal import Decimal
 from pathlib import Path
 import shutil
@@ -221,6 +222,34 @@ def _parse_custom_datetime_range(from_value, to_value):
     if not start_dt or not end_dt or end_dt < start_dt:
         return None, None
 
+    return start_dt, end_dt
+
+
+def _period_date_bounds(period, today):
+    """Return start/end dates (inclusive) for a period token, or (None, None) for all/custom."""
+    if period == 'today':
+        return today, today
+    if period == 'week':
+        return today - timedelta(days=7), today
+    if period == 'month':
+        return today - timedelta(days=30), today
+    if period == 'quarter':
+        return today - timedelta(days=90), today
+    if period == '6months':
+        return today - timedelta(days=180), today
+    if period == 'year':
+        return today - timedelta(days=365), today
+    return None, None
+
+
+def _date_to_day_bounds(start_date, end_date):
+    """Convert inclusive date bounds to aware datetime [start, end) for indexed datetime filtering."""
+    if not start_date or not end_date:
+        return None, None
+
+    tz = timezone.get_current_timezone()
+    start_dt = timezone.make_aware(datetime.combine(start_date, time.min), tz)
+    end_dt = timezone.make_aware(datetime.combine(end_date + timedelta(days=1), time.min), tz)
     return start_dt, end_dt
 
 @login_required
@@ -886,90 +915,82 @@ def get_client_analytics(request):
 
     custom_start_dt = None
     custom_end_dt = None
+    start_date, end_date = _period_date_bounds(period, today)
 
     if period == 'custom' and from_date_str and to_date_str:
         custom_start_dt, custom_end_dt = _parse_custom_datetime_range(from_date_str, to_date_str)
         if not custom_start_dt or not custom_end_dt:
             return JsonResponse({'error': 'Invalid custom date/time range.'}, status=400)
-
-        start_date = None
-        end_date = None
-    elif period == 'today':
-        start_date = today
-        end_date = today
-    elif period == 'week':
-        start_date = today - timedelta(days=7)
-        end_date = today
-    elif period == 'month':
-        start_date = today - timedelta(days=30)
-        end_date = today
-    elif period == 'quarter':
-        start_date = today - timedelta(days=90)
-        end_date = today
-    elif period == '6months':
-        start_date = today - timedelta(days=180)
-        end_date = today
-    elif period == 'year':
-        start_date = today - timedelta(days=365)
-        end_date = today
-    else:  # 'all'
         start_date = None
         end_date = None
 
-    # Get all clients
-    clients = Client.objects.all()
+    sales_filters = {'is_voided': False}
+    payment_filters = {'is_voided': False}
+
+    if custom_start_dt and custom_end_dt:
+        sales_filters['sale_date__range'] = [custom_start_dt, custom_end_dt]
+        payment_filters['date__range'] = [custom_start_dt, custom_end_dt]
+    elif start_date and end_date:
+        start_dt, end_dt = _date_to_day_bounds(start_date, end_date)
+        sales_filters['sale_date__gte'] = start_dt
+        sales_filters['sale_date__lt'] = end_dt
+        payment_filters['date__gte'] = start_dt
+        payment_filters['date__lt'] = end_dt
+
+    sales_summary = Sale.objects.filter(**sales_filters).values('client_id').annotate(
+        total_sales=Coalesce(Sum('total_amount'), Decimal('0.00')),
+        total_transactions=Count('id'),
+        last_sale_date=Max('sale_date'),
+    )
+    sales_map = {row['client_id']: row for row in sales_summary}
+
+    profit_filters = {'sale__is_voided': False}
+    if custom_start_dt and custom_end_dt:
+        profit_filters['sale__sale_date__range'] = [custom_start_dt, custom_end_dt]
+    elif start_date and end_date:
+        start_dt, end_dt = _date_to_day_bounds(start_date, end_date)
+        profit_filters['sale__sale_date__gte'] = start_dt
+        profit_filters['sale__sale_date__lt'] = end_dt
+
+    profit_summary = SaleItem.objects.filter(**profit_filters).values('sale__client_id').annotate(
+        total_profit=Coalesce(
+            Sum(F('profit_per_packet') * F('quantity_packets'), output_field=DecimalField()),
+            Decimal('0.00')
+        )
+    )
+    profit_map = {row['sale__client_id']: row['total_profit'] for row in profit_summary}
+
+    payment_summary = Payment.objects.filter(**payment_filters).values('client_id').annotate(
+        total_paid=Coalesce(Sum('amount'), Decimal('0.00')),
+    )
+    payment_map = {row['client_id']: row['total_paid'] for row in payment_summary}
+
+    client_ids = list(sales_map.keys())
+    clients = Client.objects.filter(id__in=client_ids).values('id', 'name')
+
     client_data = []
-
     for client in clients:
-        # Filter sales by date range for period-based metrics
-        if custom_start_dt and custom_end_dt:
-            client_sales = Sale.objects.filter(client=client, is_voided=False, sale_date__range=[custom_start_dt, custom_end_dt])
-        elif start_date and end_date:
-            client_sales = Sale.objects.filter(client=client, is_voided=False, sale_date__date__range=[start_date, end_date])
-        else:
-            client_sales = Sale.objects.filter(client=client)
+        client_id = client['id']
+        sales_row = sales_map.get(client_id)
+        if not sales_row:
+            continue
 
-        if client_sales.exists():
-            total_sales = client_sales.aggregate(
-                total=Sum('total_amount')
-            )['total'] or Decimal('0.00')
+        total_sales = sales_row['total_sales'] or Decimal('0.00')
+        total_transactions = sales_row['total_transactions'] or 0
+        total_profit = profit_map.get(client_id, Decimal('0.00'))
+        period_payments = payment_map.get(client_id, Decimal('0.00'))
+        last_sale = sales_row['last_sale_date']
 
-            total_profit = sum(sale.calculate_total_profit() for sale in client_sales)
-
-            # Count total sales transactions
-            total_transactions = client_sales.count()
-
-            # Get last sale date and time
-            last_sale = client_sales.order_by('-sale_date').first()
-            last_sale_time = last_sale.sale_date.strftime('%Y-%m-%d %H:%M') if last_sale else None
-
-            # DEBT IS PERIOD-BASED: Sales in period - Payments in period
-            # Filter payments by date range for period-based debt calculation
-            if custom_start_dt and custom_end_dt:
-                client_payments = Payment.objects.filter(client=client, is_voided=False, date__range=[custom_start_dt, custom_end_dt])
-            elif start_date and end_date:
-                client_payments = Payment.objects.filter(client=client, is_voided=False, date__date__range=[start_date, end_date])
-            else:
-                client_payments = Payment.objects.filter(client=client, is_voided=False)
-            
-            # Calculate period-based payments
-            period_payments = client_payments.aggregate(
-                total=Sum('amount')
-            )['total'] or Decimal('0.00')
-            
-            # Debt = sales in period - payments in period
-            client_debt = total_sales - period_payments
-
-            client_data.append({
-                'id': client.id,
-                'name': client.name,
-                'total_sales': float(total_sales),
-                'total_profit': float(total_profit),
-                'total_transactions': total_transactions,
-                'last_sale_time': last_sale_time,
-                'avg_sale': float(total_sales / total_transactions) if total_transactions > 0 else 0,
-                'debt': float(client_debt),
-            })
+        client_data.append({
+            'id': client_id,
+            'name': client['name'],
+            'total_sales': float(total_sales),
+            'total_profit': float(total_profit),
+            'total_transactions': total_transactions,
+            'last_sale_time': last_sale.strftime('%Y-%m-%d %H:%M') if last_sale else None,
+            'avg_sale': float(total_sales / total_transactions) if total_transactions > 0 else 0,
+            'debt': float(total_sales - period_payments),
+        })
 
     # Sort by profit descending
     client_data.sort(key=lambda x: x['total_profit'], reverse=True)
@@ -980,18 +1001,25 @@ def get_client_analytics(request):
     total_profit_all = sum(client['total_profit'] for client in client_data)
     total_transactions_all = sum(client['total_transactions'] for client in client_data)
 
-    # Calculate total outstanding debt from ALL sales
-    # Using Payment model to find what has been paid
-    clients_all = Client.objects.all()
+    # Calculate total outstanding debt from ALL sales/payments in grouped form.
+    all_sales_map = {
+        row['client_id']: row['total_sales']
+        for row in Sale.objects.filter(is_voided=False).values('client_id').annotate(
+            total_sales=Coalesce(Sum('total_amount'), Decimal('0.00'))
+        )
+    }
+    all_payments_map = {
+        row['client_id']: row['total_paid']
+        for row in Payment.objects.filter(is_voided=False).values('client_id').annotate(
+            total_paid=Coalesce(Sum('amount'), Decimal('0.00'))
+        )
+    }
+
     total_outstanding = Decimal('0.00')
-    for client in clients_all:
-        client_sales = Sale.objects.filter(client=client, is_voided=False)
-        if client_sales.exists():
-            total_sales_amount = client_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-            total_amount_paid = Payment.objects.filter(client=client, is_voided=False).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-            outstanding_amount = total_sales_amount - total_amount_paid
-            if outstanding_amount > 0:
-                total_outstanding += outstanding_amount
+    for client_id, total_sales_amount in all_sales_map.items():
+        outstanding_amount = total_sales_amount - all_payments_map.get(client_id, Decimal('0.00'))
+        if outstanding_amount > 0:
+            total_outstanding += outstanding_amount
 
     summary = {
         'total_clients': total_clients,
@@ -1020,96 +1048,70 @@ def get_product_analytics(request):
 
     custom_start_dt = None
     custom_end_dt = None
+    start_date, end_date = _period_date_bounds(period, now.date())
 
     if period == 'custom' and from_date_str and to_date_str:
         custom_start_dt, custom_end_dt = _parse_custom_datetime_range(from_date_str, to_date_str)
         if not custom_start_dt or not custom_end_dt:
             return JsonResponse({'error': 'Invalid custom date/time range.'}, status=400)
-
-        start_date = None
-        end_date = None
-    elif period == 'today':
-        start_date = now.date()
-        end_date = now.date()
-    elif period == 'week':
-        start_date = now.date() - timedelta(days=7)
-        end_date = now.date()
-    elif period == 'month':
-        start_date = now.date() - timedelta(days=30)
-        end_date = now.date()
-    elif period == 'quarter':
-        start_date = now.date() - timedelta(days=90)
-        end_date = now.date()
-    elif period == '6months':
-        start_date = now.date() - timedelta(days=180)
-        end_date = now.date()
-    elif period == 'year':
-        start_date = now.date() - timedelta(days=365)
-        end_date = now.date()
-    else:  # 'all'
         start_date = None
         end_date = None
 
-    # Get all products with sales data
-    products = CheeseProduct.objects.all()
+    sale_item_filters = {'sale__is_voided': False}
+    if custom_start_dt and custom_end_dt:
+        sale_item_filters['sale__sale_date__range'] = [custom_start_dt, custom_end_dt]
+    elif start_date and end_date:
+        start_dt, end_dt = _date_to_day_bounds(start_date, end_date)
+        sale_item_filters['sale__sale_date__gte'] = start_dt
+        sale_item_filters['sale__sale_date__lt'] = end_dt
+
+    product_sales_summary = SaleItem.objects.filter(**sale_item_filters).values('cheese_product_id').annotate(
+        total_quantity=Coalesce(Sum('quantity_packets'), 0),
+        total_revenue=Coalesce(
+            Sum(F('quantity_packets') * F('selling_price_per_packet'), output_field=DecimalField()),
+            Decimal('0.00')
+        ),
+        total_profit=Coalesce(
+            Sum(F('quantity_packets') * F('profit_per_packet'), output_field=DecimalField()),
+            Decimal('0.00')
+        ),
+        transaction_count=Count('id'),
+    )
+
+    summary_map = {row['cheese_product_id']: row for row in product_sales_summary}
+    products = CheeseProduct.objects.select_related('manufacturer', 'type').filter(id__in=summary_map.keys())
+
     product_data = []
-
     for product in products:
-        # Filter sale items by date range
-        if custom_start_dt and custom_end_dt:
-            product_sales = SaleItem.objects.filter(
-                cheese_product=product,
-                sale__sale_date__range=[custom_start_dt, custom_end_dt]
-            )
-        elif start_date and end_date:
-            product_sales = SaleItem.objects.filter(
-                cheese_product=product,
-                sale__sale_date__date__range=[start_date, end_date]
-            )
-        else:
-            product_sales = SaleItem.objects.filter(cheese_product=product)
+        row = summary_map.get(product.id)
+        if not row:
+            continue
 
-        if product_sales.exists():
-            # Calculate totals by iterating through sales items
-            total_quantity = Decimal('0.00')
-            total_revenue = Decimal('0.00')
-            total_profit = Decimal('0.00')
-            
-            for item in product_sales:
-                total_quantity += item.quantity_packets
-                item_revenue = item.quantity_packets * item.selling_price_per_packet
-                total_revenue += item_revenue
-                item_profit = (item.selling_price_per_packet - product.purchase_price_per_packet) * item.quantity_packets
-                total_profit += item_profit
+        total_quantity = Decimal(str(row['total_quantity'] or 0))
+        total_revenue = row['total_revenue'] or Decimal('0.00')
+        total_profit = row['total_profit'] or Decimal('0.00')
+        transaction_count = row['transaction_count'] or 0
+        current_stock = product.available_quantity_packets
 
-            # Transaction count
-            transaction_count = product_sales.count()
+        stock_turnover = float(total_quantity / current_stock) if current_stock > 0 else 0
+        profit_margin = (float(total_profit) / float(total_revenue) * 100) if total_revenue > 0 else 0
 
-            # Current stock level
-            current_stock = product.available_quantity_packets
-
-            # Stock turnover (sold / current stock)
-            stock_turnover = float(total_quantity / current_stock) if current_stock > 0 else 0
-
-            # Profit margin percentage
-            profit_margin = (float(total_profit) / float(total_revenue) * 100) if total_revenue > 0 else 0
-
-            product_data.append({
-                'id': product.id,
-                'name': f"{product.manufacturer.name} {product.type.name} {product.packet_size}kg",
-                'manufacturer': product.manufacturer.name,
-                'type': product.type.name,
-                'packet_size': float(product.packet_size),
-                'purchase_price': float(product.purchase_price_per_packet),
-                'total_quantity_sold': float(total_quantity),
-                'total_revenue': float(total_revenue),
-                'total_profit': float(total_profit),
-                'transaction_count': transaction_count,
-                'current_stock': float(current_stock),
-                'stock_turnover': stock_turnover,
-                'profit_margin': profit_margin,
-                'avg_sale_price': float(total_revenue / total_quantity) if total_quantity > 0 else 0,
-            })
+        product_data.append({
+            'id': product.id,
+            'name': f"{product.manufacturer.name} {product.type.name} {product.packet_size}kg",
+            'manufacturer': product.manufacturer.name,
+            'type': product.type.name,
+            'packet_size': float(product.packet_size),
+            'purchase_price': float(product.purchase_price_per_packet),
+            'total_quantity_sold': float(total_quantity),
+            'total_revenue': float(total_revenue),
+            'total_profit': float(total_profit),
+            'transaction_count': transaction_count,
+            'current_stock': float(current_stock),
+            'stock_turnover': stock_turnover,
+            'profit_margin': profit_margin,
+            'avg_sale_price': float(total_revenue / total_quantity) if total_quantity > 0 else 0,
+        })
 
     # Sort by revenue descending (most sold)
     product_data.sort(key=lambda x: x['total_revenue'], reverse=True)
@@ -1162,49 +1164,37 @@ def get_general_metrics(request):
 
     custom_start_dt = None
     custom_end_dt = None
+    start_date, end_date = _period_date_bounds(period, today)
 
     if period == 'custom' and from_date_str and to_date_str:
         custom_start_dt, custom_end_dt = _parse_custom_datetime_range(from_date_str, to_date_str)
         if not custom_start_dt or not custom_end_dt:
             return JsonResponse({'error': 'Invalid custom date/time range.'}, status=400)
-
-        start_date = None
-        end_date = None
-    elif period == 'today':
-        start_date = today
-        end_date = today
-    elif period == 'week':
-        start_date = today - timedelta(days=7)
-        end_date = today
-    elif period == 'month':
-        start_date = today - timedelta(days=30)
-        end_date = today
-    elif period == 'quarter':
-        start_date = today - timedelta(days=90)
-        end_date = today
-    elif period == '6months':
-        start_date = today - timedelta(days=180)
-        end_date = today
-    elif period == 'year':
-        start_date = today - timedelta(days=365)
-        end_date = today
-    else:  # 'all'
         start_date = None
         end_date = None
 
     # Get general metrics
+    sale_filters = {'is_voided': False}
+    payment_filters = {'is_voided': False}
+
     if custom_start_dt and custom_end_dt:
-        sales_queryset = Sale.objects.filter(is_voided=False, sale_date__range=[custom_start_dt, custom_end_dt])
+        sale_filters['sale_date__range'] = [custom_start_dt, custom_end_dt]
+        payment_filters['date__range'] = [custom_start_dt, custom_end_dt]
         expenses_queryset = DeliveryExpense.objects.filter(
             expense_date__range=[custom_start_dt.date(), custom_end_dt.date()],
             is_voided=False,
         )
     elif start_date and end_date:
-        sales_queryset = Sale.objects.filter(is_voided=False, sale_date__date__range=[start_date, end_date])
+        start_dt, end_dt = _date_to_day_bounds(start_date, end_date)
+        sale_filters['sale_date__gte'] = start_dt
+        sale_filters['sale_date__lt'] = end_dt
+        payment_filters['date__gte'] = start_dt
+        payment_filters['date__lt'] = end_dt
         expenses_queryset = DeliveryExpense.objects.filter(expense_date__range=[start_date, end_date], is_voided=False)
     else:
-        sales_queryset = Sale.objects.filter(is_voided=False)
         expenses_queryset = DeliveryExpense.objects.filter(is_voided=False)
+
+    sales_queryset = Sale.objects.filter(**sale_filters)
 
     # Total Revenue
     total_revenue = sales_queryset.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
@@ -1212,20 +1202,14 @@ def get_general_metrics(request):
     # Total Expenses
     total_expenses = expenses_queryset.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
-    # Total Profit (from sales) - OPTIMIZED: calculated at DB level instead of looping
-    # profit = (selling_price - purchase_price) * quantity
-    profit_queryset = SaleItem.objects.filter(
-        sale__in=sales_queryset
-    ).values('sale').annotate(
-        sale_profit=Sum(
-            F('profit_per_packet') * F('quantity_packets'),
-            output_field=DecimalField()
+    sale_item_queryset = SaleItem.objects.filter(sale__in=sales_queryset)
+
+    total_profit = sale_item_queryset.aggregate(
+        total=Coalesce(
+            Sum(F('profit_per_packet') * F('quantity_packets'), output_field=DecimalField()),
+            Decimal('0.00')
         )
-    )
-    total_profit = sum(
-        item['sale_profit'] or Decimal('0.00') 
-        for item in profit_queryset
-    )
+    )['total']
     
     # Net Profit (Profit - Expenses)
     net_profit = float(total_profit) - float(total_expenses)
@@ -1240,17 +1224,12 @@ def get_general_metrics(request):
     clients_this_period = sales_queryset.values('client').distinct().count()
 
     # Total products sold
-    total_items_sold = SaleItem.objects.filter(sale__in=sales_queryset).aggregate(
+    total_items_sold = sale_item_queryset.aggregate(
         total=Sum('quantity_packets')
     )['total'] or Decimal('0.00')
 
     # Total Paid this period
-    if custom_start_dt and custom_end_dt:
-        total_paid_amount = Payment.objects.filter(is_voided=False, date__range=[custom_start_dt, custom_end_dt]).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    elif start_date and end_date:
-        total_paid_amount = Payment.objects.filter(is_voided=False, date__date__range=[start_date, end_date]).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    else:
-        total_paid_amount = Payment.objects.filter(is_voided=False).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    total_paid_amount = Payment.objects.filter(**payment_filters).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
 
     summary = {
         'total_revenue': float(total_revenue),
@@ -1275,8 +1254,7 @@ def get_dashboard_overview(request):
     """Endpoint to get general dashboard overview metrics (not time-dependent)
     OPTIMIZED: Uses database aggregations instead of Python loops
     """
-    from django.db.models.functions import Coalesce
-    
+
     # Total Clients
     total_clients_count = Client.objects.count()
 
@@ -2399,15 +2377,15 @@ def sale_create(request):
 @login_required
 def sale_history(request):
     sales = Sale.objects.select_related('client').prefetch_related('saleitem_set__cheese_product').annotate(
-        has_actions=Exists(SaleAction.objects.filter(sale_id=OuterRef('pk')))
+        has_actions=Exists(SaleAction.objects.filter(sale_id=OuterRef('pk'))),
+        has_modified_items=Exists(SaleItem.objects.filter(sale_id=OuterRef('pk'), modified=True)),
     ).all()
     sales_with_profit = []
     for sale in sales:
-        has_modified_items = sale.saleitem_set.filter(modified=True).exists()
         sales_with_profit.append({
             'sale': sale,
             'total_profit': sale.calculate_total_profit(),
-            'has_modified_items': has_modified_items,
+            'has_modified_items': sale.has_modified_items,
             'has_actions': sale.has_actions,
         })
     
