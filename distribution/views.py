@@ -961,13 +961,19 @@ def get_client_analytics(request):
     )
     profit_map = {row['sale__client_id']: row['total_profit'] for row in profit_summary}
 
-    payment_summary = Payment.objects.filter(**payment_filters).values('client_id').annotate(
-        total_paid=Coalesce(Sum('amount'), Decimal('0.00')),
-    )
-    payment_map = {row['client_id']: row['total_paid'] for row in payment_summary}
+    all_time_sales_summary = Sale.objects.filter(client=OuterRef('pk'), is_voided=False).values('client').annotate(
+        total_sales=Sum('total_amount')
+    ).values('total_sales')
+
+    all_time_payments_summary = Payment.objects.filter(client=OuterRef('pk'), is_voided=False).values('client').annotate(
+        total_paid=Sum('amount')
+    ).values('total_paid')
 
     client_ids = list(sales_map.keys())
-    clients = Client.objects.filter(id__in=client_ids).values('id', 'name')
+    clients = Client.objects.filter(id__in=client_ids).annotate(
+        all_time_sales=Coalesce(Subquery(all_time_sales_summary), Decimal('0.00')),
+        all_time_paid=Coalesce(Subquery(all_time_payments_summary), Decimal('0.00')),
+    ).values('id', 'name', 'previous_debt', 'all_time_sales', 'all_time_paid')
 
     client_data = []
     for client in clients:
@@ -979,8 +985,12 @@ def get_client_analytics(request):
         total_sales = sales_row['total_sales'] or Decimal('0.00')
         total_transactions = sales_row['total_transactions'] or 0
         total_profit = profit_map.get(client_id, Decimal('0.00'))
-        period_payments = payment_map.get(client_id, Decimal('0.00'))
         last_sale = sales_row['last_sale_date']
+        all_time_due = (
+            (client['all_time_sales'] or Decimal('0.00'))
+            - (client['all_time_paid'] or Decimal('0.00'))
+            + (client['previous_debt'] or Decimal('0.00'))
+        )
 
         client_data.append({
             'id': client_id,
@@ -990,7 +1000,7 @@ def get_client_analytics(request):
             'total_transactions': total_transactions,
             'last_sale_time': last_sale.strftime('%Y-%m-%d %H:%M') if last_sale else None,
             'avg_sale': float(total_sales / total_transactions) if total_transactions > 0 else 0,
-            'debt': float(total_sales - period_payments),
+            'debt': float(all_time_due),
         })
 
     # Sort by profit descending
@@ -1002,23 +1012,18 @@ def get_client_analytics(request):
     total_profit_all = sum(client['total_profit'] for client in client_data)
     total_transactions_all = sum(client['total_transactions'] for client in client_data)
 
-    # Calculate total outstanding debt from ALL sales/payments in grouped form.
-    all_sales_map = {
-        row['client_id']: row['total_sales']
-        for row in Sale.objects.filter(is_voided=False).values('client_id').annotate(
-            total_sales=Coalesce(Sum('total_amount'), Decimal('0.00'))
-        )
-    }
-    all_payments_map = {
-        row['client_id']: row['total_paid']
-        for row in Payment.objects.filter(is_voided=False).values('client_id').annotate(
-            total_paid=Coalesce(Sum('amount'), Decimal('0.00'))
-        )
-    }
-
     total_outstanding = Decimal('0.00')
-    for client_id, total_sales_amount in all_sales_map.items():
-        outstanding_amount = total_sales_amount - all_payments_map.get(client_id, Decimal('0.00'))
+    all_clients_financials = Client.objects.annotate(
+        all_time_sales=Coalesce(Subquery(all_time_sales_summary), Decimal('0.00')),
+        all_time_paid=Coalesce(Subquery(all_time_payments_summary), Decimal('0.00')),
+    ).values('previous_debt', 'all_time_sales', 'all_time_paid')
+
+    for client_data_row in all_clients_financials:
+        outstanding_amount = (
+            client_data_row['all_time_sales']
+            - client_data_row['all_time_paid']
+            + client_data_row['previous_debt']
+        )
         if outstanding_amount > 0:
             total_outstanding += outstanding_amount
 
@@ -1295,7 +1300,7 @@ def get_dashboard_overview(request):
             Subquery(client_payments),
             Decimal('0.00')
         )
-    ).values('total_sales', 'total_paid')
+    ).values('total_sales', 'total_paid', 'previous_debt')
     
     # Calculate totals
     total_outstanding = Decimal('0.00')
@@ -1303,12 +1308,14 @@ def get_dashboard_overview(request):
     
     for client_data in clients_with_financials:
         outstanding = client_data['total_sales'] - client_data['total_paid']
-        if outstanding > 0:
-            total_outstanding += outstanding
-            total_unpaid_amount += outstanding
+        all_time_due = outstanding + client_data['previous_debt']
+        if all_time_due > 0:
+            total_outstanding += all_time_due
+            total_unpaid_amount += all_time_due
 
     summary = {
         'total_outstanding': float(total_outstanding),
+        'total_all_time_due': float(total_unpaid_amount),
         'total_clients': total_clients_count,
         'total_products': total_products_count,
         'total_stock_value': float(total_stock_value),
@@ -1905,7 +1912,9 @@ def export_client_pdf(request, pk):
     # Calculate client statistics
     total_sales = Sale.objects.filter(client=client, is_voided=False).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
     total_paid = Payment.objects.filter(client=client, is_voided=False).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    due_payment = total_sales - total_paid
+    previous_debt = client.previous_debt or Decimal('0.00')
+    outstanding_due = total_sales - total_paid
+    all_time_due = outstanding_due + previous_debt
     
     # Create PDF in memory
     buffer = BytesIO()
@@ -2013,7 +2022,9 @@ def export_client_pdf(request, pk):
         ['Metric', 'Amount'],
         ['All-Time Sales', f'Rs. {total_sales:,.2f}'],
         ['All-Time Payments Made', f'Rs. {total_paid:,.2f}'],
-        ['Outstanding Due', f'Rs. {due_payment:,.2f}'],
+        ['Outstanding Due', f'Rs. {outstanding_due:,.2f}'],
+        ['Previous Debt', f'Rs. {previous_debt:,.2f}'],
+        ['All Time Due', f'Rs. {all_time_due:,.2f}'],
     ]
     
     financial_table = Table(financial_data, colWidths=[3*inch, 3*inch])
@@ -2029,6 +2040,8 @@ def export_client_pdf(request, pk):
         ('FONTSIZE', (0, 1), (-1, -1), 11),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
         ('ALIGN', (1, 1), (1, -1), 'RIGHT'),
+        # Previous Debt Bold
+        ('BACKGROUND', (0, 4), (1, 4), colors.HexColor("#ff0000")),
     ]))
     
     elements.append(financial_table)
@@ -2249,7 +2262,9 @@ def export_all_clients_pdf(request):
         # Financial Summary
         total_sales = Sale.objects.filter(client=client, is_voided=False).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
         total_paid = Payment.objects.filter(client=client, is_voided=False).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        due_payment = total_sales - total_paid
+        previous_debt = client.previous_debt or Decimal('0.00')
+        outstanding_due = total_sales - total_paid
+        all_time_due = outstanding_due + previous_debt
         
         elements.append(Paragraph("Financial Summary", ParagraphStyle('ClientHeading', parent=styles['Heading3'], fontSize=11, spaceAfter=8)))
         
@@ -2257,7 +2272,9 @@ def export_all_clients_pdf(request):
             ['Metric', 'Amount'],
             ['All-Time Sales', f'Rs. {total_sales:,.2f}'],
             ['All-Time Payments', f'Rs. {total_paid:,.2f}'],
-            ['Outstanding Due', f'Rs. {due_payment:,.2f}'],
+            ['Outstanding Due', f'Rs. {outstanding_due:,.2f}'],
+            ['Previous Debt', f'Rs. {previous_debt:,.2f}'],
+            ['All Time Due', f'Rs. {all_time_due:,.2f}'],
         ]
         
         financial_table = Table(financial_data, colWidths=[2.5*inch, 3.5*inch])
@@ -2272,6 +2289,8 @@ def export_all_clients_pdf(request):
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
             ('FONTSIZE', (0, 1), (-1, -1), 9),
             ('ALIGN', (1, 1), (1, -1), 'RIGHT'),
+            # Bold previous debt
+            ('BACKGROUND', (0, 4), (1, 4), colors.HexColor("#ff0000")),
         ]))
         elements.append(financial_table)
         elements.append(Spacer(1, 0.2*inch))

@@ -39,9 +39,8 @@
                 <label class="form-label form-label-sm-muted">Client</label>
                 <select id="filterClient" class="form-control form-control-sm">
                     <option value="">-- All Clients --</option>
-                    {% regroup payments by client as client_list %}
-                    {% for client_group in client_list %}
-                        <option value="{{ client_group.grouper.name }}">{{ client_group.grouper.name }}</option>
+                    {% for client in clients %}
+                        <option value="{{ client.name }}">{{ client.name }}</option>
                     {% endfor %}
                 </select>
             </div>

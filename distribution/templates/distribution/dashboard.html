@@ -16,7 +16,7 @@
         <div class="col-md-6">
             <div class="card bg-light">
                 <div class="card-body text-center">
-                    <h6 class="card-subtitle mb-2 text-danger fw-semibold">Total Unpaid Debt</h6>
+                    <h6 class="card-subtitle mb-2 text-danger fw-semibold">All Time Due</h6>
                     <h3 class="card-text mb-0 text-danger fw-bold" id="total-unpaid-amount">PKR 0.00</h3>
                 </div>
             </div>
@@ -585,7 +585,8 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('total-clients-overview').textContent = summary.total_clients;
         document.getElementById('total-products-overview').textContent = summary.total_products;
         document.getElementById('total-stock-value').textContent = `PKR ${summary.total_stock_value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-        document.getElementById('total-unpaid-amount').textContent = `PKR ${summary.total_unpaid_amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        const allTimeDue = typeof summary.total_all_time_due !== 'undefined' ? summary.total_all_time_due : summary.total_unpaid_amount;
+        document.getElementById('total-unpaid-amount').textContent = `PKR ${allTimeDue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     }
 
     function updateGeneralMetricsCards(summary) {
