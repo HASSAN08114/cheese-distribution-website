@@ -39,6 +39,11 @@
                             <i class="bi bi-hdd-stack"></i> Database
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'receipt_settings' %}">
+                            <i class="bi bi-receipt"></i> Receipt Settings
+                        </a>
+                    </li>
                     {% endif %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="inventoryDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -236,9 +241,88 @@
                         console.error('Error:', error);
                         showToast(error.message || 'An error occurred while submitting the form.', 'danger');
                         if (onError) onError(error);
+                });
+            });
+        }
+
+        function openReceiptWindow() {
+            const receiptWindow = window.open('', '_blank');
+            if (!receiptWindow) {
+                showToast('Please allow popups so the receipt can open and print.', 'warning');
+                return null;
+            }
+
+            receiptWindow.document.open();
+            receiptWindow.document.write('<!doctype html><html><head><title>Loading receipt...</title></head><body style="font-family: Arial, sans-serif; padding: 24px;">Preparing receipt...</body></html>');
+            receiptWindow.document.close();
+            return receiptWindow;
+        }
+
+        function setupAjaxReceiptForm(form, options = {}) {
+            const printField = options.printField || form.querySelector('[name="print_receipt"]');
+            const printButtons = form.querySelectorAll('[data-receipt-print]');
+            let receiptWindow = null;
+
+            printButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    if (printField) {
+                        printField.value = this.getAttribute('data-receipt-print') || '0';
+                    }
+                });
+            });
+
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+
+                const shouldPrint = printField && printField.value === '1';
+                if (shouldPrint) {
+                    receiptWindow = openReceiptWindow();
+                }
+
+                submitFormAjax(form)
+                    .then(data => {
+                        if (data.success) {
+                            if (shouldPrint && data.receipt_url) {
+                                if (receiptWindow) {
+                                    receiptWindow.location = data.receipt_url;
+                                    receiptWindow.focus();
+                                } else {
+                                    window.open(data.receipt_url, '_blank');
+                                }
+                            } else if (shouldPrint && receiptWindow) {
+                                receiptWindow.close();
+                                showToast('Receipt URL was not returned.', 'warning');
+                            }
+                            if (options.onSuccess) options.onSuccess(data);
+                        } else {
+                            showToast(data.error || 'An error occurred', 'danger');
+                            if (options.onError) options.onError(data);
+                            if (receiptWindow) receiptWindow.close();
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        showToast(error.message || 'An error occurred while submitting the form.', 'danger');
+                        if (options.onError) options.onError(error);
+                        if (receiptWindow) receiptWindow.close();
+                    })
+                    .finally(() => {
+                        if (printField) {
+                            printField.value = '0';
+                        }
                     });
             });
         }
+
+        document.addEventListener('click', function(e) {
+            const printButton = e.target.closest('.print-sale-btn, .print-payment-btn');
+            if (!printButton) return;
+
+            const url = printButton.getAttribute('data-print-url');
+            if (url) {
+                window.open(url, '_blank');
+            }
+        });
     </script>
     
     <!-- Toast Notification Script -->

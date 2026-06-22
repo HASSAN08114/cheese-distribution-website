@@ -66,6 +66,11 @@
                     <td>PKR {{ item.sale.total_amount|floatformat:2 }}{% if item.sale.is_voided %} <span class="text-danger small">Excluded</span>{% endif %}</td>
                     <td data-iso-date="{{ item.sale.sale_date|date:'c' }}">{{ item.sale.sale_date|date:"d/m/Y H:i" }}</td>
                     <td class="text-end table-actions">
+                        <button class="btn btn-sm btn-outline-success print-sale-btn"
+                                data-print-url="{% url 'sale_print' item.sale.id %}"
+                                title="Print invoice">
+                            <i class="bi bi-printer"></i>
+                        </button>
                         <button class="btn btn-sm btn-outline-secondary view-sale-modal"
                                 data-id="{{ item.sale.id }}"
                                 title="View details">

@@ -1,0 +1,50 @@
+{% extends 'distribution/base.html' %}
+
+{% block title %}Receipt Settings{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <div>
+            <h5 class="section-title-tight">Receipt Settings</h5>
+            <p class="section-subtitle-muted">Set the company details shown on printed receipts</p>
+        </div>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label class="form-label" for="id_company_name">Company Name</label>
+                {{ form.company_name }}
+                {{ form.company_name.errors }}
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="id_phone_number">Phone Number</label>
+                {{ form.phone_number }}
+                {{ form.phone_number.errors }}
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="id_address">Company Address</label>
+                {{ form.address }}
+                {{ form.address.errors }}
+            </div>
+            <button type="submit" class="btn btn-primary">Save Settings</button>
+        </form>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header">
+        <h6 class="mb-0">Receipt Preview</h6>
+    </div>
+    <div class="card-body">
+        <div class="border rounded p-3 bg-light">
+            <div class="text-center fw-bold fs-5">{{ receipt_settings.company_name }}</div>
+            <div class="text-center">Phone: {{ receipt_settings.phone_number }}</div>
+            <hr>
+            <div class="small text-muted">Footer address:</div>
+            <div>{{ receipt_settings.address|default:'No address added yet.' }}</div>
+        </div>
+    </div>
+</div>
+{% endblock %}

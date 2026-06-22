@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if receipt_type == 'sale' %}Sale Receipt #{{ invoice_number }}{% else %}Payment Receipt #{{ invoice_number }}{% endif %}</title>
+    <style>
+        @page {
+            size: 72mm auto;
+            margin: 0;
+        }
+
+        html, body {
+            width: 72mm;
+            font-size: 14px;
+        }
+
+        .receipt {
+            width: 72mm;
+            padding: 2mm 4mm 12mm;   /* less top, more bottom */
+        }
+
+        .receipt-top {
+            text-align: center;
+            margin-bottom: 8px;
+        }
+
+        .company-name {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+
+        .company-phone {
+            font-size: 14px;
+            margin-bottom: 3px;
+        }
+
+        .line {
+            border-top: 1px solid #111;
+            margin: 6px 0;
+        }
+
+        .id-box {
+            border: 1px solid #111;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            padding: 6px 0;
+            margin-top: 20px;
+            margin-bottom: 6px;
+        }
+
+        .meta-row, .data-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 4px;   /* was 12px */
+            margin-bottom: 3px;
+        }
+
+        .meta-row span, .data-row span {
+            display: inline-block;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin: 6px 0 3px;
+            text-align: center;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 3px;
+        }
+
+        th, td {
+            padding: 2px 0;
+            vertical-align: top;
+        }
+
+        th {
+            border-bottom: 1px solid #111;
+            font-weight: 700;
+            text-align: left;
+        }
+
+        td:last-child, th:last-child {
+            text-align: right;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            font-weight: 700;
+            border-top: 1px solid #111;
+            margin-top: 4px;
+            padding-top: 3px;
+        }
+
+.footer {
+    margin-top: 20px;
+    padding-bottom: 10px;
+    padding-top: 6px;
+    border-top: 1px dashed #111;
+    font-size: 14px;
+    text-align: center;
+    min-height: 51mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+}
+        .muted {
+            color: #555;
+        }
+
+        .spacer {
+            height: 4px;
+        }
+
+
+        @media print {
+            html, body {
+                width: 72mm;
+            }
+            .receipt {
+                width: 72mm;
+                padding: 2mm 4mm 12mm;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="receipt">
+        <div class="receipt-top">
+            <div class="company-name">{{ receipt_settings.company_name }}</div>
+            <div class="company-phone">{{ receipt_settings.phone_number }}</div>
+        </div>
+
+        <div class="line"></div>
+
+        <div class="id-box">
+            {% if receipt_type == 'sale' %}
+                <strong>Sale ID #</strong> {{ invoice_number }}
+            {% else %}
+                <strong>Payment ID #</strong> {{ invoice_number }}
+            {% endif %}
+        </div>
+
+        <div class="meta-row">
+            <span><strong>Date</strong> {{ receipt_date }}</span>
+            <span><strong>Time</strong> {{ receipt_time }}</span>
+        </div>
+        <div class="meta-row">
+            <span><strong>Client:</strong> {{ client_name }}</span>
+            <span><strong>Phone:</strong> {{ client_phone|default:'-' }}</span>
+        </div>
+
+        {% if receipt_type == 'sale' %}
+        <div class="section-title">Sale Data</div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 60%;">Item</th>
+                    <th>Qty</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in sale_items %}
+                <tr>
+                    <td>{{ item.product_name }}</td>
+                    <td>{{ item.quantity_packets }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="total-row">
+            <span>Total Price</span>
+            <span>PKR {{ total_amount|floatformat:2 }}</span>
+        </div>
+        {% else %}
+        <div class="section-title">Payment Data</div>
+        <div class="data-row">
+            <span><strong>Payment Method</strong></span>
+            <span>{{ payment_method }}</span>
+        </div>
+        {% if payment_bank %}
+        <div class="data-row">
+            <span><strong>Bank/Wallet</strong></span>
+            <span>{{ payment_bank }}</span>
+        </div>
+        {% endif %}
+        <div class="total-row">
+            <span>Amount</span>
+            <span>PKR {{ payment_amount|floatformat:2 }}</span>
+        </div>
+        {% endif %}
+
+<div class="footer">
+    <div class="footer-inner">
+        <div class="line"></div>
+        <div>{{ receipt_settings.address|default:'Lahore' }}</div>
+    </div>
+</div>
+    </div>
+
+    <script>
+        window.addEventListener('load', function() {
+            window.print();
+            setTimeout(function() {
+                window.close();
+            }, 250);
+        });
+    </script>
+</body>
+</html>

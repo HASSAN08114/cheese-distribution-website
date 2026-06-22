@@ -76,6 +76,14 @@
                     <td class="text-end table-actions">
                         <button
                             type="button"
+                            class="btn btn-sm btn-outline-success print-payment-btn"
+                            data-print-url="{% url 'payment_print' payment.pk %}"
+                            title="Print invoice"
+                        >
+                            <i class="bi bi-printer"></i>
+                        </button>
+                        <button
+                            type="button"
                             class="btn btn-sm btn-outline-secondary view-payment-btn"
                             data-view-url="{% url 'payment_modal_details' payment.pk %}"
                         >

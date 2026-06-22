@@ -2,7 +2,12 @@
     <div class="modal-content">
         <div class="modal-header">
             <h5 class="modal-title">Sale #{{ sale.id }}</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-outline-success print-sale-btn" data-print-url="{% url 'sale_print' sale.id %}">
+                    <i class="bi bi-printer"></i> Print
+                </button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
         </div>
         <div class="modal-body modal-body-scroll-70">
             <div class="row g-3 mb-3">

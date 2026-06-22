@@ -21,6 +21,9 @@ from .users_forms import (
     UserRoleForm,
     UserPasswordChangeForm,
 )
+from .receipt_forms import (
+    ReceiptSettingsForm,
+)
 
 __all__ = [
     'ManufacturerForm',
@@ -35,4 +38,5 @@ __all__ = [
     'UserForm',
     'UserRoleForm',
     'UserPasswordChangeForm',
+    'ReceiptSettingsForm',
 ]

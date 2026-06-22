@@ -136,6 +136,37 @@ class Payment(models.Model):
         ordering = ['-date']
 
 
+class ReceiptSettings(models.Model):
+    company_name = models.CharField(max_length=200, default='Zain Traders')
+    phone_number = models.CharField(max_length=30, default='03134628929')
+    address = models.TextField(default='')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        # Keep this as a single-row settings table.
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(
+            pk=1,
+            defaults={
+                'company_name': 'Zain Traders',
+                'phone_number': '03134628929',
+                'address': '',
+            }
+        )
+        return obj
+
+    def __str__(self):
+        return self.company_name
+
+    class Meta:
+        verbose_name = 'Receipt Settings'
+        verbose_name_plural = 'Receipt Settings'
+
+
 class Sale(models.Model):
     client = models.ForeignKey(Client, on_delete=models.CASCADE)
     sale_date = models.DateTimeField(default=timezone.now)

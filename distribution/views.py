@@ -20,7 +20,7 @@ from io import StringIO
 from django.core.management import call_command
 from .models import (
     Manufacturer, CheeseProduct, Client, Sale, SaleItem, SaleAction, UserProfile, Payment, PaymentAction,
-    DeliveryEmployee, DeliveryExpense, ExpenseAction, SiteActivity,
+    DeliveryEmployee, DeliveryExpense, ExpenseAction, SiteActivity, ReceiptSettings,
 )
 from .forms import (
     ManufacturerForm, CheeseProductForm, ClientForm,
@@ -28,6 +28,7 @@ from .forms import (
     UserPasswordChangeForm,
     PaymentForm, DeliveryEmployeeForm, DeliveryExpenseForm,
 )
+from .forms import ReceiptSettingsForm
 from .forms import CheeseTypeForm
 from .decorators import owner_required, is_owner
 
@@ -252,6 +253,57 @@ def _date_to_day_bounds(start_date, end_date):
     start_dt = timezone.make_aware(datetime.combine(start_date, time.min), tz)
     end_dt = timezone.make_aware(datetime.combine(end_date + timedelta(days=1), time.min), tz)
     return start_dt, end_dt
+
+
+def _get_receipt_settings():
+    return ReceiptSettings.load()
+
+
+def _receipt_datetime_parts(dt):
+    local_dt = timezone.localtime(dt)
+    return local_dt.strftime('%d/%m/%Y'), local_dt.strftime('%H:%M')
+
+
+def _sale_receipt_context(sale):
+    settings_obj = _get_receipt_settings()
+    items = sale.saleitem_set.select_related('cheese_product').all()
+    dated, timed = _receipt_datetime_parts(sale.sale_date)
+    return {
+        'receipt_settings': settings_obj,
+        'sale': sale,
+        'sale_items': [
+            {
+                'product_name': item.cheese_product.__str__(),
+                'quantity_packets': item.quantity_packets,
+                'selling_price_per_packet': item.selling_price_per_packet,
+                'item_total': item.quantity_packets * item.selling_price_per_packet,
+            }
+            for item in items
+        ],
+        'receipt_date': dated,
+        'receipt_time': timed,
+        'client_name': sale.client.name,
+        'client_phone': sale.client.phone or '',
+        'invoice_number': sale.id,
+        'total_amount': sale.total_amount,
+    }
+
+
+def _payment_receipt_context(payment):
+    settings_obj = _get_receipt_settings()
+    dated, timed = _receipt_datetime_parts(payment.date)
+    return {
+        'receipt_settings': settings_obj,
+        'payment': payment,
+        'receipt_date': dated,
+        'receipt_time': timed,
+        'client_name': payment.client.name,
+        'client_phone': payment.client.phone or '',
+        'payment_method': payment.get_mode_display(),
+        'invoice_number': payment.id,
+        'payment_bank': payment.bank or '',
+        'payment_amount': payment.amount,
+    }
 
 @login_required
 @require_POST
@@ -786,6 +838,26 @@ def sale_modal_details(request, pk):
         'sale_actions': sale_actions,
         'products': products,
         'total_profit': total_profit
+    })
+
+
+@login_required
+@require_GET
+def sale_print(request, pk):
+    sale = get_object_or_404(Sale.objects.select_related('client'), pk=pk)
+    return render(request, 'distribution/receipts/receipt_print.html', {
+        'receipt_type': 'sale',
+        **_sale_receipt_context(sale),
+    })
+
+
+@login_required
+@require_GET
+def payment_print(request, pk):
+    payment = get_object_or_404(Payment.objects.select_related('client'), pk=pk)
+    return render(request, 'distribution/receipts/receipt_print.html', {
+        'receipt_type': 'payment',
+        **_payment_receipt_context(payment),
     })
 
 from .models import StockAdditionHistory
@@ -1737,6 +1809,7 @@ def quick_sale_create(request):
     if request.method == 'POST':
         client_id = request.POST.get('client')
         sale_date_str = request.POST.get('sale_date')
+        should_print = request.POST.get('print_receipt') in {'1', 'true', 'True', 'on', 'yes'}
         
         if not client_id:
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -1782,8 +1855,12 @@ def quick_sale_create(request):
                     'success': True,
                     'message': 'Sale created successfully.',
                     'sold_items': sold_items,
-                    'total_sold_quantity': total_sold
+                    'total_sold_quantity': total_sold,
+                    'receipt_url': f'/sales/{sale.id}/print/'
                 })
+
+            if should_print:
+                return redirect('sale_print', pk=sale.id)
 
             messages.success(request, 'Sale created successfully.')
             return redirect('sale_history')
@@ -2313,6 +2390,7 @@ def sale_create(request):
     if request.method == 'POST':
         client_id = request.POST.get('client')
         sale_date_str = request.POST.get('sale_date')
+        should_print = request.POST.get('print_receipt') in {'1', 'true', 'True', 'on', 'yes'}
 
         if not client_id:
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -2342,7 +2420,7 @@ def sale_create(request):
 
         if formset.is_valid():
             try:
-                _create_sale_from_valid_forms(
+                sale = _create_sale_from_valid_forms(
                     client=client,
                     sale_datetime=sale_datetime,
                     valid_forms=_normalize_sale_forms(formset),
@@ -2359,7 +2437,14 @@ def sale_create(request):
                 })
 
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return JsonResponse({'success': True, 'message': 'Sale created successfully.'})
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Sale created successfully.',
+                    'receipt_url': f'/sales/{sale.id}/print/' if should_print else ''
+                })
+
+            if should_print:
+                return redirect('sale_print', pk=sale.id)
 
             messages.success(request, 'Sale created successfully.')
             formset = SaleItemFormSet()
@@ -2426,13 +2511,21 @@ def add_payment(request):
     """Record a client payment."""
     if request.method == 'POST':
         form = PaymentForm(request.POST)
+        should_print = request.POST.get('print_receipt') in {'1', 'true', 'True', 'on', 'yes'}
         if form.is_valid():
             payment = form.save()
             SiteActivity.update_activity(f'Payment of PKR {payment.amount} recorded for {payment.client.name}')
             
             # Handle AJAX requests
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return JsonResponse({'success': True, 'message': 'Payment recorded successfully.'})
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Payment recorded successfully.',
+                    'receipt_url': f'/payments/{payment.id}/print/' if should_print else ''
+                })
+
+            if should_print:
+                return redirect('payment_print', pk=payment.id)
             
             messages.success(request, 'Payment recorded successfully.')
             return redirect('payment_history')
@@ -2644,6 +2737,26 @@ def payment_delete(request, pk):
     SiteActivity.update_activity(f'Payment deleted for {client_name} (PKR {amount})')
     messages.success(request, 'Payment deleted successfully.')
     return redirect('payment_history')
+
+
+@owner_required
+def receipt_settings(request):
+    receipt_settings_obj = ReceiptSettings.load()
+
+    if request.method == 'POST':
+        form = ReceiptSettingsForm(request.POST, instance=receipt_settings_obj)
+        if form.is_valid():
+            form.save()
+            SiteActivity.update_activity('Receipt settings updated')
+            messages.success(request, 'Receipt settings updated successfully.')
+            return redirect('receipt_settings')
+    else:
+        form = ReceiptSettingsForm(instance=receipt_settings_obj)
+
+    return render(request, 'distribution/receipt_settings.html', {
+        'form': form,
+        'receipt_settings': receipt_settings_obj,
+    })
 
 
 @login_required

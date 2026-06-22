@@ -62,6 +62,7 @@ urlpatterns = [
     path('payments/add/', views.add_payment, name='add_payment'),
     path('payments/history/', views.payment_history, name='payment_history'),
     path('payments/<int:pk>/modal/', views.payment_modal_details, name='payment_modal_details'),
+    path('payments/<int:pk>/print/', views.payment_print, name='payment_print'),
     path('payments/<int:pk>/actions/', views.payment_action_apply, name='payment_action_apply'),
     path('payments/<int:pk>/edit/', views.payment_edit, name='payment_edit'),
     path('payments/<int:pk>/delete/', views.payment_delete, name='payment_delete'),
@@ -84,6 +85,8 @@ urlpatterns = [
     path('users/<int:pk>/edit-role/', views.user_edit_role, name='user_edit_role'),
     path('users/<int:pk>/change-password/', views.user_change_password, name='user_change_password'),
     path('users/<int:pk>/delete/', views.user_delete, name='user_delete'),
+    path('receipt-settings/', views.receipt_settings, name='receipt_settings'),
+    path('sales/<int:pk>/print/', views.sale_print, name='sale_print'),
     path('database/', views.database_management, name='database_management'),
 ]
 

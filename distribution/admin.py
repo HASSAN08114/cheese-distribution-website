@@ -9,9 +9,22 @@ from .models import (
 	Payment,
 	PaymentAction,
 	UserProfile,
+	ReceiptSettings,
 	StockAdditionHistory,
 	CheeseType,
 )
+
+
+@admin.register(ReceiptSettings)
+class ReceiptSettingsAdmin(admin.ModelAdmin):
+    list_display = ('company_name', 'phone_number', 'updated_at')
+
+    def has_add_permission(self, request):
+        return not ReceiptSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 
 admin.site.register(Manufacturer)
 admin.site.register(CheeseProduct)

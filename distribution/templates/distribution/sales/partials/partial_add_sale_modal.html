@@ -1,5 +1,6 @@
 <form id="addSaleForm" method="post" action="{% url 'quick_sale_create' %}">
     {% csrf_token %}
+    <input type="hidden" name="print_receipt" id="addSalePrintReceipt" value="0">
     <div class="modal-header">
         <h5 class="modal-title">Add Sale</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -57,7 +58,8 @@
     </div>
     <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="submit" class="btn btn-primary">Create Sale</button>
+        <button type="submit" class="btn btn-primary" data-receipt-print="0">Create Sale</button>
+        <button type="submit" class="btn btn-success" data-receipt-print="1">Create Sale & Print</button>
     </div>
 </form>
 
@@ -235,6 +237,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     const minutes = match[5];
                     hiddenInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
                 }
+            }
+        });
+
+        setupAjaxReceiptForm(addSaleForm, {
+            printField: document.getElementById('addSalePrintReceipt'),
+            onSuccess: function(data) {
+                showToast(data.message || 'Sale created successfully.', 'success');
+                const modal = bootstrap.Modal.getInstance(document.getElementById('addSaleModal'));
+                if (modal) modal.hide();
+                addSaleForm.reset();
+            },
+            onError: function(error) {
+                showToast(error.error || 'Unable to create sale.', 'danger');
             }
         });
     }

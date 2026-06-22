@@ -13,6 +13,7 @@
     <div class="card-body">
         <form method="post" id="saleForm">
             {% csrf_token %}
+            <input type="hidden" name="print_receipt" id="salePrintReceipt" value="0">
             
             <div class="mb-3">
                 <label for="client" class="form-label">Client</label>
@@ -69,7 +70,8 @@
             <button type="button" class="btn btn-secondary mb-3" id="add-item"><i class="bi bi-plus-lg"></i> Add Item</button>
             </div>
             <div class="mt-4">
-                <button type="submit" class="btn btn-primary" form="saleForm"><i class="bi bi-check-lg"></i> Create Sale</button>
+                <button type="submit" class="btn btn-primary" form="saleForm" data-receipt-print="0"><i class="bi bi-check-lg"></i> Create Sale</button>
+                <button type="submit" class="btn btn-success ms-2" form="saleForm" data-receipt-print="1"><i class="bi bi-printer"></i> Create Sale & Print</button>
             </div>
         </form>
     </div>
@@ -252,6 +254,27 @@ document.addEventListener('DOMContentLoaded', function() {
                     const minutes = match[5];
                     hiddenInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
                 }
+            }
+        });
+
+        setupAjaxReceiptForm(saleForm, {
+            printField: document.getElementById('salePrintReceipt'),
+            onSuccess: function(data) {
+                showToast(data.message || 'Sale created successfully.', 'success');
+                const saleDateDisplayInput = document.getElementById('sale_date_display');
+                if (saleDateDisplayInput) {
+                    saleDateDisplayInput.value = '';
+                }
+                const hiddenInput = document.getElementById('sale_date');
+                if (hiddenInput) {
+                    hiddenInput.value = '';
+                }
+                setTimeout(function() {
+                    window.location.href = "{% url 'sale_history' %}";
+                }, 500);
+            },
+            onError: function(error) {
+                showToast(error.error || 'Unable to create sale.', 'danger');
             }
         });
     }
