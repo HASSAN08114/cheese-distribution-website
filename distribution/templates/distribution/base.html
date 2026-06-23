@@ -139,7 +139,7 @@
          * @param {HTMLFormElement} form - The form element
          * @returns {Promise}
          */
-        function submitFormAjax(form) {
+        function submitFormAjax(form, options = {}) {
             const formId = form.id || form.name || 'form-' + Math.random();
             
             // Prevent duplicate submissions
@@ -150,8 +150,10 @@
             // Mark form as submitting
             submittingForms.add(formId);
             
-            // Disable all submit buttons in the form
-            const submitButtons = form.querySelectorAll('button[type="submit"]');
+            // Disable only the active button when available so other actions stay usable.
+            const submitButtons = options.activeButton
+                ? [options.activeButton]
+                : form.querySelectorAll('button[type="submit"], button[data-receipt-print]');
             const originalButtonStates = [];
             
             submitButtons.forEach(btn => {
@@ -264,9 +266,16 @@
             let receiptWindow = null;
 
             printButtons.forEach(button => {
-                button.addEventListener('click', function() {
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    form._receiptActiveButton = this;
                     if (printField) {
                         printField.value = this.getAttribute('data-receipt-print') || '0';
+                    }
+                    if (typeof form.requestSubmit === 'function') {
+                        form.requestSubmit();
+                    } else {
+                        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
                     }
                 });
             });
@@ -274,12 +283,13 @@
             form.addEventListener('submit', function(e) {
                 e.preventDefault();
 
+                const activeButton = form._receiptActiveButton || null;
                 const shouldPrint = printField && printField.value === '1';
                 if (shouldPrint) {
                     receiptWindow = openReceiptWindow();
                 }
 
-                submitFormAjax(form)
+                submitFormAjax(form, { activeButton })
                     .then(data => {
                         if (data.success) {
                             if (shouldPrint && data.receipt_url) {
@@ -310,6 +320,7 @@
                         if (printField) {
                             printField.value = '0';
                         }
+                        form._receiptActiveButton = null;
                     });
             });
         }

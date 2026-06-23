@@ -58,8 +58,8 @@
     </div>
     <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="submit" class="btn btn-primary" data-receipt-print="0">Create Sale</button>
-        <button type="submit" class="btn btn-success" data-receipt-print="1">Create Sale & Print</button>
+        <button type="button" class="btn btn-primary" data-receipt-print="0">Create Sale</button>
+        <button type="button" class="btn btn-success" data-receipt-print="1">Create Sale & Print</button>
     </div>
 </form>
 
@@ -244,8 +244,13 @@ document.addEventListener('DOMContentLoaded', function() {
             printField: document.getElementById('addSalePrintReceipt'),
             onSuccess: function(data) {
                 showToast(data.message || 'Sale created successfully.', 'success');
-                const modal = bootstrap.Modal.getInstance(document.getElementById('addSaleModal'));
-                if (modal) modal.hide();
+                const modalEl = document.getElementById('addSaleModal');
+                if (modalEl) {
+                    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                    setTimeout(function() {
+                        modal.hide();
+                    }, 150);
+                }
                 addSaleForm.reset();
             },
             onError: function(error) {

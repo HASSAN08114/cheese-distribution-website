@@ -40,8 +40,8 @@
     </div>
     <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="submit" class="btn btn-primary" data-receipt-print="0">Create Payment</button>
-        <button type="submit" class="btn btn-success" data-receipt-print="1">Create Payment & Print</button>
+        <button type="button" class="btn btn-primary" data-receipt-print="0">Create Payment</button>
+        <button type="button" class="btn btn-success" data-receipt-print="1">Create Payment & Print</button>
     </div>
 </form>
 
@@ -102,18 +102,24 @@ document.addEventListener('DOMContentLoaded', function() {
             convertPaymentDateToISO();
         });
         
-        setupAjaxReceiptForm(quickPaymentForm,
-            function(data) {
+        setupAjaxReceiptForm(quickPaymentForm, {
+            printField: document.getElementById('quickPaymentPrintReceipt'),
+            onSuccess: function(data) {
                 showToast(data.message || 'Payment has been recorded successfully.', 'success');
-                const modal = bootstrap.Modal.getInstance(document.getElementById('quickPaymentModal'));
-                if (modal) modal.hide();
+                const modalEl = document.getElementById('quickPaymentModal');
+                if (modalEl) {
+                    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                    setTimeout(function() {
+                        modal.hide();
+                    }, 150);
+                }
                 quickPaymentForm.reset();
                 setDefaultPaymentDateTime();
             },
-            function(error) {
+            onError: function(error) {
                 showToast(error.error || 'An error occurred while recording the payment.', 'danger');
             }
-        );
+        });
     }
 });
 </script>
