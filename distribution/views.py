@@ -1972,416 +1972,367 @@ def client_delete(request, pk):
     return render(request, 'distribution/client_delete.html', {'client': client})
 
 
-@login_required
-def export_client_pdf(request, pk):
-    """Export client data as PDF"""
+# ─────────────────────────────────────────────────────────────────────────────
+# Shared PDF-building helper
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _build_client_pdf(client, start_date, end_date, company_name):
+    """
+    Build and return a BytesIO containing a single client's PDF statement.
+    start_date / end_date are datetime objects or None.
+    """
     from reportlab.lib.pagesizes import letter
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.platypus import (
+        SimpleDocTemplate, Table, TableStyle,
+        Paragraph, Spacer, HRFlowable,
+    )
     from reportlab.lib.units import inch
     from io import BytesIO
-    from django.http import HttpResponse
     from decimal import Decimal
-    
-    client = get_object_or_404(Client, pk=pk)
-    
-    # Calculate client statistics
-    total_sales = Sale.objects.filter(client=client, is_voided=False).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    total_paid = Payment.objects.filter(client=client, is_voided=False).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    previous_debt = client.previous_debt or Decimal('0.00')
-    outstanding_due = total_sales - total_paid
-    all_time_due = outstanding_due + previous_debt
-    
-    # Create PDF in memory
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18)
-    
-    # Container for PDF elements
-    elements = []
-    
-    # Define styles
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=24,
-        textColor=colors.HexColor('#1a1a1a'),
-        spaceAfter=30,
-        alignment=1  # Center alignment
-    )
-    
-    heading_style = ParagraphStyle(
-        'CustomHeading',
-        parent=styles['Heading2'],
-        fontSize=14,
-        textColor=colors.HexColor('#333333'),
-        spaceAfter=12,
-        spaceBefore=12
-    )
-    
-    normal_style = ParagraphStyle(
-        'CustomNormal',
-        parent=styles['Normal'],
-        fontSize=11,
-        spaceAfter=6
-    )
-    
-    # Add title
-    title = Paragraph(f"Client Report: {client.name}", title_style)
-    elements.append(title)
-    elements.append(Spacer(1, 0.3*inch))
-    
-    # Get time period from query params
     from datetime import datetime
-    start_date_str = request.GET.get('start_date')
-    end_date_str = request.GET.get('end_date')
-    
-    # Add Report Period Section
-    period_text = "Full Report (All-Time)"
-    if start_date_str or end_date_str:
-        try:
-            if start_date_str and end_date_str:
-                start_dt = datetime.strptime(start_date_str, '%Y-%m-%d')
-                end_dt = datetime.strptime(end_date_str, '%Y-%m-%d')
-                period_text = f"Report Period: {start_dt.strftime('%B %d, %Y')} to {end_dt.strftime('%B %d, %Y')}"
-            elif start_date_str:
-                start_dt = datetime.strptime(start_date_str, '%Y-%m-%d')
-                period_text = f"Report Period: From {start_dt.strftime('%B %d, %Y')}"
-            elif end_date_str:
-                end_dt = datetime.strptime(end_date_str, '%Y-%m-%d')
-                period_text = f"Report Period: Until {end_dt.strftime('%B %d, %Y')}"
-        except Exception:
-            pass
-    
-    period_style = ParagraphStyle(
-        'PeriodStyle',
-        parent=styles['Normal'],
-        fontSize=10,
-        textColor=colors.HexColor('#666666'),
-        spaceAfter=12,
-        alignment=1  # Center alignment
-    )
-    elements.append(Paragraph(period_text, period_style))
-    elements.append(Spacer(1, 0.2*inch))
-    
-    # Client Information Section
-    elements.append(Paragraph("Client Information", heading_style))
-    
-    client_info_data = [
-        ['Field', 'Value'],
-        ['Name', client.name],
-        ['Phone', client.phone],
-        ['Address', client.address],
-    ]
-    
-    client_info_table = Table(client_info_data, colWidths=[2*inch, 4*inch])
-    client_info_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3498db')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 12),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('FONTSIZE', (0, 1), (-1, -1), 11),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
-    ]))
-    
-    elements.append(client_info_table)
-    elements.append(Spacer(1, 0.3*inch))
-    
-    # Financial Summary Section
-    elements.append(Paragraph("Financial Summary", heading_style))
-    
-    financial_data = [
-        ['Metric', 'Amount'],
-        ['All-Time Sales', f'Rs. {total_sales:,.2f}'],
-        ['All-Time Payments Made', f'Rs. {total_paid:,.2f}'],
-        ['Outstanding Due', f'Rs. {outstanding_due:,.2f}'],
-        ['Previous Debt', f'Rs. {previous_debt:,.2f}'],
-        ['All Time Due', f'Rs. {all_time_due:,.2f}'],
-    ]
-    
-    financial_table = Table(financial_data, colWidths=[3*inch, 3*inch])
-    financial_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#27ae60')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 12),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('FONTSIZE', (0, 1), (-1, -1), 11),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
-        ('ALIGN', (1, 1), (1, -1), 'RIGHT'),
-        # Previous Debt Bold
-        ('BACKGROUND', (0, 4), (1, 4), colors.HexColor("#ff0000")),
-    ]))
-    
-    elements.append(financial_table)
-    elements.append(Spacer(1, 0.3*inch))
-    
-    # Prepare filters for sales and payments
-    sales_filter = {'client': client, 'is_voided': False}
-    payments_filter = {'client': client, 'is_voided': False}
-    if start_date_str:
-        try:
-            start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
-            sales_filter['sale_date__date__gte'] = start_date
-            payments_filter['date__date__gte'] = start_date
-        except Exception:
-            pass
-    if end_date_str:
-        try:
-            end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
-            sales_filter['sale_date__date__lte'] = end_date
-            payments_filter['date__date__lte'] = end_date
-        except Exception:
-            pass
 
-    # Sales History Section
-    elements.append(Spacer(1, 0.4*inch))
-    elements.append(Paragraph("Sales History", heading_style))
-    sales = Sale.objects.filter(**sales_filter).prefetch_related('saleitem_set').order_by('-sale_date')
-    
+    # ── Opening Balance ───────────────────────────────────────────────────────
+    if start_date:
+        sales_before = Sale.objects.filter(
+            client=client, is_voided=False, sale_date__date__lt=start_date
+        ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+        paid_before = Payment.objects.filter(
+            client=client, is_voided=False, date__date__lt=start_date
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        opening_balance = (client.previous_debt or Decimal('0.00')) + sales_before - paid_before
+    else:
+        opening_balance = client.previous_debt or Decimal('0.00')
+
+    # ── Period filters ────────────────────────────────────────────────────────
+    sales_filter    = {'client': client, 'is_voided': False}
+    payments_filter = {'client': client, 'is_voided': False}
+    if start_date:
+        sales_filter['sale_date__date__gte']  = start_date
+        payments_filter['date__date__gte']    = start_date
+    if end_date:
+        sales_filter['sale_date__date__lte']  = end_date
+        payments_filter['date__date__lte']    = end_date
+
+    invoiced_amount = Sale.objects.filter(**sales_filter).aggregate(
+        total=Sum('total_amount'))['total'] or Decimal('0.00')
+    amount_paid = Payment.objects.filter(**payments_filter).aggregate(
+        total=Sum('amount'))['total'] or Decimal('0.00')
+    balance_due = opening_balance + invoiced_amount - amount_paid
+
+    # ── Period label ──────────────────────────────────────────────────────────
+    if start_date and end_date:
+        period_text = f"{start_date.strftime('%B %d, %Y')}  –  {end_date.strftime('%B %d, %Y')}"
+    elif start_date:
+        period_text = f"From {start_date.strftime('%B %d, %Y')}"
+    elif end_date:
+        period_text = f"Until {end_date.strftime('%B %d, %Y')}"
+    else:
+        period_text = "All Time"
+
+    # ── Colour palette ────────────────────────────────────────────────────────
+    C_DARK      = colors.HexColor('#1C2833')
+    C_BLUE      = colors.HexColor('#2E86C1')
+    C_GREEN     = colors.HexColor('#1E8449')
+    C_RED       = colors.HexColor('#C0392B')
+    C_STRIPE    = colors.HexColor('#EBF5FB')
+    C_HEADER_FG = colors.white
+    C_RULE      = colors.HexColor('#BDC3C7')
+
+    # ── Document ──────────────────────────────────────────────────────────────
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=letter,
+        rightMargin=54, leftMargin=54, topMargin=54, bottomMargin=36,
+    )
+
+    styles = getSampleStyleSheet()
+
+    def S(name, **kw):
+        return ParagraphStyle(name, parent=styles['Normal'], **kw)
+
+    style_company = S('Company', fontSize=9,  textColor=colors.HexColor('#7F8C8D'), alignment=1, spaceAfter=2)
+    style_title   = S('Title',   fontSize=22, textColor=C_DARK, alignment=1, spaceAfter=20, fontName='Helvetica-Bold')
+    style_period  = S('Period',  fontSize=10, textColor=colors.HexColor('#555555'), alignment=1, spaceAfter=2)
+    style_section = S('Section', fontSize=11, textColor=C_DARK, fontName='Helvetica-Bold', spaceBefore=14, spaceAfter=6)
+    style_empty   = S('Empty',   fontSize=9,  textColor=colors.HexColor('#888888'))
+    style_footer  = S('Footer',  fontSize=7,  textColor=colors.HexColor('#AAAAAA'), alignment=1, spaceBefore=4)
+
+    def money(v):
+        return f"Rs. {v:,.2f}"
+
+    elements = []
+
+    # ── Header ────────────────────────────────────────────────────────────────
+    elements.append(Paragraph(company_name, style_company))
+    elements.append(Paragraph(f"Account Statement — {client.name}", style_title))
+    elements.append(Paragraph(f"Period: {period_text}", style_period))
+    elements.append(Spacer(1, 4))
+    elements.append(HRFlowable(width="100%", thickness=1.5, color=C_BLUE, spaceAfter=10))
+
+    # ── Client info ───────────────────────────────────────────────────────────
+    info_rows = [['Name', client.name or '—']]
+    if client.phone:
+        info_rows.append(['Phone', client.phone])
+    if client.address:
+        info_rows.append(['Address', client.address])
+
+    info_table = Table(info_rows, colWidths=[1.1*inch, 5.9*inch])
+    info_table.setStyle(TableStyle([
+        ('FONTNAME',      (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTNAME',      (1, 0), (1, -1), 'Helvetica'),
+        ('FONTSIZE',      (0, 0), (-1, -1), 9),
+        ('TEXTCOLOR',     (0, 0), (0, -1), colors.HexColor('#555555')),
+        ('TEXTCOLOR',     (1, 0), (1, -1), C_DARK),
+        ('TOPPADDING',    (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
+    ]))
+    elements.append(info_table)
+    elements.append(Spacer(1, 10))
+    elements.append(HRFlowable(width="100%", thickness=0.5, color=C_RULE, spaceAfter=10))
+
+    # ── Account Summary ───────────────────────────────────────────────────────
+    elements.append(Paragraph("Account Summary", style_section))
+
+    LABEL_W  = 3.5 * inch
+    AMOUNT_W = 3.5 * inch
+
+    summary_table = Table(
+        [
+            ['Opening Balance', money(opening_balance)],
+            ['Invoiced Amount', money(invoiced_amount)],
+            ['Amount Paid',     money(amount_paid)],
+        ],
+        colWidths=[LABEL_W, AMOUNT_W],
+    )
+    summary_table.setStyle(TableStyle([
+        ('FONTNAME',      (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE',      (0, 0), (-1, -1), 10),
+        ('TEXTCOLOR',     (0, 0), (-1, -1), C_DARK),
+        ('ALIGN',         (1, 0), (1, -1),  'RIGHT'),
+        ('TOPPADDING',    (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING',   (0, 0), (-1, -1), 8),
+        ('RIGHTPADDING',  (0, 0), (-1, -1), 8),
+        ('TEXTCOLOR',     (1, 2), (1, 2),   C_GREEN),
+        ('LINEBELOW',     (0, 0), (-1, -1), 0.5, C_RULE),
+    ]))
+    elements.append(summary_table)
+
+    elements.append(Spacer(0, -1))
+    elements.append(HRFlowable(width="100%", thickness=1, color=C_DARK, spaceAfter=2))
+
+    bal_color = C_RED if balance_due > 0 else C_GREEN
+    balance_row = Table(
+        [['Balance Due', money(balance_due)]],
+        colWidths=[LABEL_W, AMOUNT_W],
+    )
+    balance_row.setStyle(TableStyle([
+        ('FONTNAME',      (0, 0), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE',      (0, 0), (-1, -1), 12),
+        ('TEXTCOLOR',     (0, 0), (0, 0),   C_DARK),
+        ('TEXTCOLOR',     (1, 0), (1, 0),   bal_color),
+        ('ALIGN',         (1, 0), (1, 0),   'RIGHT'),
+        ('TOPPADDING',    (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('LEFTPADDING',   (0, 0), (-1, -1), 8),
+        ('RIGHTPADDING',  (0, 0), (-1, -1), 8),
+        ('BACKGROUND',    (0, 0), (-1, -1), colors.HexColor('#FDFEFE')),
+    ]))
+    elements.append(balance_row)
+    elements.append(HRFlowable(width="100%", thickness=1, color=C_DARK, spaceAfter=14))
+
+    # ── Sales History ─────────────────────────────────────────────────────────
+    elements.append(Paragraph("Sales History", style_section))
+    sales = Sale.objects.filter(**sales_filter).prefetch_related('saleitem_set').order_by('sale_date')
+
     if sales.exists():
-        sales_data = [["ID", "Date", "Product", "Qty", "Packet Price", "Total"]]
+        COL_W = [0.55*inch, 0.9*inch, 2.2*inch, 0.55*inch, 1.1*inch, 1.2*inch]
+        sales_data = [["#", "Date", "Product", "Qty", "Unit Price", "Amount"]]
+
         for sale in sales:
-            sale_items = sale.saleitem_set.all()
-            is_first_item = True
-            for item in sale_items:
-                if is_first_item:
-                    sales_data.append([
-                        f"{sale.id}",
-                        sale.sale_date.strftime('%d-%m-%Y'),
-                        f"{item.cheese_product}",
-                        str(item.quantity_packets),
-                        f"{item.selling_price_per_packet:,.2f}",
-                        f"{item.quantity_packets * item.selling_price_per_packet:,.2f}"
-                    ])
-                    is_first_item = False
-                else:
-                    sales_data.append([
-                        "",
-                        "",
-                        f"{item.cheese_product}",
-                        str(item.quantity_packets),
-                        f"{item.selling_price_per_packet:,.2f}",
-                        f"{item.quantity_packets * item.selling_price_per_packet:,.2f}"
-                    ])
-            # Add total row for this sale
-            sales_data.append([
-                "",
-                "SALE TOTAL",
-                "",
-                "",
-                f"{sale.total_amount:,.2f}"
-            ])
-        
-        sales_table = Table(sales_data, colWidths=[1*inch,1.2*inch, 1.8*inch, 0.8*inch, 1.2*inch, 1.2*inch])
+            items = list(sale.saleitem_set.all())
+            for i, item in enumerate(items):
+                sales_data.append([
+                    str(sale.id) if i == 0 else "",
+                    sale.sale_date.strftime('%d-%m-%Y') if i == 0 else "",
+                    str(item.cheese_product),
+                    str(item.quantity_packets),
+                    f"{item.selling_price_per_packet:,.2f}",
+                    f"{item.quantity_packets * item.selling_price_per_packet:,.2f}",
+                ])
+            sales_data.append(["", "", "", "", "Sale Total →", f"{sale.total_amount:,.2f}"])
+
+        sales_table = Table(sales_data, colWidths=COL_W, repeatRows=1)
         sales_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2980b9')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 11),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
-            ('ALIGN', (1, 1), (1, -1), 'RIGHT'),
-            ('ALIGN', (2, 1), (4, -1), 'RIGHT'),
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-            # Highlight sale total rows
+            ('BACKGROUND',    (0, 0), (-1, 0),  C_BLUE),
+            ('TEXTCOLOR',     (0, 0), (-1, 0),  C_HEADER_FG),
+            ('FONTNAME',      (0, 0), (-1, 0),  'Helvetica-Bold'),
+            ('FONTSIZE',      (0, 0), (-1, 0),  9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0),  8),
+            ('TOPPADDING',    (0, 0), (-1, 0),  8),
+            ('FONTNAME',      (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE',      (0, 1), (-1, -1), 8),
+            ('TOPPADDING',    (0, 1), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 4),
+            ('LEFTPADDING',   (0, 0), (-1, -1), 5),
+            ('RIGHTPADDING',  (0, 0), (-1, -1), 5),
+            ('TEXTCOLOR',     (0, 1), (-1, -1), C_DARK),
+            ('ALIGN',         (3, 0), (-1, -1), 'RIGHT'),
+            ('ALIGN',         (0, 0), (1,  -1), 'CENTER'),
+            ('LINEBELOW',     (0, 0), (-1, -1), 0.3, C_RULE),
+            ('BOX',           (0, 0), (-1, -1), 0.5, colors.HexColor('#AEB6BF')),
         ]))
-        
-        # Highlight sale total rows
+
         row_idx = 1
         for sale in sales:
-            sale_items = sale.saleitem_set.all()
-            row_idx += len(sale_items)
+            item_count = sale.saleitem_set.count()
+            for j in range(item_count):
+                if j % 2 == 0:
+                    sales_table.setStyle(TableStyle([
+                        ('BACKGROUND', (0, row_idx + j), (-1, row_idx + j), C_STRIPE),
+                    ]))
+            row_idx += item_count
             sales_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, row_idx), (-1, row_idx), colors.HexColor('#d5dbdb')),
-                ('FONTNAME', (0, row_idx), (-1, row_idx), 'Helvetica-Bold'),
+                ('BACKGROUND', (0, row_idx), (-1, row_idx), colors.HexColor('#D5D8DC')),
+                ('FONTNAME',   (0, row_idx), (-1, row_idx), 'Helvetica-Bold'),
+                ('FONTSIZE',   (0, row_idx), (-1, row_idx), 8),
             ]))
             row_idx += 1
-        
+
         elements.append(sales_table)
     else:
-        elements.append(Paragraph("No sales found for the selected period.", 
-                                ParagraphStyle('Normal', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#666666'))))
+        elements.append(Paragraph("No sales recorded for this period.", style_empty))
 
-    # Payments History Section
-    elements.append(Spacer(1, 0.4*inch))
-    elements.append(Paragraph("Payments History", heading_style))
-    payments = Payment.objects.filter(**payments_filter).order_by('-date')
-    payments_data = [["Date", "Amount (Rs.)", "Mode", "Bank"]]
-    for payment in payments:
-        payments_data.append([
-            payment.date.strftime('%Y-%m-%d'),
-            f"{payment.amount:,.2f}",
-            payment.get_mode_display(),
-            payment.bank or "-"
+    # ── Payments History ──────────────────────────────────────────────────────
+    elements.append(Spacer(1, 14))
+    elements.append(Paragraph("Payments Received", style_section))
+    payments = Payment.objects.filter(**payments_filter).order_by('date')
+ 
+    if payments.exists():
+        PAY_COL_W = [1.7*inch, 1.8*inch, 1.5*inch, 2.0*inch]
+        pay_data  = [["Date", "Mode", "Bank","Amount (Rs.)"]]
+        for p in payments:
+            pay_data.append([
+                p.date.strftime('%d-%m-%Y'),
+                p.get_mode_display(),
+                p.bank or "—",
+                f"{p.amount:,.2f}",
+            ])
+ 
+        pay_table = Table(pay_data, colWidths=PAY_COL_W, repeatRows=1)
+        pay_ts = TableStyle([
+            ('BACKGROUND',    (0, 0), (-1, 0),  C_GREEN),
+            ('TEXTCOLOR',     (0, 0), (-1, 0),  C_HEADER_FG),
+            ('FONTNAME',      (0, 0), (-1, 0),  'Helvetica-Bold'),
+            ('FONTSIZE',      (0, 0), (-1, 0),  9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0),  8),
+            ('TOPPADDING',    (0, 0), (-1, 0),  8),
+            ('FONTNAME',      (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE',      (0, 1), (-1, -1), 9),
+            ('TOPPADDING',    (0, 1), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 5),
+            ('LEFTPADDING',   (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING',  (0, 0), (-1, -1), 6),
+            ('TEXTCOLOR',     (0, 1), (-1, -1), C_DARK),
+            ('TEXTCOLOR',     (3, 1), (3, -1),  C_GREEN),
+            ('FONTNAME',      (3, 1), (3, -1),  'Helvetica-Bold'),
+            ('ALIGN',         (3, 0), (3, -1),  'RIGHT'),
+            ('LINEBELOW',     (0, 0), (-1, -1), 0.3, C_RULE),
+            ('BOX',           (0, 0), (-1, -1), 0.5, colors.HexColor('#AEB6BF')),
         ])
-    payments_table = Table(payments_data, colWidths=[1.5*inch, 1.5*inch, 1.5*inch, 1.5*inch])
-    payments_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#8e44ad')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 12),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('FONTSIZE', (0, 1), (-1, -1), 11),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
-        ('ALIGN', (1, 1), (1, -1), 'RIGHT'),
-    ]))
-    elements.append(payments_table)
+        for i in range(1, len(pay_data)):
+            if i % 2 == 0:
+                pay_ts.add('BACKGROUND', (0, i), (-1, i), C_STRIPE)
+        pay_table.setStyle(pay_ts)
+        elements.append(pay_table)
+    else:
+        elements.append(Paragraph("No payments recorded for this period.", style_empty))
+ 
 
-    # Build PDF
+    # ── Footer ────────────────────────────────────────────────────────────────
+    elements.append(Spacer(1, 20))
+    elements.append(HRFlowable(width="100%", thickness=0.5, color=C_RULE))
+    elements.append(Paragraph(
+        f"Generated on {datetime.now().strftime('%B %d, %Y')}",
+        style_footer,
+    ))
+
     doc.build(elements)
-
-    # Get PDF data
     buffer.seek(0)
+    return buffer
 
-    # Create HTTP response
+@login_required
+def export_client_pdf(request, pk):
+    """Export a single client's account statement as a PDF download."""
+    from datetime import datetime
+    from django.http import HttpResponse
+
+    client = get_object_or_404(Client, pk=pk)
+
+    start_date = end_date = None
+    try:
+        if request.GET.get('start_date'):
+            start_date = datetime.strptime(request.GET['start_date'], '%Y-%m-%d')
+        if request.GET.get('end_date'):
+            end_date = datetime.strptime(request.GET['end_date'], '%Y-%m-%d')
+    except Exception:
+        pass
+
+    try:
+        company_name = ReceiptSettings.load().company_name
+    except Exception:
+        company_name = "Zain Traders"
+
+    buffer = _build_client_pdf(client, start_date, end_date, company_name)
+
+    safe_name = client.name.replace(" ", "_")
     response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="client_{client.name.replace(" ", "_")}.pdf"'
-
+    response['Content-Disposition'] = f'attachment; filename="statement_{safe_name}.pdf"'
     return response
 
 
 @login_required
 def export_all_clients_pdf(request):
-    """Export all clients' data as combined PDF"""
-    from reportlab.lib.pagesizes import letter
-    from reportlab.lib import colors
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
-    from reportlab.lib.units import inch
+    """
+    Generate one PDF per client and return them all as a ZIP archive.
+    The same start_date / end_date query params are forwarded to every statement.
+    """
+    import zipfile
+    from datetime import datetime
     from io import BytesIO
     from django.http import HttpResponse
-    from decimal import Decimal
-    
+
+    start_date = end_date = None
+    try:
+        if request.GET.get('start_date'):
+            start_date = datetime.strptime(request.GET['start_date'], '%Y-%m-%d')
+        if request.GET.get('end_date'):
+            end_date = datetime.strptime(request.GET['end_date'], '%Y-%m-%d')
+    except Exception:
+        pass
+
+    try:
+        company_name = ReceiptSettings.load().company_name
+    except Exception:
+        company_name = "Zain Traders"
+
     clients = Client.objects.all().order_by('name')
-    
-    # Create PDF in memory
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18)
-    
-    # Container for PDF elements
-    elements = []
-    
-    # Define styles
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=24,
-        textColor=colors.HexColor('#1a1a1a'),
-        spaceAfter=30,
-        alignment=1
-    )
-    
-    heading_style = ParagraphStyle(
-        'CustomHeading',
-        parent=styles['Heading2'],
-        fontSize=14,
-        textColor=colors.HexColor('#333333'),
-        spaceAfter=12,
-        spaceBefore=12
-    )
-    
-    # Add main title
-    title = Paragraph("All Clients Report", title_style)
-    elements.append(title)
-    elements.append(Spacer(1, 0.3*inch))
-    
-    # Add each client's data on a separate page
-    for idx, client in enumerate(clients):
-        if idx > 0:
-            elements.append(PageBreak())
-        
-        # Client title
-        client_title = Paragraph(f"Client: {client.name}", heading_style)
-        elements.append(client_title)
-        
-        # Client Information
-        elements.append(Paragraph("Information", ParagraphStyle('ClientHeading', parent=styles['Heading3'], fontSize=11, spaceAfter=8)))
-        
-        client_info_data = [
-            ['Field', 'Value'],
-            ['Name', client.name],
-            ['Phone', client.phone],
-            ['Address', client.address],
-        ]
-        
-        client_info_table = Table(client_info_data, colWidths=[1.5*inch, 4.5*inch])
-        client_info_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3498db')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#ecf0f1')),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-        ]))
-        elements.append(client_info_table)
-        elements.append(Spacer(1, 0.2*inch))
-        
-        # Financial Summary
-        total_sales = Sale.objects.filter(client=client, is_voided=False).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-        total_paid = Payment.objects.filter(client=client, is_voided=False).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        previous_debt = client.previous_debt or Decimal('0.00')
-        outstanding_due = total_sales - total_paid
-        all_time_due = outstanding_due + previous_debt
-        
-        elements.append(Paragraph("Financial Summary", ParagraphStyle('ClientHeading', parent=styles['Heading3'], fontSize=11, spaceAfter=8)))
-        
-        financial_data = [
-            ['Metric', 'Amount'],
-            ['All-Time Sales', f'Rs. {total_sales:,.2f}'],
-            ['All-Time Payments', f'Rs. {total_paid:,.2f}'],
-            ['Outstanding Due', f'Rs. {outstanding_due:,.2f}'],
-            ['Previous Debt', f'Rs. {previous_debt:,.2f}'],
-            ['All Time Due', f'Rs. {all_time_due:,.2f}'],
-        ]
-        
-        financial_table = Table(financial_data, colWidths=[2.5*inch, 3.5*inch])
-        financial_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#27ae60')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#ecf0f1')),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('ALIGN', (1, 1), (1, -1), 'RIGHT'),
-            # Bold previous debt
-            ('BACKGROUND', (0, 4), (1, 4), colors.HexColor("#ff0000")),
-        ]))
-        elements.append(financial_table)
-        elements.append(Spacer(1, 0.2*inch))
-    
-    # Build PDF
-    doc.build(elements)
-    
-    # Get PDF data
-    buffer.seek(0)
-    
-    # Create HTTP response
-    response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
-    response['Content-Disposition'] = 'attachment; filename="all_clients_report.pdf"'
-    
+
+    zip_buffer = BytesIO()
+    with zipfile.ZipFile(zip_buffer, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
+        for client in clients:
+            pdf_buffer = _build_client_pdf(client, start_date, end_date, company_name)
+            safe_name  = client.name.replace(" ", "_")
+            zf.writestr(f"statement_{safe_name}.pdf", pdf_buffer.getvalue())
+
+    zip_buffer.seek(0)
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M')
+    response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
+    response['Content-Disposition'] = f'attachment; filename="all_client_statements_{timestamp}.zip"'
     return response
 
 
