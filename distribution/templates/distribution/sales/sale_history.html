@@ -19,9 +19,14 @@
             <h5 class="section-title-tight">Sale History</h5>
             <p class="section-subtitle-muted">View all completed sales and transactions</p>
         </div>
-        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addSaleModal">
-            <i class="bi bi-plus-lg"></i> Create Quick Sale
-        </button>
+        <div class="d-flex gap-2 flex-wrap">
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="saleHistoryRefreshBtn">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addSaleModal">
+                <i class="bi bi-plus-lg"></i> Create Quick Sale
+            </button>
+        </div>
     </div>
     
     <!-- Filter Controls -->
@@ -39,12 +44,15 @@
                 <label class="form-label form-label-sm-muted">To Date</label>
                 <input type="text" id="filterToDate" class="form-control form-control-sm js-date-picker" placeholder="DD/MM/YYYY">
             </div>
-            <div class="sales-filter-field">
-                <label class="form-label form-label-sm-muted">Client</label>
-                <select id="filterClient" class="form-control form-control-sm">
-                    <option value="">-- All Clients --</option>
-                </select>
-            </div>
+                <div class="sales-filter-field">
+                    <label class="form-label form-label-sm-muted">Client</label>
+                    <select id="filterClient" class="form-control form-control-sm">
+                        <option value="">-- All Clients --</option>
+                        {% for client in clients %}
+                            <option value="{{ client.id }}">{{ client.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
             <button class="btn btn-sm btn-secondary btn-fit-content" onclick="resetSalesFilters()" title="Reset filters">
                 Reset
             </button>
@@ -62,43 +70,24 @@
                     <th class="text-end">Actions</th>
                 </tr>
             </thead>
-            <tbody>
-                {% for item in sales_data %}
-                <tr class="{% if item.sale.is_voided %}table-danger{% elif item.has_actions %}table-warning{% endif %}">
-                    <td>#{{ item.sale.id }}{% if item.sale.is_voided %} <span class="badge bg-danger ms-1">Voided</span>{% endif %}</td>
-                    <td>{{ item.sale.client.name }}</td>
-                    <td>PKR {{ item.sale.total_amount|floatformat:2 }}{% if item.sale.is_voided %} <span class="text-danger small">Excluded</span>{% endif %}</td>
-                    <td data-iso-date="{{ item.sale.sale_date|date:'c' }}">{{ item.sale.sale_date|date:"d/m/Y H:i" }}</td>
-                    <td class="text-end table-actions">
-                        <button class="btn btn-sm btn-outline-success print-sale-btn"
-                                data-print-url="{% url 'sale_print' item.sale.id %}"
-                                title="Print invoice">
-                            <i class="bi bi-printer"></i>
-                        </button>
-                        <button class="btn btn-sm btn-outline-secondary view-sale-modal"
-                                data-id="{{ item.sale.id }}"
-                                title="View details">
-                            View
-                        </button>
-                        {% if user_is_owner %}
-                        <button class="btn btn-sm btn-outline-danger delete-sale-btn"
-                                data-id="{{ item.sale.id }}"
-                                data-client-name="{{ item.sale.client.name }}"
-                                title="Delete sale">
-                            <i class="bi bi-trash"></i>
-                        </button>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="4" class="text-center text-muted">
-                        No sales yet
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
+            <tbody id="saleHistoryTableBody"></tbody>
         </table>
+        <div id="saleHistoryLoading" class="text-center py-3 d-none">
+            <div class="spinner-border spinner-border-sm text-primary me-2" role="status" aria-hidden="true"></div>
+            Loading more sales...
+        </div>
+        <div id="saleHistoryEmptyState" class="text-center text-muted py-4 d-none">
+            No sales found.
+        </div>
+        <div id="saleHistoryError" class="alert alert-danger d-none mt-3 mb-0">
+            <div class="d-flex justify-content-between align-items-center gap-3">
+                <span data-history-error-message>Failed to load sales history.</span>
+                <button type="button" class="btn btn-outline-danger btn-sm" id="saleHistoryRetryBtn">
+                    Refresh
+                </button>
+            </div>
+        </div>
+        <div id="saleHistorySentinel" class="py-2"></div>
     </div>
 </div>
 
@@ -180,6 +169,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="/static/js/history_pagination.js"></script>
 <script>
 // Setup z-index for return modals to ensure they appear on top
 document.addEventListener('DOMContentLoaded', function() {
@@ -621,82 +611,88 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Sales History Filtering
-function parseDdMmDate(value) {
-    if (!value) return null;
-    const match = value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-    if (!match) return null;
+document.addEventListener('DOMContentLoaded', function() {
+    const saleFilters = {
+        saleId: document.getElementById('filterSaleId'),
+        fromDate: document.getElementById('filterFromDate'),
+        toDate: document.getElementById('filterToDate'),
+        client: document.getElementById('filterClient'),
+    };
 
-    const day = parseInt(match[1], 10);
-    const month = parseInt(match[2], 10);
-    const year = parseInt(match[3], 10);
-    const parsed = new Date(year, month - 1, day);
-
-    if (
-        parsed.getFullYear() !== year ||
-        parsed.getMonth() !== month - 1 ||
-        parsed.getDate() !== day
-    ) {
-        return null;
+    function currentSaleFilters() {
+        return {
+            sale_id: saleFilters.saleId ? saleFilters.saleId.value.trim() : '',
+            from_date: saleFilters.fromDate ? saleFilters.fromDate.value.trim() : '',
+            to_date: saleFilters.toDate ? saleFilters.toDate.value.trim() : '',
+            client_id: saleFilters.client ? saleFilters.client.value : '',
+        };
     }
 
-    return parsed;
-}
+    window.saleHistoryPager = createHistoryPaginator({
+        endpoint: "{% url 'get_sales_history' %}",
+        tbody: '#saleHistoryTableBody',
+        sentinel: '#saleHistorySentinel',
+        loading: '#saleHistoryLoading',
+        error: '#saleHistoryError',
+        empty: '#saleHistoryEmptyState',
+        refreshButton: '#saleHistoryRefreshBtn',
+        pageSize: 20,
+        filterInputs: ['#filterSaleId', '#filterFromDate', '#filterToDate', '#filterClient'],
+        filterDebounceMs: 250,
+        getFilters: currentSaleFilters,
+        renderRow: function(item) {
+            const saleClass = item.is_voided ? 'table-danger' : (item.has_actions ? 'table-warning' : '');
+            const voidBadge = item.is_voided ? ' <span class="badge bg-danger ms-1">Voided</span>' : '';
+            const excludedText = item.is_voided ? ' <span class="text-danger small">Excluded</span>' : '';
 
-function applySalesFilters() {
-    const fromDate = document.getElementById('filterFromDate').value;
-    const toDate = document.getElementById('filterToDate').value;
-    const filterClient = document.getElementById('filterClient').value;
-    const filterSaleId = document.getElementById('filterSaleId').value.trim();
-
-    const rows = document.querySelectorAll('tbody tr');
-    rows.forEach(row => {
-        if (row.querySelector('td:nth-child(5)')) {  // Check if it's not an empty message row
-            const clientName = row.querySelector('td:nth-child(2)').textContent.trim();
-            const dateIso = row.querySelector('td:nth-child(4)').getAttribute('data-iso-date');
-            const saleDate = new Date(dateIso);
-            const saleId = row.querySelector('td:nth-child(1)').textContent.replace('#', '').trim();
-
-            const fromDateObj = parseDdMmDate(fromDate);
-            const toDateObj = parseDdMmDate(toDate);
-            if (toDateObj) {
-                toDateObj.setHours(23, 59, 59, 999);
-            }
-            
-            let show = true;
-            
-            // Apply date filter
-            if (fromDateObj && saleDate < fromDateObj) show = false;
-            if (toDateObj && saleDate > toDateObj) show = false;
-            
-            // Apply client filter
-            if (filterClient && clientName !== filterClient) show = false;
-            if (filterSaleId && saleId !== filterSaleId) show = false;
-
-            row.style.display = show ? '' : 'none';
-        }
+            return `
+                <tr class="${saleClass}">
+                    <td>#${escapeHtml(item.id)}${voidBadge}</td>
+                    <td>${escapeHtml(item.client_name)}</td>
+                    <td>PKR ${Number(item.total_amount).toFixed(2)}${excludedText}</td>
+                    <td data-iso-date="${escapeHtml(item.sale_date)}">${escapeHtml(item.sale_date_display)}</td>
+                    <td class="text-end table-actions">
+                        <button class="btn btn-sm btn-outline-success print-sale-btn"
+                                data-print-url="/sales/${escapeHtml(item.id)}/print/"
+                                title="Print invoice">
+                            <i class="bi bi-printer"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary view-sale-modal"
+                                data-id="${escapeHtml(item.id)}"
+                                title="View details">
+                            View
+                        </button>
+                        {% if user_is_owner %}
+                        <button class="btn btn-sm btn-outline-danger delete-sale-btn"
+                                data-id="${escapeHtml(item.id)}"
+                                data-client-name="${escapeHtml(item.client_name)}"
+                                title="Delete sale">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                        {% endif %}
+                    </td>
+                </tr>
+            `;
+        },
     });
-}
-    
-    // Delete Sale Handler
+
     document.addEventListener('click', function(e) {
         const button = e.target.closest('.delete-sale-btn');
-        if (button) {
-            const saleId = button.getAttribute('data-id');
-            const clientName = button.getAttribute('data-client-name');
-            
-            document.getElementById('deleteSaleClientName').textContent = clientName;
-            document.getElementById('confirmDeleteSaleBtn').setAttribute('data-sale-id', saleId);
-            
-            const deleteSaleModal = new bootstrap.Modal(document.getElementById('deleteSaleModal'));
-            deleteSaleModal.show();
-        }
+        if (!button) return;
+
+        const saleId = button.getAttribute('data-id');
+        const clientName = button.getAttribute('data-client-name');
+
+        document.getElementById('deleteSaleClientName').textContent = clientName;
+        document.getElementById('confirmDeleteSaleBtn').setAttribute('data-sale-id', saleId);
+
+        const deleteSaleModal = new bootstrap.Modal(document.getElementById('deleteSaleModal'));
+        deleteSaleModal.show();
     });
-    
-    // Confirm Delete Sale Handler
+
     document.getElementById('confirmDeleteSaleBtn').addEventListener('click', function() {
         const saleId = this.getAttribute('data-sale-id');
-        
+
         fetch(`/sales/${saleId}/delete/`, {
             method: 'POST',
             headers: {
@@ -710,8 +706,11 @@ function applySalesFilters() {
                 showToast(data.message, 'success');
                 const deleteSaleModal = bootstrap.Modal.getInstance(document.getElementById('deleteSaleModal'));
                 deleteSaleModal.hide();
-                // Reload the page to show updated data
-                setTimeout(() => window.location.reload(), 1000);
+                if (window.saleHistoryPager) {
+                    window.saleHistoryPager.refresh();
+                } else {
+                    setTimeout(() => window.location.reload(), 1000);
+                }
             } else {
                 showToast(data.error || 'Error deleting sale', 'danger');
             }
@@ -721,40 +720,23 @@ function applySalesFilters() {
             showToast('An error occurred while deleting the sale', 'danger');
         });
     });
+});
 
 function resetSalesFilters() {
-    document.getElementById('filterFromDate').value = '';
-    document.getElementById('filterToDate').value = '';
-    document.getElementById('filterClient').value = '';
-    document.getElementById('filterSaleId').value = '';
-    const rows = document.querySelectorAll('tbody tr');
-    rows.forEach(row => row.style.display = '');
-}
+    const saleId = document.getElementById('filterSaleId');
+    const fromDate = document.getElementById('filterFromDate');
+    const toDate = document.getElementById('filterToDate');
+    const client = document.getElementById('filterClient');
 
-// Attach filter event listeners
-document.addEventListener('DOMContentLoaded', function() {
-    document.getElementById('filterFromDate').addEventListener('input', applySalesFilters);
-    document.getElementById('filterToDate').addEventListener('input', applySalesFilters);
-    document.getElementById('filterClient').addEventListener('change', applySalesFilters);
-    document.getElementById('filterSaleId').addEventListener('input', applySalesFilters);
-    // Populate client dropdown with unique clients from the table
-    const clientSelect = document.getElementById('filterClient');
-    const rows = document.querySelectorAll('tbody tr');
-    const seenClients = new Set();
-    
-    rows.forEach(row => {
-        if (row.querySelector('td:nth-child(5)')) {  // Not an empty message row
-            const clientName = row.querySelector('td:nth-child(2)').textContent.trim();
-            if (clientName && !seenClients.has(clientName)) {
-                seenClients.add(clientName);
-                const option = document.createElement('option');
-                option.value = clientName;
-                option.textContent = clientName;
-                clientSelect.appendChild(option);
-            }
-        }
-    });
-});
+    if (saleId) saleId.value = '';
+    if (fromDate) fromDate.value = '';
+    if (toDate) toDate.value = '';
+    if (client) client.value = '';
+
+    if (window.saleHistoryPager) {
+        window.saleHistoryPager.refresh();
+    }
+}
 
 // Populate current date/time when quick sale modal is shown
 document.addEventListener('DOMContentLoaded', function() {

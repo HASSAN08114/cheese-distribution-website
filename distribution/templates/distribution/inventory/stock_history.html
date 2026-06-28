@@ -6,11 +6,14 @@
 
 <!-- Stock Additions Table -->
 <div class="card">
-    <div class="card-header">
+    <div class="card-header card-header-flex">
         <div>
             <h5 class="section-title-tight">Stock Addition History</h5>
             <p class="section-subtitle-muted">View all stock additions and modifications</p>
         </div>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="stockHistoryRefreshBtn">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
     </div>
     
     <!-- Filter Controls -->
@@ -24,24 +27,33 @@
                 <label class="form-label form-label-sm-muted">To Date</label>
                 <input type="text" id="stockFilterToDate" class="form-control form-control-sm js-date-picker" placeholder="DD/MM/YYYY">
             </div>
-            <div class="filter-field-sm">
-                <label class="form-label form-label-sm-muted">Manufacturer</label>
-                <select id="stockFilterManufacturer" class="form-control form-control-sm">
-                    <option value="">-- All Manufacturers --</option>
-                </select>
-            </div>
-            <div class="filter-field-sm">
-                <label class="form-label form-label-sm-muted">Type</label>
-                <select id="stockFilterType" class="form-control form-control-sm">
-                    <option value="">-- All Types --</option>
-                </select>
-            </div>
-            <div class="filter-field-sm">
-                <label class="form-label form-label-sm-muted">Product</label>
-                <select id="stockFilterProduct" class="form-control form-control-sm">
-                    <option value="">-- All Products --</option>
-                </select>
-            </div>
+                <div class="filter-field-sm">
+                    <label class="form-label form-label-sm-muted">Manufacturer</label>
+                    <select id="stockFilterManufacturer" class="form-control form-control-sm">
+                        <option value="">-- All Manufacturers --</option>
+                        {% for manufacturer in manufacturers %}
+                            <option value="{{ manufacturer.id }}">{{ manufacturer.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="filter-field-sm">
+                    <label class="form-label form-label-sm-muted">Type</label>
+                    <select id="stockFilterType" class="form-control form-control-sm">
+                        <option value="">-- All Types --</option>
+                        {% for cheese_type in cheese_types %}
+                            <option value="{{ cheese_type.id }}">{{ cheese_type.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="filter-field-sm">
+                    <label class="form-label form-label-sm-muted">Product</label>
+                    <select id="stockFilterProduct" class="form-control form-control-sm">
+                        <option value="">-- All Products --</option>
+                        {% for product in products %}
+                            <option value="{{ product.id }}">{{ product.manufacturer.name }} - {{ product.type.name }} {{ product.packet_size }}kg</option>
+                        {% endfor %}
+                    </select>
+                </div>
             <button class="btn btn-sm btn-secondary btn-fit-content" onclick="resetStockFilters()" title="Reset filters">
                 Reset
             </button>
@@ -51,348 +63,104 @@
     <div class="card-body card-body-compact">
         <div class="table-responsive">
             <table class="table table-hover">
-                <thead class="table-light">
-                    <tr>
-                        <th>Products</th>
-                        <th>Operation Type</th>
-                        <th>Added By</th>
-                        <th>Date</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% if stock_additions %}
-                    {% for addition in stock_additions %}
-                    <tr>
-                        <td>
-                            {% with first_item=addition.stockadditionitem_set.first %}
-                                {% if first_item %}
-                                    <strong>
-                                        {% if addition.operation_type == 'add' %}
-                                            <span class="text-success">+{{ first_item.quantity_packets|floatformat:0 }}</span>
-                                        {% elif addition.operation_type == 'remove' %}
-                                            <span class="text-danger">{{ first_item.quantity_packets|floatformat:0 }}</span>
-                                        {% else %}
-                                            {{ first_item.quantity_packets|floatformat:0 }}
-                                        {% endif %}
-                                    </strong>
-                                {% endif %}
-                            {% endwith %}
-                            <br>
-                            <small class="text-muted">
-                                {% for item in addition.stockadditionitem_set.all %}
-                                    {{ item.cheese_product.manufacturer.name }} - {{ item.cheese_product.type.name }} {{ item.cheese_product.packet_size }}kg
-                                    {% if not forloop.last %}<br>{% endif %}
-                                {% endfor %}
-                            </small>
-                        </td>
-                        <td>
-                            {% if addition.operation_type == 'add' %}
-                                <span class="badge bg-success">Add</span>
-                            {% elif addition.operation_type == 'remove' %}
-                                <span class="badge bg-danger">Remove</span>
-                            {% elif addition.operation_type == 'price_change' %}
-                                <span class="badge bg-info">Price Change</span>
-                            {% endif %}
-                        </td>
-                        <td>{% if addition.added_by %}{{ addition.added_by.user.username }}{% else %}N/A{% endif %}</td>
-                        <td data-iso-date="{{ addition.date_last_updated|date:'c' }}">{{ addition.date_last_updated|date:"d/m/Y H:i" }}</td>
-                    </tr>
-                    {% endfor %}
-                    {% else %}
-                    <tr>
-                        <td colspan="6" class="text-center text-muted py-4">
-                            <p class="mb-0">No stock additions found.</p>
-                        </td>
-                    </tr>
-                    {% endif %}
-                </tbody>
-            </table>
+            <thead class="table-light">
+                <tr>
+                    <th>Products</th>
+                    <th>Operation Type</th>
+                    <th>Added By</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+            <tbody id="stockHistoryTableBody"></tbody>
+        </table>
+        <div id="stockHistoryLoading" class="text-center py-3 d-none">
+            <div class="spinner-border spinner-border-sm text-primary me-2" role="status" aria-hidden="true"></div>
+            Loading more stock history...
         </div>
+        <div id="stockHistoryEmptyState" class="text-center text-muted py-4 d-none">
+            No stock additions found.
+        </div>
+        <div id="stockHistoryError" class="alert alert-danger d-none mt-3 mb-0">
+            <div class="d-flex justify-content-between align-items-center gap-3">
+                <span data-history-error-message>Failed to load stock history.</span>
+                <button type="button" class="btn btn-outline-danger btn-sm" id="stockHistoryRetryBtn">
+                    Refresh
+                </button>
+            </div>
+        </div>
+        <div id="stockHistorySentinel" class="py-2"></div>
     </div>
+</div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
+<script src="/static/js/history_pagination.js"></script>
 <script>
-// Stock History Filtering with Dependent Dropdowns
-let stockData = {
-    products: [],  // Array of {manufacturer, type, packetSize, display}
-};
-
-function parseDdMmDate(value) {
-    if (!value) return null;
-    const match = value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-    if (!match) return null;
-
-    const day = parseInt(match[1], 10);
-    const month = parseInt(match[2], 10);
-    const year = parseInt(match[3], 10);
-    const parsed = new Date(year, month - 1, day);
-
-    if (
-        parsed.getFullYear() !== year ||
-        parsed.getMonth() !== month - 1 ||
-        parsed.getDate() !== day
-    ) {
-        return null;
-    }
-
-    return parsed;
-}
-
-function applyStockFilters() {
-    const fromDate = document.getElementById('stockFilterFromDate').value;
-    const toDate = document.getElementById('stockFilterToDate').value;
-    const filterType = document.getElementById('stockFilterType').value;
-    const filterProduct = document.getElementById('stockFilterProduct').value;
-    const filterManufacturer = document.getElementById('stockFilterManufacturer').value;
-    
-    const rows = document.querySelectorAll('tbody tr');
-    rows.forEach(row => {
-        if (row.querySelector('td:nth-child(2)')) {  // Check if it's not an empty message row
-            const productElement = row.querySelector('td small.text-muted');
-            if (!productElement) return;
-            
-            const dateIso = row.querySelector('td:last-child').getAttribute('data-iso-date');
-            const stockDate = new Date(dateIso);
-            
-            const fromDateObj = parseDdMmDate(fromDate);
-            const toDateObj = parseDdMmDate(toDate);
-            if (toDateObj) {
-                toDateObj.setHours(23, 59, 59, 999);
-            }
-            
-            let show = true;
-            
-            // Apply date filter
-            if (fromDateObj && stockDate < fromDateObj) show = false;
-            if (toDateObj && stockDate > toDateObj) show = false;
-            
-            // Parse product info from row by checking child nodes
-            const productLines = [];
-            productElement.childNodes.forEach(node => {
-                if (node.nodeType === Node.TEXT_NODE) {
-                    const line = node.textContent.trim();
-                    if (line) productLines.push(line);
-                } else if (node.tagName === 'BR') {
-                    // br tags separate products
-                }
-            });
-            
-            let matchesFilters = productLines.some(line => {
-                const parts = line.split(' - ');
-                const mfg = parts[0]?.trim() || '';
-                const rest = parts[1]?.trim() || '';
-                const typeMatch = rest.match(/^(.+?)\s+[\d.]+kg$/i);
-                const type = typeMatch ? typeMatch[1].trim() : '';
-                const fullDisplay = `${mfg} - ${rest}`;
-                
-                let matches = true;
-                if (filterManufacturer && mfg !== filterManufacturer) matches = false;
-                if (filterType && type !== filterType) matches = false;
-                if (filterProduct && fullDisplay !== filterProduct) matches = false;
-                
-                return matches;
-            });
-            
-            if (!matchesFilters && (filterManufacturer || filterType || filterProduct)) {
-                show = false;
-            }
-            
-            row.style.display = show ? '' : 'none';
-        }
-    });
-}
-
-function updateProductDropdown() {
-    const filterManufacturer = document.getElementById('stockFilterManufacturer').value;
-    const filterType = document.getElementById('stockFilterType').value;
-    const productSelect = document.getElementById('stockFilterProduct');
-    const currentValue = productSelect.value;
-    
-    // Clear products except first option
-    while (productSelect.options.length > 1) {
-        productSelect.remove(1);
-    }
-    
-    // Get products that match selected manufacturer and type
-    const matchingProducts = new Set();
-    stockData.products.forEach(product => {
-        let matches = true;
-        if (filterManufacturer && product.manufacturer !== filterManufacturer) matches = false;
-        if (filterType && product.type !== filterType) matches = false;
-        if (matches) {
-            matchingProducts.add(product.display);
-        }
-    });
-    
-    // Add matching products to dropdown
-    Array.from(matchingProducts).sort().forEach(product => {
-        const option = document.createElement('option');
-        option.value = product;
-        option.textContent = product;
-        productSelect.appendChild(option);
-    });
-    
-    // Keep previous selection if still valid, otherwise reset
-    if (Array.from(productSelect.options).some(opt => opt.value === currentValue)) {
-        productSelect.value = currentValue;
-    } else {
-        productSelect.value = '';
-    }
-    
-    applyStockFilters();
-}
-
-function updateTypeDropdown() {
-    const filterManufacturer = document.getElementById('stockFilterManufacturer').value;
-    const typeSelect = document.getElementById('stockFilterType');
-    const currentValue = typeSelect.value;
-    
-    // Clear types except first option
-    while (typeSelect.options.length > 1) {
-        typeSelect.remove(1);
-    }
-    
-    // Get types that match selected manufacturer
-    const matchingTypes = new Set();
-    stockData.products.forEach(product => {
-        if (!filterManufacturer || product.manufacturer === filterManufacturer) {
-            matchingTypes.add(product.type);
-        }
-    });
-    
-    // Add matching types to dropdown
-    Array.from(matchingTypes).sort().forEach(type => {
-        const option = document.createElement('option');
-        option.value = type;
-        option.textContent = type;
-        typeSelect.appendChild(option);
-    });
-    
-    // Keep previous selection if still valid, otherwise reset
-    if (Array.from(typeSelect.options).some(opt => opt.value === currentValue)) {
-        typeSelect.value = currentValue;
-    } else {
-        typeSelect.value = '';
-    }
-    
-    updateProductDropdown();
-}
-
 function resetStockFilters() {
     document.getElementById('stockFilterFromDate').value = '';
     document.getElementById('stockFilterToDate').value = '';
     document.getElementById('stockFilterType').value = '';
     document.getElementById('stockFilterProduct').value = '';
     document.getElementById('stockFilterManufacturer').value = '';
-    
-    updateTypeDropdown();
-    
-    const rows = document.querySelectorAll('tbody tr');
-    rows.forEach(row => row.style.display = '');
+    if (window.stockHistoryPager) {
+        window.stockHistoryPager.refresh();
+    }
 }
 
-// Attach filter event listeners and populate dropdowns
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Initializing stock filters...');
-    
-    // Parse product data from table
-    const rows = document.querySelectorAll('tbody tr');
-    const manufacturerSet = new Set();
-    
-    console.log('Found ' + rows.length + ' rows');
-    
-    rows.forEach((row, rowIndex) => {
-        const productElement = row.querySelector('td small.text-muted');
-        if (!productElement) {
-            console.log('Row ' + rowIndex + ': no product element found');
-            return;
-        }
-        
-        // Parse child nodes properly to handle <br> tags
-        const productLines = [];
-        let currentLine = '';
-        
-        productElement.childNodes.forEach(node => {
-            if (node.nodeType === Node.TEXT_NODE) {
-                const text = node.textContent.trim();
-                if (text) {
-                    currentLine += (currentLine ? ' ' : '') + text;
-                }
-            } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'BR') {
-                if (currentLine) {
-                    productLines.push(currentLine);
-                    currentLine = '';
-                }
-            }
-        });
-        
-        if (currentLine) {
-            productLines.push(currentLine);
-        }
-        
-        console.log('Row ' + rowIndex + ' lines: ', productLines);
-        
-        productLines.forEach(line => {
-            if (!line.trim()) return;
-            
-            const parts = line.split(' - ');
-            const manufacturer = parts[0]?.trim() || '';
-            const rest = parts[1]?.trim() || '';
-            
-            console.log('Parsing line: "' + line + '" -> mfg="' + manufacturer + '" rest="' + rest + '"');
-            
-            // Extract type from "Type PacketSize" format
-            const typeMatch = rest.match(/^(.+?)\s+([\d.]+kg)$/i);
-            if (typeMatch && manufacturer && rest) {
-                const type = typeMatch[1].trim();
-                const packetSize = typeMatch[2].trim();
-                const display = `${manufacturer} - ${rest}`;
-                
-                console.log('  -> Valid product: type="' + type + '" packetSize="' + packetSize + '" display="' + display + '"');
-                
-                stockData.products.push({
-                    manufacturer,
-                    type,
-                    packetSize,
-                    display
-                });
-                
-                manufacturerSet.add(manufacturer);
-            } else {
-                console.log('  -> Not matched by regex');
-            }
-        });
+    window.stockHistoryPager = createHistoryPaginator({
+        endpoint: "{% url 'get_stock_history' %}",
+        tbody: '#stockHistoryTableBody',
+        sentinel: '#stockHistorySentinel',
+        loading: '#stockHistoryLoading',
+        error: '#stockHistoryError',
+        empty: '#stockHistoryEmptyState',
+        refreshButton: '#stockHistoryRefreshBtn',
+        pageSize: 15,
+        filterInputs: [
+            '#stockFilterFromDate',
+            '#stockFilterToDate',
+            '#stockFilterManufacturer',
+            '#stockFilterType',
+            '#stockFilterProduct',
+        ],
+        filterDebounceMs: 250,
+        getFilters: function() {
+            return {
+                from_date: document.getElementById('stockFilterFromDate').value.trim(),
+                to_date: document.getElementById('stockFilterToDate').value.trim(),
+                manufacturer_id: document.getElementById('stockFilterManufacturer').value,
+                type_id: document.getElementById('stockFilterType').value,
+                product_id: document.getElementById('stockFilterProduct').value,
+            };
+        },
+        renderRow: function(addition) {
+            const quantityClass = addition.operation_type === 'add' ? 'text-success' : (addition.operation_type === 'remove' ? 'text-danger' : 'text-body');
+            const quantityPrefix = addition.operation_type === 'add' ? '+' : '';
+            const badgeClass = addition.operation_type === 'add' ? 'bg-success' : (addition.operation_type === 'remove' ? 'bg-danger' : 'bg-info');
+            const itemsHtml = (addition.items || []).map(item => escapeHtml(item.product_name)).join('<br>');
+
+            return `
+                <tr>
+                    <td>
+                        <strong>
+                            <span class="${quantityClass}">${quantityPrefix}${Number(addition.total_packets || 0).toFixed(0)}</span>
+                        </strong>
+                        <br>
+                        <small class="text-muted">
+                            ${itemsHtml || '-'}
+                        </small>
+                    </td>
+                    <td>
+                        <span class="badge ${badgeClass}">${escapeHtml(addition.operation_label)}</span>
+                    </td>
+                    <td>${escapeHtml(addition.added_by)}</td>
+                    <td data-iso-date="${escapeHtml(addition.date_last_updated)}">${escapeHtml(addition.date_last_updated_display)}</td>
+                </tr>
+            `;
+        },
     });
-    
-    console.log('Total products loaded:', stockData.products.length);
-    console.log('Manufacturers:', Array.from(manufacturerSet));
-    
-    // Add manufacturers to dropdown
-    const manufacturerSelect = document.getElementById('stockFilterManufacturer');
-    Array.from(manufacturerSet).sort().forEach(mfg => {
-        const option = document.createElement('option');
-        option.value = mfg;
-        option.textContent = mfg;
-        manufacturerSelect.appendChild(option);
-    });
-    
-    console.log('Manufacturer dropdown populated with ' + (manufacturerSet.size) + ' options');
-    
-    // Add event listeners
-    document.getElementById('stockFilterFromDate').addEventListener('input', applyStockFilters);
-    document.getElementById('stockFilterToDate').addEventListener('input', applyStockFilters);
-    document.getElementById('stockFilterManufacturer').addEventListener('change', updateTypeDropdown);
-    document.getElementById('stockFilterType').addEventListener('change', updateProductDropdown);
-    document.getElementById('stockFilterProduct').addEventListener('change', applyStockFilters);
-    
-    console.log('Event listeners attached');
-    
-    // Initialize type and product dropdowns
-    updateTypeDropdown();
-    
-    console.log('Stock filters initialized');
 });
 </script>
 {% endblock %}

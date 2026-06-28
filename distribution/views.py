@@ -34,6 +34,7 @@ from .decorators import owner_required, is_owner
 
 
 from django.http import JsonResponse, FileResponse
+from django.core.paginator import Paginator, EmptyPage
 from django.template.loader import render_to_string
 from django.shortcuts import render
 from .forms import CheeseTypeForm
@@ -94,6 +95,72 @@ def _parse_ddmmyyyy_datetime(value):
         parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
 
     return parsed
+
+
+def _parse_ddmmyyyy_date(value):
+    if not value:
+        return None
+
+    raw_value = value.strip()
+    try:
+        return datetime.strptime(raw_value, '%d/%m/%Y').date()
+    except ValueError:
+        return None
+
+
+def _get_pagination_params(request, default_page_size=20, max_page_size=100):
+    try:
+        page = int(request.GET.get('page', 1))
+    except (TypeError, ValueError):
+        page = 1
+
+    try:
+        page_size = int(request.GET.get('page_size', default_page_size))
+    except (TypeError, ValueError):
+        page_size = default_page_size
+
+    page = max(page, 1)
+    page_size = max(1, min(page_size, max_page_size))
+    return page, page_size
+
+
+def _json_paginated_response(items, paginator, page_obj, extra=None):
+    payload = {
+        'results': items,
+        'pagination': {
+            'page': page_obj.number,
+            'page_size': paginator.per_page,
+            'total_count': paginator.count,
+            'total_pages': paginator.num_pages,
+            'has_next': page_obj.has_next(),
+            'has_previous': page_obj.has_previous(),
+        },
+    }
+    if extra:
+        payload.update(extra)
+    return JsonResponse(payload)
+
+
+def _get_page_obj(paginator, page_number):
+    if paginator.count == 0:
+        class _EmptyPageObj:
+            number = 1
+            object_list = []
+
+            @staticmethod
+            def has_next():
+                return False
+
+            @staticmethod
+            def has_previous():
+                return False
+
+        return _EmptyPageObj()
+
+    try:
+        return paginator.page(page_number)
+    except EmptyPage:
+        return paginator.page(paginator.num_pages)
 
 
 def _update_sale_total(sale):
@@ -867,32 +934,14 @@ from .models import StockAdditionHistory
 
 @login_required
 def stock_history(request):
-    from .models import StockAdditionItem
-    from decimal import Decimal
-    
-    stock_additions = StockAdditionHistory.objects.prefetch_related('stockadditionitem_set__cheese_product', 'added_by').all()
-    
-    # Calculate total value for each stock addition
-    for addition in stock_additions:
-        first_item = addition.stockadditionitem_set.first()
-        if first_item:
-            addition.total_value = first_item.quantity_packets * first_item.cheese_product.purchase_price_per_packet
-        else:
-            addition.total_value = Decimal('0.00')
-    
-    # Get products for quick stock form
+    manufacturers = Manufacturer.objects.all()
+    cheese_types = CheeseType.objects.all()
     products = CheeseProduct.objects.select_related('manufacturer', 'type').all()
-    products_with_value = []
-    for product in products:
-        stock_value = product.available_quantity_packets * product.purchase_price_per_packet
-        products_with_value.append({
-            'product': product,
-            'stock_value': stock_value
-        })
-    
+
     return render(request, 'distribution/inventory/stock_history.html', {
-        'stock_additions': stock_additions,
-        'products_with_value': products_with_value,
+        'manufacturers': manufacturers,
+        'cheese_types': cheese_types,
+        'products': products,
     })
 
 @login_required
@@ -1405,154 +1454,195 @@ def get_dashboard_overview(request):
 
 @login_required
 def get_sales_history(request):
-    """AJAX endpoint to get sales history"""
+    """AJAX endpoint to get paginated sales history."""
     period = request.GET.get('period', 'all')
+    sale_id = request.GET.get('sale_id', '').strip()
+    client_id = request.GET.get('client_id', '').strip()
+    from_date = _parse_ddmmyyyy_date(request.GET.get('from_date', ''))
+    to_date = _parse_ddmmyyyy_date(request.GET.get('to_date', ''))
+    page, page_size = _get_pagination_params(request, default_page_size=20)
+
+    sales = Sale.objects.select_related('client').prefetch_related('saleitem_set').annotate(
+        has_actions=Exists(SaleAction.objects.filter(sale_id=OuterRef('pk'))),
+        has_modified_items=Exists(SaleItem.objects.filter(sale_id=OuterRef('pk'), modified=True)),
+    ).filter(is_voided=False)
 
     now = timezone.now()
-
     if period == 'today':
-        start_date = now.date()
-        end_date = now.date()
+        sales = sales.filter(sale_date__date=now.date())
     elif period == 'week':
-        start_date = now.date() - timedelta(days=7)
-        end_date = now.date()
+        sales = sales.filter(sale_date__date__gte=now.date() - timedelta(days=7))
     elif period == 'month':
-        start_date = now.date() - timedelta(days=30)
-        end_date = now.date()
+        sales = sales.filter(sale_date__date__gte=now.date() - timedelta(days=30))
     elif period == 'quarter':
-        start_date = now.date() - timedelta(days=90)
-        end_date = now.date()
+        sales = sales.filter(sale_date__date__gte=now.date() - timedelta(days=90))
     elif period == '6months':
-        start_date = now.date() - timedelta(days=180)
-        end_date = now.date()
+        sales = sales.filter(sale_date__date__gte=now.date() - timedelta(days=180))
     elif period == 'year':
-        start_date = now.date() - timedelta(days=365)
-        end_date = now.date()
-    else:  # 'all'
-        start_date = None
-        end_date = None
+        sales = sales.filter(sale_date__date__gte=now.date() - timedelta(days=365))
 
-    # Get sales
-    if start_date and end_date:
-        sales = Sale.objects.filter(is_voided=False, sale_date__date__range=[start_date, end_date]).select_related('client')
-    else:
-        sales = Sale.objects.filter(is_voided=False).select_related('client')
+    if sale_id:
+        try:
+            sales = sales.filter(pk=int(sale_id))
+        except (TypeError, ValueError):
+            return JsonResponse({'error': 'Invalid sale id.'}, status=400)
+
+    if client_id:
+        try:
+            sales = sales.filter(client_id=int(client_id))
+        except (TypeError, ValueError):
+            return JsonResponse({'error': 'Invalid client id.'}, status=400)
+
+    if from_date:
+        sales = sales.filter(sale_date__date__gte=from_date)
+    if to_date:
+        sales = sales.filter(sale_date__date__lte=to_date)
+
+    sales = sales.order_by('-sale_date', '-id')
+    paginator = Paginator(sales, page_size)
+    page_obj = _get_page_obj(paginator, page)
 
     sales_data = []
-    for sale in sales:
+    total_profit = Decimal('0.00')
+    total_revenue = Decimal('0.00')
+
+    for sale in page_obj.object_list:
+        sale_profit = sale.calculate_total_profit()
         sales_data.append({
             'id': sale.id,
+            'client_id': sale.client_id,
             'client_name': sale.client.name,
             'client_phone': sale.client.phone,
-            'sale_date': sale.sale_date.strftime('%Y-%m-%d %H:%M'),
+            'sale_date': sale.sale_date.isoformat(),
+            'sale_date_display': sale.sale_date.strftime('%d/%m/%Y %H:%M'),
             'total_amount': float(sale.total_amount),
-            'total_profit': float(sale.calculate_total_profit()),
+            'total_profit': float(sale_profit),
+            'is_voided': sale.is_voided,
+            'has_actions': sale.has_actions,
+            'has_modified_items': sale.has_modified_items,
         })
-
-    # Sort by date descending
-    sales_data.sort(key=lambda x: x['sale_date'], reverse=True)
-
-    # Calculate summary stats
-    total_sales = len(sales_data)
-    total_revenue = sum(sale['total_amount'] for sale in sales_data)
-    total_profit = sum(sale['total_profit'] for sale in sales_data)
+        total_profit += sale_profit
+        total_revenue += sale.total_amount
 
     summary = {
-        'total_sales': total_sales,
-        'total_revenue': float(total_revenue),
+        'total_sales': paginator.count,
+        'total_revenue': float(sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')),
         'total_profit': float(total_profit),
     }
 
-    return JsonResponse({
-        'sales': sales_data,
-        'summary': summary,
-        'period': period
-    })
+    return _json_paginated_response(
+        sales_data,
+        paginator,
+        page_obj,
+        extra={
+            'summary': summary,
+            'period': period,
+        }
+    )
 
 
 @login_required
 def get_stock_history(request):
-    """AJAX endpoint to get stock addition history"""
+    """AJAX endpoint to get paginated stock addition history."""
     period = request.GET.get('period', 'all')
+    from_date = _parse_ddmmyyyy_date(request.GET.get('from_date', ''))
+    to_date = _parse_ddmmyyyy_date(request.GET.get('to_date', ''))
+    manufacturer_id = request.GET.get('manufacturer_id', '').strip()
+    type_id = request.GET.get('type_id', '').strip()
+    product_id = request.GET.get('product_id', '').strip()
+    page, page_size = _get_pagination_params(request, default_page_size=15)
+
+    stock_additions = StockAdditionHistory.objects.select_related('added_by__user').prefetch_related(
+        'stockadditionitem_set__cheese_product__manufacturer',
+        'stockadditionitem_set__cheese_product__type',
+    )
 
     now = timezone.now()
-
     if period == 'today':
-        start_date = now.date()
-        end_date = now.date()
+        stock_additions = stock_additions.filter(date_last_updated__date=now.date())
     elif period == 'week':
-        start_date = now.date() - timedelta(days=7)
-        end_date = now.date()
+        stock_additions = stock_additions.filter(date_last_updated__date__gte=now.date() - timedelta(days=7))
     elif period == 'month':
-        start_date = now.date() - timedelta(days=30)
-        end_date = now.date()
+        stock_additions = stock_additions.filter(date_last_updated__date__gte=now.date() - timedelta(days=30))
     elif period == 'quarter':
-        start_date = now.date() - timedelta(days=90)
-        end_date = now.date()
+        stock_additions = stock_additions.filter(date_last_updated__date__gte=now.date() - timedelta(days=90))
     elif period == '6months':
-        start_date = now.date() - timedelta(days=180)
-        end_date = now.date()
+        stock_additions = stock_additions.filter(date_last_updated__date__gte=now.date() - timedelta(days=180))
     elif period == 'year':
-        start_date = now.date() - timedelta(days=365)
-        end_date = now.date()
-    else:  # 'all'
-        start_date = None
-        end_date = None
+        stock_additions = stock_additions.filter(date_last_updated__date__gte=now.date() - timedelta(days=365))
 
-    # Get stock addition history with items
-    from .models import StockAdditionHistory, StockAdditionItem
-    if start_date and end_date:
-        stock_additions = StockAdditionHistory.objects.filter(
-            date_added__date__range=[start_date, end_date]
-        ).prefetch_related('stockadditionitem_set__cheese_product__manufacturer', 'stockadditionitem_set__cheese_product__type', 'added_by__user')
-    else:
-        stock_additions = StockAdditionHistory.objects.all().prefetch_related(
-            'stockadditionitem_set__cheese_product__manufacturer', 'stockadditionitem_set__cheese_product__type', 'added_by__user'
-        )
+    if from_date:
+        stock_additions = stock_additions.filter(date_last_updated__date__gte=from_date)
+    if to_date:
+        stock_additions = stock_additions.filter(date_last_updated__date__lte=to_date)
+
+    if manufacturer_id:
+        try:
+            stock_additions = stock_additions.filter(stockadditionitem__cheese_product__manufacturer_id=int(manufacturer_id))
+        except (TypeError, ValueError):
+            return JsonResponse({'error': 'Invalid manufacturer id.'}, status=400)
+    if type_id:
+        try:
+            stock_additions = stock_additions.filter(stockadditionitem__cheese_product__type_id=int(type_id))
+        except (TypeError, ValueError):
+            return JsonResponse({'error': 'Invalid cheese type id.'}, status=400)
+    if product_id:
+        try:
+            stock_additions = stock_additions.filter(stockadditionitem__cheese_product_id=int(product_id))
+        except (TypeError, ValueError):
+            return JsonResponse({'error': 'Invalid product id.'}, status=400)
+
+    stock_additions = stock_additions.distinct().order_by('-date_last_updated', '-id')
+    paginator = Paginator(stock_additions, page_size)
+    page_obj = _get_page_obj(paginator, page)
 
     stock_data = []
-    for stock_addition in stock_additions:
+    total_packets_added = 0
+
+    for stock_addition in page_obj.object_list:
+        items = []
+        addition_total = 0
         for item in stock_addition.stockadditionitem_set.all():
-            stock_data.append({
+            items.append({
                 'id': item.id,
-                'addition_id': stock_addition.id,
-                'product_name': f"{item.cheese_product.manufacturer.name} {item.cheese_product.type.name} {item.cheese_product.packet_size}kg",
+                'product_id': item.cheese_product_id,
+                'product_name': f"{item.cheese_product.manufacturer.name} - {item.cheese_product.type.name} {item.cheese_product.packet_size}kg",
+                'manufacturer_name': item.cheese_product.manufacturer.name,
+                'type_name': item.cheese_product.type.name,
+                'packet_size': float(item.cheese_product.packet_size),
                 'quantity_packets': float(item.quantity_packets),
-                'quantity_returned': float(item.quantity_returned),
-                'date_added': stock_addition.date_added.strftime('%Y-%m-%d %H:%M'),
-                'added_by': stock_addition.added_by.user.username if stock_addition.added_by else 'Unknown',
-                'modified': stock_addition.modified,
+                'old_price': float(item.old_price) if item.old_price is not None else None,
+                'new_price': float(item.new_price) if item.new_price is not None else None,
             })
+            addition_total += item.quantity_packets
 
-    # Sort by date descending
-    stock_data.sort(key=lambda x: x['date_added'], reverse=True)
-
-    # Calculate summary stats
-    total_stock_additions = len(stock_data)
-    total_packets_added = sum(item['quantity_packets'] for item in stock_data)
-    total_packets_returned = sum(item['quantity_returned'] for item in stock_data)
-
-    # Group by product for summary
-    product_summary = {}
-    for item in stock_data:
-        if item['product_name'] not in product_summary:
-            product_summary[item['product_name']] = {'added': 0, 'returned': 0}
-        product_summary[item['product_name']]['added'] += item['quantity_packets']
-        product_summary[item['product_name']]['returned'] += item['quantity_returned']
+        total_packets_added += addition_total
+        stock_data.append({
+            'id': stock_addition.id,
+            'operation_type': stock_addition.operation_type,
+            'operation_label': stock_addition.get_operation_type_display(),
+            'added_by': stock_addition.added_by.user.username if stock_addition.added_by else 'N/A',
+            'date_last_updated': stock_addition.date_last_updated.isoformat(),
+            'date_last_updated_display': stock_addition.date_last_updated.strftime('%d/%m/%Y %H:%M'),
+            'items': items,
+            'total_packets': float(addition_total),
+        })
 
     summary = {
-        'total_stock_additions': total_stock_additions,
+        'total_stock_additions': paginator.count,
         'total_packets_added': float(total_packets_added),
-        'total_packets_returned': float(total_packets_returned),
-        'unique_products': len(product_summary),
-        'product_summary': product_summary,
+        'unique_products': sum(len(addition['items']) for addition in stock_data),
     }
 
-    return JsonResponse({
-        'stock_history': stock_data,
-        'summary': summary,
-        'period': period
-    })
+    return _json_paginated_response(
+        stock_data,
+        paginator,
+        page_obj,
+        extra={
+            'summary': summary,
+            'period': period,
+        }
+    )
 
 
 @login_required
@@ -2436,25 +2526,9 @@ def sale_create(request):
 
 @login_required
 def sale_history(request):
-    sales = Sale.objects.select_related('client').prefetch_related('saleitem_set__cheese_product').annotate(
-        has_actions=Exists(SaleAction.objects.filter(sale_id=OuterRef('pk'))),
-        has_modified_items=Exists(SaleItem.objects.filter(sale_id=OuterRef('pk'), modified=True)),
-    ).all()
-    sales_with_profit = []
-    for sale in sales:
-        sales_with_profit.append({
-            'sale': sale,
-            'total_profit': sale.calculate_total_profit(),
-            'has_modified_items': sale.has_modified_items,
-            'has_actions': sale.has_actions,
-        })
-    
-    # Calculate analytics
-    now = timezone.now()
     user_is_owner = is_owner(request.user)
     
     return render(request, 'distribution/sales/sale_history.html', {
-        'sales_data': sales_with_profit,
         'user_is_owner': user_is_owner,
         'clients': Client.objects.all(),
         'formset': SaleItemFormSet(),
@@ -2499,12 +2573,8 @@ def add_payment(request):
 
 @login_required
 def payment_history(request):
-    payments = Payment.objects.select_related('client').annotate(
-        has_actions=Exists(PaymentAction.objects.filter(payment_id=OuterRef('pk')))
-    ).all().order_by('-date')
     clients = Client.objects.all()
     return render(request, 'distribution/clients/payment_history.html', {
-        'payments': payments,
         'clients': clients,
         'user_is_owner': is_owner(request.user),
     })
@@ -2716,36 +2786,69 @@ def receipt_settings(request):
 
 @login_required
 def get_payment_history(request):
-    """AJAX endpoint to get payment history data"""
-    payments = Payment.objects.select_related('client').all().order_by('-date')[:100]
-    
+    """AJAX endpoint to get paginated payment history data."""
+    payment_id = request.GET.get('payment_id', '').strip()
+    client_id = request.GET.get('client_id', '').strip()
+    from_date = _parse_ddmmyyyy_date(request.GET.get('from_date', ''))
+    to_date = _parse_ddmmyyyy_date(request.GET.get('to_date', ''))
+    page, page_size = _get_pagination_params(request, default_page_size=20)
+
+    payments = Payment.objects.select_related('client').annotate(
+        has_actions=Exists(PaymentAction.objects.filter(payment_id=OuterRef('pk')))
+    ).order_by('-date', '-id')
+
+    if client_id:
+        try:
+            payments = payments.filter(client_id=int(client_id))
+        except (TypeError, ValueError):
+            return JsonResponse({'error': 'Invalid client id.'}, status=400)
+
+    if payment_id:
+        try:
+            payments = payments.filter(pk=int(payment_id))
+        except (TypeError, ValueError):
+            return JsonResponse({'error': 'Invalid payment id.'}, status=400)
+
+    if from_date:
+        payments = payments.filter(date__date__gte=from_date)
+    if to_date:
+        payments = payments.filter(date__date__lte=to_date)
+
+    paginator = Paginator(payments, page_size)
+    page_obj = _get_page_obj(paginator, page)
+
     payment_data = []
     total_amount = Decimal('0.00')
-    
-    for payment in payments:
+    for payment in page_obj.object_list:
         payment_data.append({
             'id': payment.id,
+            'client_id': payment.client_id,
             'client_name': payment.client.name,
             'client_phone': payment.client.phone,
             'amount': float(payment.amount),
-            'mode': payment.get_mode_display(),
-            'bank': payment.bank or 'N/A',
-            'date': payment.date.strftime('%Y-%m-%d %H:%M'),
+            'mode': payment.mode,
+            'mode_display': payment.get_mode_display(),
+            'bank': payment.bank or '',
+            'date': payment.date.isoformat(),
+            'date_display': payment.date.strftime('%d/%m/%Y %H:%M'),
             'is_voided': payment.is_voided,
+            'has_actions': payment.has_actions,
         })
         if not payment.is_voided:
             total_amount += payment.amount
-    
+
     summary = {
-        'total_payments': len(payment_data),
-        'total_amount': float(total_amount),
+        'total_payments': paginator.count,
+        'total_amount': float(payments.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')),
         'average_payment': float(total_amount / len(payment_data)) if payment_data else 0,
     }
-    
-    return JsonResponse({
-        'payments': payment_data,
-        'summary': summary,
-    })
+
+    return _json_paginated_response(
+        payment_data,
+        paginator,
+        page_obj,
+        extra={'summary': summary}
+    )
 
 
 # =========================
