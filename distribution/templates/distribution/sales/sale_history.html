@@ -28,6 +28,10 @@
     <div class="card-body sales-filter-panel">
         <div class="sales-filter-row">
             <div class="sales-filter-field">
+                <label class="form-label form-label-sm-muted">Sale ID</label>
+                <input type="number" id="filterSaleId" class="form-control form-control-sm" placeholder="#">
+            </div>
+            <div class="sales-filter-field">
                 <label class="form-label form-label-sm-muted">From Date</label>
                 <input type="text" id="filterFromDate" class="form-control form-control-sm js-date-picker" placeholder="DD/MM/YYYY">
             </div>
@@ -643,14 +647,16 @@ function applySalesFilters() {
     const fromDate = document.getElementById('filterFromDate').value;
     const toDate = document.getElementById('filterToDate').value;
     const filterClient = document.getElementById('filterClient').value;
-    
+    const filterSaleId = document.getElementById('filterSaleId').value.trim();
+
     const rows = document.querySelectorAll('tbody tr');
     rows.forEach(row => {
         if (row.querySelector('td:nth-child(5)')) {  // Check if it's not an empty message row
             const clientName = row.querySelector('td:nth-child(2)').textContent.trim();
             const dateIso = row.querySelector('td:nth-child(4)').getAttribute('data-iso-date');
             const saleDate = new Date(dateIso);
-            
+            const saleId = row.querySelector('td:nth-child(1)').textContent.replace('#', '').trim();
+
             const fromDateObj = parseDdMmDate(fromDate);
             const toDateObj = parseDdMmDate(toDate);
             if (toDateObj) {
@@ -665,7 +671,8 @@ function applySalesFilters() {
             
             // Apply client filter
             if (filterClient && clientName !== filterClient) show = false;
-            
+            if (filterSaleId && saleId !== filterSaleId) show = false;
+
             row.style.display = show ? '' : 'none';
         }
     });
@@ -719,7 +726,7 @@ function resetSalesFilters() {
     document.getElementById('filterFromDate').value = '';
     document.getElementById('filterToDate').value = '';
     document.getElementById('filterClient').value = '';
-    
+    document.getElementById('filterSaleId').value = '';
     const rows = document.querySelectorAll('tbody tr');
     rows.forEach(row => row.style.display = '');
 }
@@ -729,7 +736,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('filterFromDate').addEventListener('input', applySalesFilters);
     document.getElementById('filterToDate').addEventListener('input', applySalesFilters);
     document.getElementById('filterClient').addEventListener('change', applySalesFilters);
-    
+    document.getElementById('filterSaleId').addEventListener('input', applySalesFilters);
     // Populate client dropdown with unique clients from the table
     const clientSelect = document.getElementById('filterClient');
     const rows = document.querySelectorAll('tbody tr');

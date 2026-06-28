@@ -127,6 +127,8 @@ def _reserve_sale_product_stock(product, quantity, *, allow_void=False):
 
 
 def _create_sale_from_valid_forms(*, client, sale_datetime, valid_forms, request=None):
+    if not valid_forms:
+        raise SaleStockError('A sale must have at least one item.')
     with transaction.atomic():
         sale = Sale.objects.create(
             client=client,
@@ -2154,6 +2156,8 @@ def _build_client_pdf(client, start_date, end_date, company_name):
 
         for sale in sales:
             items = list(sale.saleitem_set.all())
+            if not items:
+                sales_data.append([str(sale.id), sale.sale_date.strftime('%d-%m-%Y') , "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN"])
             for i, item in enumerate(items):
                 sales_data.append([
                     str(sale.id) if i == 0 else "",
