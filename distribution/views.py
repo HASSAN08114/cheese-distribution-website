@@ -1508,13 +1508,14 @@ def get_sales_history(request):
 
     for sale in page_obj.object_list:
         sale_profit = sale.calculate_total_profit()
+        local_sale_date = timezone.localtime(sale.sale_date)
         sales_data.append({
             'id': sale.id,
             'client_id': sale.client_id,
             'client_name': sale.client.name,
             'client_phone': sale.client.phone,
-            'sale_date': sale.sale_date.isoformat(),
-            'sale_date_display': sale.sale_date.strftime('%d/%m/%Y %H:%M'),
+            'sale_date': local_sale_date.isoformat(),
+            'sale_date_display': local_sale_date.strftime('%d/%m/%Y %H:%M'),
             'total_amount': float(sale.total_amount),
             'total_profit': float(sale_profit),
             'is_voided': sale.is_voided,
@@ -1617,13 +1618,14 @@ def get_stock_history(request):
             addition_total += item.quantity_packets
 
         total_packets_added += addition_total
+        local_last_updated = timezone.localtime(stock_addition.date_last_updated)
         stock_data.append({
             'id': stock_addition.id,
             'operation_type': stock_addition.operation_type,
             'operation_label': stock_addition.get_operation_type_display(),
             'added_by': stock_addition.added_by.user.username if stock_addition.added_by else 'N/A',
-            'date_last_updated': stock_addition.date_last_updated.isoformat(),
-            'date_last_updated_display': stock_addition.date_last_updated.strftime('%d/%m/%Y %H:%M'),
+            'date_last_updated': local_last_updated.isoformat(),
+            'date_last_updated_display': local_last_updated.strftime('%d/%m/%Y %H:%M'),
             'items': items,
             'total_packets': float(addition_total),
         })
@@ -2246,12 +2248,13 @@ def _build_client_pdf(client, start_date, end_date, company_name):
 
         for sale in sales:
             items = list(sale.saleitem_set.all())
+            local_sale_date = timezone.localtime(sale.sale_date)
             if not items:
-                sales_data.append([str(sale.id), sale.sale_date.strftime('%d-%m-%Y') , "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN"])
+                sales_data.append([str(sale.id), local_sale_date.strftime('%d-%m-%Y') , "UNKNOWN", "UNKNOWN", "UNKNOWN", "UNKNOWN"])
             for i, item in enumerate(items):
                 sales_data.append([
                     str(sale.id) if i == 0 else "",
-                    sale.sale_date.strftime('%d-%m-%Y') if i == 0 else "",
+                    local_sale_date.strftime('%d-%m-%Y') if i == 0 else "",
                     str(item.cheese_product),
                     str(item.quantity_packets),
                     f"{item.selling_price_per_packet:,.2f}",
@@ -2309,8 +2312,9 @@ def _build_client_pdf(client, start_date, end_date, company_name):
         PAY_COL_W = [1.7*inch, 1.8*inch, 1.5*inch, 2.0*inch]
         pay_data  = [["Date", "Mode", "Bank","Amount (Rs.)"]]
         for p in payments:
+            local_date = timezone.localtime(p.date)
             pay_data.append([
-                p.date.strftime('%d-%m-%Y'),
+                local_date.strftime('%d-%m-%Y'),
                 p.get_mode_display(),
                 p.bank or "—",
                 f"{p.amount:,.2f}",
@@ -2820,6 +2824,7 @@ def get_payment_history(request):
     payment_data = []
     total_amount = Decimal('0.00')
     for payment in page_obj.object_list:
+        local_date = timezone.localtime(payment.date)
         payment_data.append({
             'id': payment.id,
             'client_id': payment.client_id,
@@ -2829,8 +2834,8 @@ def get_payment_history(request):
             'mode': payment.mode,
             'mode_display': payment.get_mode_display(),
             'bank': payment.bank or '',
-            'date': payment.date.isoformat(),
-            'date_display': payment.date.strftime('%d/%m/%Y %H:%M'),
+            'date': local_date.isoformat(),
+            'date_display': local_date.strftime('%d/%m/%Y %H:%M'),
             'is_voided': payment.is_voided,
             'has_actions': payment.has_actions,
         })

@@ -42,8 +42,12 @@ class PaymentForm(forms.ModelForm):
             'client': forms.Select(attrs={'class': 'form-control'}),
             'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'date': forms.DateTimeInput(
-                attrs={'class': 'form-control', 'type': 'datetime-local'},
-                format='%Y-%m-%dT%H:%M'
+                attrs={
+                    'class': 'form-control js-datetime-picker',
+                    'type': 'text',
+                    'placeholder': 'DD/MM/YYYY HH:MM'
+                },
+                format='%d/%m/%Y %H:%M'
             ),
             'mode': forms.Select(attrs={'class': 'form-control'}),
             'bank': forms.TextInput(attrs={'class': 'form-control'}),
@@ -54,9 +58,9 @@ class PaymentForm(forms.ModelForm):
         self.fields['date'].input_formats = ['%Y-%m-%dT%H:%M', '%d/%m/%Y %H:%M']
         if not self.is_bound:
             if self.instance.pk and self.instance.date:
-                self.fields['date'].initial = timezone.localtime(self.instance.date).strftime('%Y-%m-%dT%H:%M')
+                self.fields['date'].initial = timezone.localtime(self.instance.date).strftime('%d/%m/%Y %H:%M')
             else:
-                self.fields['date'].initial = timezone.localtime().strftime('%Y-%m-%dT%H:%M')
+                self.fields['date'].initial = timezone.localtime().strftime('%d/%m/%Y %H:%M')
 
     def clean(self):
         cleaned_data = super().clean()
